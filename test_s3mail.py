@@ -761,6 +761,12 @@ def test_aws_error_messages():
     assert "Standardprofil" in msg and "Zugangsdaten speichern" in msg, msg
     assert "Unable to locate" not in msg, msg
 
+    # SSO braucht kein awscrt - da fehlt nur die Anmeldung
+    class SSOTokenLoadError(Exception): pass
+    msg = t(SSOTokenLoadError("no token"), "sso")
+    assert "aws sso login --profile sso" in msg, msg
+    assert "Access Key" not in msg, "schickt SSO-Nutzer faelschlich zu den Access Keys"
+
     msg = t(ProfileNotFound("x"), "gibtsnicht")
     assert "gibtsnicht" in msg and "gibt es auf diesem Rechner nicht" in msg, msg
 

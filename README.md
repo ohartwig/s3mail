@@ -77,16 +77,22 @@ Nicht gebraucht werden Lambda, EC2, VPC oder eine WorkMail-Organisation.
 6. **Receipt-Rule-Set** anlegen, darin eine Regel mit der Aktion **S3** → Bucket
    und Prefix `mail/`. Danach **das Rule-Set aktivieren** – ein angelegtes, aber
    inaktives Rule-Set ist der häufigste Grund dafür, dass nichts ankommt.
-7. **IAM-Identität** für s3mail: ein IAM-Benutzer mit **Access Key ID und Secret**,
-   ausgestattet mit der [Policy weiter unten](#iam-policy). Entweder trägst du die
-   beiden im Assistenten ein – er legt daraus ein AWS-Profil an, die AWS CLI muss
-   dafür nicht installiert sein –, oder du wählst ein Profil, das auf dem Rechner
-   schon existiert.
+7. **Zugang für s3mail.** Drei Wege, je nachdem, wie euer AWS-Konto organisiert ist:
+
+   | Weg | Was zu tun ist | AWS CLI nötig? |
+   |---|---|---|
+   | **IAM-Benutzer mit Access Key** *(empfohlen)* | In der IAM-Konsole einen Benutzer mit der [Policy unten](#iam-policy) anlegen, Access Key erzeugen, die beiden Werte in Schritt 1 des Assistenten eintragen | nein |
+   | **Vorhandenes Profil mit Schlüsseln** | Im Assistenten aus der Liste wählen | nein |
+   | **AWS SSO / IAM Identity Center** | Einmal `aws sso login --profile NAME`, dann das Profil im Assistenten wählen | ja, zum Anmelden |
+
+   Der Assistent schreibt eingetippte Schlüssel als **eigenes, zusätzliches Profil**
+   nach `~/.aws/credentials` (Standard-Name `s3mail`, chmod 600). Vorhandene Profile
+   bleiben unangetastet – auch ein `default`, das anders arbeitet.
 
    Was **nicht** funktioniert: ein Profil, das sich über das neue `aws login`
-   anmeldet (Eintrag `login_session` in `~/.aws/config`). Das arbeitet mit einem
-   Token statt mit Schlüsseln und bräuchte `botocore[crt]`, das im fertigen Paket
-   nicht enthalten ist. Der Assistent sagt es dir in dem Fall im Klartext.
+   anmeldet (Eintrag `login_session` in `~/.aws/config`). Das bräuchte
+   `botocore[crt]`, das im fertigen Paket nicht enthalten ist. Der Assistent sagt
+   es dir in dem Fall im Klartext und zeigt die Alternativen.
 8. **Absenderadresse verifizieren**, wenn geantwortet werden soll. Solange das
    SES-Konto in der **Sandbox** steckt, kann es außerdem nur an verifizierte
    Adressen senden – Empfang funktioniert in der Sandbox uneingeschränkt, das

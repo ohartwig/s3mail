@@ -155,9 +155,14 @@ def aws_error(exc: Exception, profile: str = "") -> str:
         return (f"{wo} meldet sich über „aws login“ an (Token statt Access Key). "
                 f"Damit kann s3mail nicht arbeiten. Wähle ein Profil mit Access Key – "
                 f"oder leg dir eins an: {keys}")
+    if name in ("SSOTokenLoadError", "UnauthorizedSSOTokenError", "TokenRetrievalError"):
+        # Klassisches SSO funktioniert - es fehlt nur die Anmeldung, nicht awscrt
+        cmd = f"aws sso login --profile {profile}" if profile else "aws sso login"
+        return (f"{wo} meldet sich über AWS SSO an, aber es liegt keine gültige "
+                f"Anmeldung vor. Einmal „{cmd}“ im Terminal ausführen, dann hier "
+                f"noch einmal auf „Buckets laden“.")
     if name in ("NoCredentialsError", "PartialCredentialsError",
-                "CredentialRetrievalError", "UnauthorizedSSOTokenError",
-                "SSOTokenLoadError", "TokenRetrievalError"):
+                "CredentialRetrievalError"):
         return f"Für {wo} sind keine brauchbaren Zugangsdaten hinterlegt. {keys}"
     if name == "ProfileNotFound":
         return (f"Das AWS-Profil „{profile}“ gibt es auf diesem Rechner nicht. "
