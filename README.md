@@ -129,10 +129,16 @@ has:anhang has:spam is:ungelesen is:stern tag:wichtig in:archiv
 **Tastatur:** `j`/`k` blättern · `x` auswählen · `s` Stern · `e` archivieren ·
 `Entf` Papierkorb · `/` Suche.
 
-## Ohne Python: Binary bauen
+## Ohne Python: fertiges Paket
 
-Wer s3mail an jemanden weitergibt, der kein Python hat, baut ein Paket mit
-PyInstaller. Gebraucht wird das nur auf dem Rechner, der baut:
+Fertig gebaut liegt das jeweils aktuelle Paket unter
+[Releases](https://git.ole-hartwig.eu/development/s3mail/-/releases) – bisher nur
+für **macOS auf Apple Silicon**. `s3mail-macos-arm64.zip` entpacken und den
+darin liegenden `s3mail` starten; beim ersten Mal blockt macOS das unsignierte
+Programm, das geht über Rechtsklick → Öffnen.
+
+Für jede andere Plattform einmal selbst bauen – PyInstaller baut immer für das
+System, auf dem es läuft:
 
 ```bash
 pip install pyinstaller boto3 cryptography
@@ -149,15 +155,9 @@ Datei packt sich bei *jedem* Start neu aus, und XProtect sieht sich das
 Ausgepackte jedes Mal an – gemessen rund 7 Sekunden pro Start gegenüber einer
 halben Sekunde beim Ordner. Unter Linux und Windows fällt das weg.
 
-Zwei Dinge, die man wissen muss:
-
-- **Pro Plattform einmal bauen.** PyInstaller baut immer für das System, auf dem
-  es läuft. Ein macOS-arm64-Paket läuft weder unter Windows noch auf einem
-  Intel-Mac.
-- **macOS zeigt eine Warnung**, weil das Programm nicht signiert ist – beim ersten
-  Start über Rechtsklick → Öffnen bestätigen. Wer das den Empfängern ersparen
-  will, braucht ein Apple-Developer-Zertifikat und muss signieren und notarisieren
-  (`codesign_identity` in `s3mail.spec`).
+Wer den Empfängern die Gatekeeper-Warnung ersparen will, braucht ein
+Apple-Developer-Zertifikat und muss signieren und notarisieren
+(`codesign_identity` in `s3mail.spec`).
 
 Die Spec-Datei wirft die Dienstbeschreibungen aus botocore weg, die s3mail nie
 anfasst – von rund 400 AWS-Diensten bleiben S3, SES, KMS und STS übrig, was etwa
