@@ -13,6 +13,15 @@ python3 s3mail.py
 Wenn deine SES-Regel die Mails client-seitig mit KMS verschlüsselt, kommt noch
 `pip install cryptography` dazu – siehe [Verschlüsselte Buckets](#verschlüsselte-buckets).
 
+Beim Start schreibt s3mail eine Adresse ins Terminal, die ein **Token** enthält:
+
+```
+s3mail laeuft auf http://127.0.0.1:8765/?t=8Kd2...   (Strg+C zum Beenden)
+```
+
+Der Browser wird damit von selbst geöffnet. Ohne dieses Token antwortet der Server
+nicht – siehe [Wer darf ran](#wer-darf-ran).
+
 Beim ersten Mal öffnet sich der **Einrichtungs-Assistent** im Browser statt des
 Postfachs. Dort in drei Schritten:
 
@@ -119,6 +128,40 @@ has:anhang has:spam is:ungelesen is:stern tag:wichtig in:archiv
 **Tastatur:** `j`/`k` blättern · `x` auswählen · `s` Stern · `e` archivieren ·
 `Entf` Papierkorb · `/` Suche.
 
+## Ohne Python: Binary bauen
+
+Wer s3mail an jemanden weitergibt, der kein Python hat, baut ein Paket mit
+PyInstaller. Gebraucht wird das nur auf dem Rechner, der baut:
+
+```bash
+pip install pyinstaller boto3 cryptography
+python3 build.py                    # s3mail.py aktualisieren
+pyinstaller --clean s3mail.spec     # -> dist/s3mail/
+```
+
+Heraus kommt `dist/s3mail/` – ein Ordner mit dem Startprogramm `s3mail` darin,
+zum Weitergeben einfach zippen. Rund 37 MB, Start in einer halben Sekunde.
+
+`S3MAIL_ONEFILE=1 pyinstaller --clean s3mail.spec` macht daraus stattdessen eine
+einzelne 15-MB-Datei. Bequemer zum Verschicken, aber auf macOS spürbar zäh: die
+Datei packt sich bei *jedem* Start neu aus, und XProtect sieht sich das
+Ausgepackte jedes Mal an – gemessen rund 7 Sekunden pro Start gegenüber einer
+halben Sekunde beim Ordner. Unter Linux und Windows fällt das weg.
+
+Zwei Dinge, die man wissen muss:
+
+- **Pro Plattform einmal bauen.** PyInstaller baut immer für das System, auf dem
+  es läuft. Ein macOS-arm64-Paket läuft weder unter Windows noch auf einem
+  Intel-Mac.
+- **macOS zeigt eine Warnung**, weil das Programm nicht signiert ist – beim ersten
+  Start über Rechtsklick → Öffnen bestätigen. Wer das den Empfängern ersparen
+  will, braucht ein Apple-Developer-Zertifikat und muss signieren und notarisieren
+  (`codesign_identity` in `s3mail.spec`).
+
+Die Spec-Datei wirft die Dienstbeschreibungen aus botocore weg, die s3mail nie
+anfasst – von rund 400 AWS-Diensten bleiben S3, SES, KMS und STS übrig, was etwa
+20 MB spart.
+
 ## Verschlüsselte Buckets
 
 Es gibt zwei Sorten Verschlüsselung, und nur eine davon macht Arbeit.
@@ -179,6 +222,32 @@ merkt es das am `NotImplemented` und schreibt ohne Sperre weiter – dann gilt w
 Fehlt das Schreibrecht ganz, fällt s3mail still auf einen lokalen Zustand zurück und
 zeigt das in der Seitenleiste an.
 
+## Wer darf ran
+
+Der Server bindet an 127.0.0.1. Das allein ist keine Zugangskontrolle: Auf
+127.0.0.1 kommt jeder andere Benutzer desselben Rechners, und eine beliebige
+Webseite im Browser kann dorthin Anfragen schicken. Deshalb prüft s3mail drei
+Dinge, bevor es irgendetwas tut:
+
+- **Token.** Bei jedem Start wird eins gewürfelt; es steht in der Adresse im
+  Terminal und wandert beim ersten Aufruf in ein `SameSite=Strict`-Cookie, damit
+  Anhänge und Folgeaufrufe ohne `?t=` in der Adresse auskommen. Ohne gültiges
+  Token gibt es 403 – auch auf die Startseite. Das Token lebt nur im Speicher;
+  nach einem Neustart gilt die neue Adresse aus dem Terminal.
+- **Origin.** Eine fremde Seite kann per `fetch()` einen POST hierher schicken,
+  ohne Preflight, wenn sie `Content-Type: text/plain` setzt. Lesen kann sie die
+  Antwort nicht, aber Löschen oder Versenden würden trotzdem laufen. Der Browser
+  verrät sich dabei über den `Origin`-Header, und s3mail lehnt fremde Herkunft ab.
+- **Host.** Eine Domain, die auf 127.0.0.1 zeigt (DNS-Rebinding), wäre für den
+  Browser dieselbe Herkunft wie s3mail und dürfte damit alles lesen – aber sie
+  steht im `Host`-Header. Akzeptiert wird nur `127.0.0.1`, `localhost` oder `::1`
+  mit dem richtigen Port.
+
+Wird `--host` auf eine öffentliche Adresse gelegt, entfällt die Host-Prüfung (der
+Name des Servers ist dann nicht vorhersagbar) und Token und Origin bleiben. Das
+ersetzt trotzdem keinen Reverse-Proxy mit richtiger Authentifizierung – s3mail
+kennt keine Benutzer, wer das Token hat, sieht das ganze Postfach.
+
 ## IAM-Policy
 
 ```json
@@ -217,11 +286,11 @@ eingetippt statt ausgewählt.
 ## Grenzen
 
 - Kein IMAP, kein Push – neue Mails kommen erst mit „Neu laden“.
-- Der Server bindet nur an 127.0.0.1 und hat keine Authentifizierung. `--host` auf eine
-  öffentliche Adresse zu legen heißt, das Postfach offen ins Netz zu stellen – wenn,
-  dann nur hinter einen Reverse-Proxy mit Auth. Der Assistent nimmt Access Keys über
-  diese lokale Verbindung entgegen; auf einem Mehrbenutzer-Rechner also besser vorher
-  ein AWS-Profil anlegen und im Assistenten nur auswählen.
+- Der Zugang hängt an einem Token, nicht an Benutzern (siehe
+  [Wer darf ran](#wer-darf-ran)). Wer die Adresse aus dem Terminal hat, sieht das
+  ganze Postfach. `--host` auf eine öffentliche Adresse zu legen heißt weiterhin,
+  das Postfach ins Netz zu stellen – wenn, dann hinter einen Reverse-Proxy mit
+  richtiger Auth.
 - Verschieben kopiert das Objekt. Verschlüsselung und Speicherklasse werden dabei
   übernommen, die Versionshistorie eines versionierten Buckets aber nicht – der neue
   Key beginnt mit einer neuen Version.
@@ -231,10 +300,11 @@ eingetippt statt ausgewählt.
 ## Tests
 
 `test_s3mail.py` fährt die ganze Logik gegen einen Fake-S3 mit ETags, Conditional
-Writes und echt verschlüsselten Testmails – 32 Testgruppen: Index, Ordner, Verschieben
+Writes und echt verschlüsselten Testmails – 33 Testgruppen: Index, Ordner, Verschieben
 mit Zustandsübernahme, Papierkorb-Regeln, Tags, Regel-Engine, Suche, Versand-Header,
 Schreibkonflikte, KMS-Entschlüsselung (GCM und CBC), Konfiguration, Credentials-Datei,
-Verbindungstest, Lifecycle, HTTP-Schicht.
+Verbindungstest, Lifecycle, HTTP-Schicht, Zugangskontrolle. Kein AWS-Zugriff, aber
+`boto3` und `cryptography` müssen installiert sein.
 
 `ui_check.py` und `ui_setup_check.py` klicken zusätzlich mit Playwright durch die
 laufende Oberfläche (Postfach bzw. Assistent).

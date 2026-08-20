@@ -1,7 +1,11 @@
-import json, os, sys, tempfile, threading
+import os, json, sys, tempfile, threading
 from http.server import ThreadingHTTPServer
-sys.path.insert(0, "/home/claude")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import re
 import s3mail
+
+TOKEN = "ui-test-token"
+OUT = os.environ.get("S3MAIL_UI_OUT", os.path.dirname(os.path.abspath(__file__)))
 from test_s3mail import build_mails, FakeS3, FakeSession, FakeSESIdentities
 
 for var in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_PROFILE"):
@@ -15,6 +19,8 @@ s3 = FakeS3(build_mails())
 s3mail.make_session = lambda p, r: FakeSession(s3)
 s3mail.Handler.store = None; s3mail.Handler.sender = None
 
+s3mail.Handler.token = TOKEN
+s3mail.Handler.bind, s3mail.Handler.port = "127.0.0.1", 8803
 httpd = ThreadingHTTPServer(("127.0.0.1", 8803), s3mail.Handler)
 threading.Thread(target=httpd.serve_forever, daemon=True).start()
 
@@ -25,7 +31,7 @@ with sync_playwright() as p:
     pg = b.new_page(viewport={"width":900,"height":1250}, color_scheme="dark")
     pg.on("pageerror", lambda e: errs.append("pageerror: " + str(e)))
     pg.on("console", lambda m: errs.append("console: " + m.text) if m.type == "error" else None)
-    pg.goto("http://127.0.0.1:8803/")
+    pg.goto("http://127.0.0.1:8803/?t=" + TOKEN)
     pg.wait_for_function("document.querySelectorAll('#region option').length > 0")
 
     # Ohne vorhandenes Profil sollte direkt der "Neue Zugangsdaten"-Tab offen sein
@@ -54,20 +60,20 @@ with sync_playwright() as p:
     print("Checks:", " | ".join(l for l in checks.splitlines() if l.strip())[:300])
     assert "Bucket lesen" in checks and "Conditional Writes" in checks
     assert pg.is_visible("#lifeBox"), "Lifecycle-Block nicht aufgetaucht"
-    pg.screenshot(path="/home/claude/v3-setup.png", full_page=True)
+    pg.screenshot(path=os.path.join(OUT, "v3-setup.png"), full_page=True)
 
     pg.select_option("#days", "30"); pg.click("#setLife"); pg.wait_for_timeout(400)
     print("Lifecycle:", pg.inner_text("#lifeMsg"))
     assert any(r["ID"] == "s3mail-trash" for r in (s3.lifecycle or [])), "keine Regel gesetzt"
 
     pg.click("#save")
-    pg.wait_for_url("http://127.0.0.1:8803/", timeout=5000)
+    pg.wait_for_url(re.compile(r"127\.0\.0\.1:8803/(\?|$)"), timeout=5000)
     pg.wait_for_selector(".item", timeout=5000)
     print("Nach dem Speichern:", pg.inner_text("#box"), "|", pg.locator(".item").count(), "Mails")
     cfg = json.load(open(s3mail.CONFIG_FILE))
     assert cfg["bucket"] == "test-bucket" and cfg["prefix"] == "mail/"
     assert oct(os.stat(s3mail.CONFIG_FILE).st_mode & 0o777) == "0o600"
-    pg.screenshot(path="/home/claude/v3-after-setup.png")
+    pg.screenshot(path=os.path.join(OUT, "v3-after-setup.png"))
 
     # Einstellungen-Knopf führt zurück in den Assistenten, jetzt vorbefüllt
     pg.click("text=Einstellungen"); pg.wait_for_selector("#bucket")

@@ -10,6 +10,8 @@ import s3mail
 OK = []
 def ok(msg): OK.append(msg); print("ok:", msg)
 
+TOKEN = "test-token-123"
+
 # --------------------------------------------------------------------------- #
 def mail(frm, to, subject, body, date, mid, attach=None, spam=False, html=None):
     m = EmailMessage()
@@ -315,13 +317,16 @@ def test_http():
                              "default_from": "support@firma.de", "can_send": True}
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), s3mail.Handler)
     port = httpd.server_address[1]
+    s3mail.Handler.token = TOKEN
+    s3mail.Handler.bind, s3mail.Handler.port = "127.0.0.1", port
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     base = f"http://127.0.0.1:{port}"
 
     def call(path, body=None, expect=200):
         req = urllib.request.Request(base + path, method="POST" if body is not None else "GET",
                                      data=json.dumps(body).encode() if body is not None else None,
-                                     headers={"Content-Type": "application/json"})
+                                     headers={"Content-Type": "application/json",
+                                              "X-S3mail-Token": TOKEN})
         try:
             r = urllib.request.urlopen(req)
         except urllib.error.HTTPError as e:
@@ -330,7 +335,7 @@ def test_http():
         assert expect == 200, f"{path}: unerwartet erfolgreich"
         return json.loads(r.read()) if "json" in r.headers.get("Content-Type", "") else r
 
-    page = urllib.request.urlopen(base + "/").read().decode()
+    page = urllib.request.urlopen(base + "/?t=" + TOKEN).read().decode()
     assert "__CONFIG__" not in page and '"can_send": true' in page
     d = call("/api/messages?folder=")
     assert len(d["messages"]) == 4 and d["folders"] and d["allow_delete"] is True
@@ -352,10 +357,67 @@ def test_http():
     assert call("/api/rules/apply", {})["moved"] >= 0
     assert call("/api/send", {"mode": "reply", "key": "mail/m1", "to": "a@b.de",
                               "subject": "s", "body": "b"})["message_id"] == "0100-fake-id"
-    r = urllib.request.urlopen(base + "/api/raw?key=mail/m1")
+    r = urllib.request.urlopen(base + "/api/raw?key=mail/m1&t=" + TOKEN)
     assert r.read().startswith(b"From:") and "attachment" in r.headers["Content-Disposition"]
     httpd.shutdown()
     ok("http: messages/flag/tag/move/delete/rules/send/raw + fehlercodes 400/403/404")
+
+def test_http_access_control():
+    """Host-Header (DNS-Rebinding), Origin (CSRF) und Token (Mitleser lokal)."""
+    s3 = FakeS3(build_mails()); st = new_store(s3); st.refresh()
+    s3mail.Handler.store = st
+    s3mail.Handler.sender = s3mail.Sender(FakeSES(), "support@firma.de")
+    s3mail.Handler.config = {"bucket": "test-bucket", "root": "mail/",
+                             "default_from": "support@firma.de", "can_send": True}
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), s3mail.Handler)
+    port = httpd.server_address[1]
+    s3mail.Handler.token = TOKEN
+    s3mail.Handler.bind, s3mail.Handler.port = "127.0.0.1", port
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{port}"
+
+    def status(path, headers, body=None):
+        req = urllib.request.Request(
+            base + path, method="POST" if body is not None else "GET",
+            data=json.dumps(body).encode() if body is not None else None,
+            headers=headers)
+        try:
+            return urllib.request.urlopen(req).status
+        except urllib.error.HTTPError as e:
+            return e.code
+
+    good = {"X-S3mail-Token": TOKEN}
+    assert status("/api/overview", good) == 200
+
+    # Token fehlt oder passt nicht
+    assert status("/api/overview", {}) == 403
+    assert status("/api/overview", {"X-S3mail-Token": "falsch"}) == 403
+    assert status("/", {}) == 403, "postfachseite ohne token ausgeliefert"
+
+    # Token per Cookie statt Header
+    assert status("/api/overview", {"Cookie": f"s3mail={TOKEN}"}) == 200
+    assert status("/api/overview", {"Cookie": "s3mail=falsch"}) == 403
+
+    # Seitenaufruf mit ?t= setzt das Cookie fuer Anhaenge und Folgeaufrufe
+    head = urllib.request.urlopen(base + "/?t=" + TOKEN).headers["Set-Cookie"]
+    assert f"s3mail={TOKEN}" in head and "SameSite=Strict" in head, head
+
+    # CSRF: fremde Seite schickt einen POST, das Token-Cookie faehrt mit
+    assert status("/api/empty-trash", {**good, "Origin": "https://boese.example"},
+                  body={}) == 403, "csrf-post von fremder origin durchgelassen"
+    assert status("/api/send", {**good, "Origin": "http://localhost:1234"},
+                  body={}) == 403, "fremder port als origin durchgelassen"
+    assert status("/api/overview", {**good, "Origin": f"http://127.0.0.1:{port}"}) == 200
+
+    # DNS-Rebinding: fremder Name im Host-Header
+    assert status("/api/message?key=mail/m1",
+                  {**good, "Host": "boese.example"}) == 403, "fremder host durchgelassen"
+    assert status("/api/overview", {**good, "Host": f"localhost:{port}"}) == 200
+
+    assert st.index, "abgewiesene anfragen haben das postfach veraendert"
+    httpd.shutdown()
+    ok("http: host/origin/token sperren rebinding, csrf und lokale mitleser")
+
 
 # --------------------------------------------------------------------------- #
 # Verschluesselung
@@ -685,26 +747,40 @@ def test_setup_api_and_wizard_http():
     s3mail.Handler.store = None; s3mail.Handler.sender = None
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), s3mail.Handler)
     port = httpd.server_address[1]
+    s3mail.Handler.token = TOKEN
+    s3mail.Handler.bind, s3mail.Handler.port = "127.0.0.1", port
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     base = f"http://127.0.0.1:{port}"
-    page = urllib.request.urlopen(base + "/").read().decode()
+    tok = {"X-S3mail-Token": TOKEN}
+    def get(path):
+        return urllib.request.urlopen(urllib.request.Request(base + path, headers=tok))
+    page = get("/").read().decode()
     assert "s3mail einrichten" in page and "Access Key" in page
-    assert "s3mail einrichten" in urllib.request.urlopen(base + "/setup").read().decode()
+    assert "s3mail einrichten" in get("/setup").read().decode()
     try:
-        urllib.request.urlopen(base + "/api/messages?folder="); raise AssertionError("postfach offen")
+        get("/api/messages?folder="); raise AssertionError("postfach offen")
     except urllib.error.HTTPError as e:
         assert e.code == 503 and "eingerichtet" in json.loads(e.read())["error"]
+
+    # Der Assistent schreibt AWS-Zugangsdaten - ohne Token darf er nicht anspringen
+    try:
+        urllib.request.urlopen(urllib.request.Request(
+            base + "/api/setup/credentials", method="POST", data=b"{}",
+            headers={"Content-Type": "application/json"}))
+        raise AssertionError("assistent ohne token erreichbar")
+    except urllib.error.HTTPError as e:
+        assert e.code == 403
 
     req = urllib.request.Request(base + "/api/setup/save", method="POST",
         data=json.dumps({"bucket": "test-bucket", "prefix": "mail/", "region": "eu-central-1",
                          "from": "support@firma.de"}).encode(),
-        headers={"Content-Type": "application/json"})
+        headers={"Content-Type": "application/json", **tok})
     saved = json.loads(urllib.request.urlopen(req).read())
     assert saved["config"]["bucket"] == "test-bucket"
     assert s3mail.Handler.store is not None, "nach dem speichern nicht scharf geschaltet"
-    d = json.loads(urllib.request.urlopen(base + "/api/messages?folder=").read())
+    d = json.loads(get("/api/messages?folder=").read())
     assert "messages" in d
-    assert "__CONFIG__" not in urllib.request.urlopen(base + "/").read().decode()
+    assert "__CONFIG__" not in get("/").read().decode()
     httpd.shutdown()
     ok("wizard: info/buckets/test/save, setup-modus sperrt das postfach, danach live")
 

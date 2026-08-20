@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import re
+import secrets
 import sys
 import threading
 import traceback
@@ -52,6 +53,11 @@ class Handler(BaseHTTPRequestHandler):
     sender: Sender | None = None
     config: dict = {}
     no_send: bool = False
+    token: str = ""              # Sitzungs-Token, siehe _guard_request()
+    bind: str = "127.0.0.1"      # Adresse, an die der Server gebunden ist
+    port: int = 8765
+
+    LOOPBACK = ("127.0.0.1", "localhost", "::1")
 
     def log_message(self, fmt, *args):
         pass  # ruhiges Terminal; Fehler kommen ueber Tracebacks
@@ -98,20 +104,91 @@ class Handler(BaseHTTPRequestHandler):
             "allow_delete": self.store.allow_delete,
         }
 
+    # -- Zugang -------------------------------------------------------------- #
+    def _host_ok(self) -> bool:
+        """Gegen DNS-Rebinding: eine fremde Domain, die auf 127.0.0.1 zeigt, waere
+        sonst die gleiche Origin wie s3mail und duerfte das Postfach auslesen. Der
+        Browser schickt in dem Fall aber ihren Namen im Host-Header mit."""
+        if self.bind not in self.LOOPBACK:
+            return True          # gebunden nach aussen: Auth macht der Reverse-Proxy
+        host = (self.headers.get("Host") or "").strip()
+        if host.startswith("["):                      # [::1]:8765
+            name, _, port = host.partition("]")
+            name, port = name[1:], port.lstrip(":")
+        else:
+            name, _, port = host.partition(":")
+        return name in self.LOOPBACK and port in ("", str(self.port))
+
+    def _origin_ok(self) -> bool:
+        """Gegen CSRF: eine fremde Seite kann per fetch() einen POST hierher
+        schicken (Content-Type text/plain, kein Preflight). Lesen kann sie die
+        Antwort nicht, aber Loeschen und Versenden wuerden trotzdem laufen. Bei
+        genau solchen Anfragen setzt der Browser die Origin."""
+        origin = self.headers.get("Origin")
+        if not origin or origin == "null":
+            return True          # gleiche Origin oder gar kein Browser
+        parts = urlparse(origin)
+        return (parts.hostname in self.LOOPBACK
+                and str(parts.port or "") in ("", str(self.port)))
+
+    def _token(self) -> str:
+        """Token aus Header, Query (?t=) oder Cookie."""
+        given = self.headers.get("X-S3mail-Token") or ""
+        if not given:
+            given = parse_qs(urlparse(self.path).query).get("t", [""])[0]
+        if not given:
+            for part in (self.headers.get("Cookie") or "").split(";"):
+                name, _, value = part.strip().partition("=")
+                if name == "s3mail":
+                    given = value
+                    break
+        return given
+
+    def _token_ok(self) -> bool:
+        """Gegen Mitleser auf demselben Rechner: 127.0.0.1 erreicht jeder lokale
+        Benutzer. Das Token steht nur in der Adresse, die beim Start ausgegeben
+        wird, und danach in einem SameSite-Cookie."""
+        return bool(self.token) and secrets.compare_digest(self._token(), self.token)
+
+    def _guard_request(self) -> bool:
+        """True, wenn die Anfrage bedient werden darf. Sonst ist schon geantwortet."""
+        if not self._host_ok():
+            self._send(403, b"s3mail: unerwarteter Host-Header",
+                       "text/plain; charset=utf-8")
+            return False
+        if not self._origin_ok():
+            self._json({"error": "Anfrage von einer fremden Herkunft abgelehnt"}, 403)
+            return False
+        if not self._token_ok():
+            if urlparse(self.path).path.startswith("/api/"):
+                self._json({"error": "Token fehlt oder passt nicht"}, 403)
+            else:
+                self._send(403, TOKEN_PAGE.encode("utf-8"),
+                           "text/html; charset=utf-8")
+            return False
+        return True
+
+    def _page(self, body: str):
+        """Seite ausliefern und dabei das Token als Cookie setzen, damit Anhaenge
+        und Folgeaufrufe ohne ?t= in der Adresse auskommen."""
+        self._send(200, body.encode("utf-8"), "text/html; charset=utf-8",
+                   {"Set-Cookie": f"s3mail={self.token}; Path=/; HttpOnly; "
+                                  f"SameSite=Strict"})
+
     # -- GET ---------------------------------------------------------------- #
     def do_GET(self):
+        if not self._guard_request():
+            return
         url = urlparse(self.path)
         qs = parse_qs(url.query, keep_blank_values=True)
 
         def run():
             if url.path in ("/", "/index.html"):
                 if self.store is None:                 # noch nicht eingerichtet
-                    return self._send(200, SETUP_PAGE.encode("utf-8"),
-                                      "text/html; charset=utf-8")
-                page = PAGE.replace("__CONFIG__", json.dumps(self.config))
-                self._send(200, page.encode("utf-8"), "text/html; charset=utf-8")
+                    return self._page(SETUP_PAGE)
+                self._page(PAGE.replace("__CONFIG__", json.dumps(self.config)))
             elif url.path in ("/setup", "/setup/"):
-                self._send(200, SETUP_PAGE.encode("utf-8"), "text/html; charset=utf-8")
+                self._page(SETUP_PAGE)
             elif self.store is None:
                 self._json({"error": "s3mail ist noch nicht eingerichtet"}, 503)
             elif url.path == "/api/overview":
@@ -148,6 +225,8 @@ class Handler(BaseHTTPRequestHandler):
 
     # -- POST --------------------------------------------------------------- #
     def do_POST(self):
+        if not self._guard_request():
+            return
         url = urlparse(self.path)
         length = int(self.headers.get("Content-Length") or 0)
         raw = self.rfile.read(length) if length else b"{}"
@@ -213,6 +292,18 @@ class Handler(BaseHTTPRequestHandler):
 # --------------------------------------------------------------------------- #
 # Frontend
 # --------------------------------------------------------------------------- #
+TOKEN_PAGE = """<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><title>s3mail</title></head>
+<body style="font:15px/1.65 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+             max-width:34em; margin:14vh auto; padding:0 6vw; color:#16202b">
+<h1 style="font-size:20px">Token fehlt</h1>
+<p>s3mail ist nur über die Adresse erreichbar, die beim Start im Terminal steht –
+sie enthält ein Token. Sonst käme jeder andere Benutzer dieses Rechners über
+127.0.0.1 ins Postfach.</p>
+<p>Falls das Postfach in einem anderen Tab offen ist: dort neu laden. Sonst die
+Adresse aus dem Terminal kopieren.</p>
+</body></html>"""
+
 PAGE = r"""<!doctype html>
 <html lang="de">
 <head>
@@ -929,13 +1020,17 @@ def main(argv=None):
         except Exception as exc:
             print(f"Verbindung fehlgeschlagen ({exc}) - starte den Assistenten.")
 
+    Handler.token = secrets.token_urlsafe(24)
+    Handler.bind = cfg["host"]
+    Handler.port = int(cfg["port"])
     httpd = ThreadingHTTPServer((cfg["host"], int(cfg["port"])), Handler)
-    url = f"http://{cfg['host']}:{cfg['port']}/"
+    url = f"http://{cfg['host']}:{cfg['port']}/?t={Handler.token}"
     if store is None:
-        print(f"s3mail ist noch nicht eingerichtet - Assistent: {url}")
+        print(f"s3mail ist noch nicht eingerichtet - Assistent: {url}", flush=True)
     else:
-        print(f"s3mail laeuft auf {url}   (Strg+C zum Beenden)")
-        print(f"Bucket: {cfg['bucket']}/{store.root}   Cache: {store.cache_file}")
+        print(f"s3mail laeuft auf {url}   (Strg+C zum Beenden)", flush=True)
+        print(f"Bucket: {cfg['bucket']}/{store.root}   Cache: {store.cache_file}",
+              flush=True)
     if not args.no_browser:
         threading.Timer(0.6, lambda: webbrowser.open(url)).start()
     try:

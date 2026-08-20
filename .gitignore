@@ -5,6 +5,11 @@ __pycache__/
 .venv/
 venv/
 
+# PyInstaller
+build/
+dist/
+*.manifest
+
 # s3mail
 config.json
 *.state.json
