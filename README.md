@@ -3,6 +3,94 @@
 Mail-Client für E-Mails, die Amazon SES als Rohdaten (MIME) in einen S3-Bucket schreibt.
 Eine einzige Python-Datei, startet einen lokalen Webserver, Postfach im Browser.
 
+## Voraussetzungen
+
+### Auf dem Rechner, der s3mail startet
+
+Zwei Wege, und beide brauchen sonst nichts – keinen Webserver, keine Datenbank,
+kein Docker. s3mail bringt seinen eigenen Server mit und bindet ihn an 127.0.0.1.
+
+- **Fertiges Paket** aus den
+  [Releases](https://git.ole-hartwig.eu/development/s3mail/-/releases) – da ist
+  alles drin, Python muss nicht installiert sein. Derzeit nur macOS auf Apple
+  Silicon; für andere Plattformen siehe
+  [Ohne Python: fertiges Paket](#ohne-python-fertiges-paket).
+
+  ```bash
+  unzip s3mail-macos-arm64.zip
+  xattr -dr com.apple.quarantine s3mail   # einmalig, das Programm ist unsigniert
+  ./s3mail/s3mail
+  ```
+- **Aus dem Quellcode:** Python 3.10 oder neuer und `pip install boto3`. Die
+  Untergrenze kommt von boto3, s3mail selbst läuft auch auf älteren. Sind die
+  Mails client-seitig mit KMS verschlüsselt, kommt `cryptography` dazu.
+
+Dazu ein Browser. Nach außen gehen nur HTTPS-Verbindungen zu
+`s3.<region>.amazonaws.com`, `email.<region>.amazonaws.com` und – falls
+verschlüsselt – `kms.<region>.amazonaws.com`.
+
+### Im AWS-Konto
+
+| Was | Wofür | Fehlt es, dann … |
+|---|---|---|
+| In SES verifizierte **Domain** | Empfang überhaupt | kommt keine Mail an |
+| **MX-Record** auf SES | leitet die Mail zu AWS | Mail geht an den alten Server |
+| **S3-Bucket** in derselben Region | die Mails liegen dort | – |
+| **Bucket-Policy** für SES | SES darf hineinschreiben | Mails werden verworfen |
+| Aktives **Receipt-Rule-Set** mit S3-Aktion | schreibt die Mail in den Bucket | Mail wird angenommen und weggeworfen |
+| **IAM-Identität** mit der [Policy unten](#iam-policy) | s3mail liest und sortiert | s3mail kommt nicht an den Bucket |
+| Verifizierte **Absenderadresse** | Antworten und Weiterleiten | Lesen geht, Senden nicht (`--no-send`) |
+| **KMS-Schlüssel** (optional) | nur bei Verschlüsselung | siehe [Verschlüsselte Buckets](#verschlüsselte-buckets) |
+
+Nicht gebraucht werden Lambda, EC2, VPC oder eine WorkMail-Organisation.
+
+### Einrichten, der Reihe nach
+
+1. **Region wählen.** SES nimmt Mail nur in bestimmten Regionen entgegen; der
+   Assistent bietet genau diese an (Frankfurt, Irland, London, Paris, Stockholm,
+   Mailand, die US-Regionen, Kanada, São Paulo, Tokio, Seoul, Singapur, Sydney,
+   Mumbai, Tel Aviv, Kapstadt, Bahrain). Bucket und SES gehören in dieselbe Region.
+2. **Domain in SES verifizieren** und die DKIM-CNAMEs im DNS setzen.
+3. **MX-Record** der Domain auf `inbound-smtp.<region>.amazonaws.com`, Priorität 10.
+4. **S3-Bucket anlegen**, darin ein Prefix als Wurzel, üblicherweise `mail/`.
+5. **Bucket-Policy**, damit SES schreiben darf – die SES-Konsole bietet sie beim
+   Anlegen der Regel an, von Hand sieht sie so aus:
+
+   ```json
+   {
+     "Version": "2012-10-17",
+     "Statement": [{
+       "Sid": "AllowSESPuts",
+       "Effect": "Allow",
+       "Principal": {"Service": "ses.amazonaws.com"},
+       "Action": "s3:PutObject",
+       "Resource": "arn:aws:s3:::MEIN-BUCKET/mail/*",
+       "Condition": {
+         "StringEquals": {"aws:SourceAccount": "123456789012"},
+         "StringLike": {
+           "aws:SourceArn": "arn:aws:ses:REGION:123456789012:receipt-rule-set/*"}
+       }
+     }]
+   }
+   ```
+
+6. **Receipt-Rule-Set** anlegen, darin eine Regel mit der Aktion **S3** → Bucket
+   und Prefix `mail/`. Danach **das Rule-Set aktivieren** – ein angelegtes, aber
+   inaktives Rule-Set ist der häufigste Grund dafür, dass nichts ankommt.
+7. **IAM-Identität** für s3mail: Benutzer mit Access Key oder ein Profil, das auf
+   dem Rechner schon existiert, mit der [Policy weiter unten](#iam-policy).
+8. **Absenderadresse verifizieren**, wenn geantwortet werden soll. Solange das
+   SES-Konto in der **Sandbox** steckt, kann es außerdem nur an verifizierte
+   Adressen senden – Empfang funktioniert in der Sandbox uneingeschränkt, das
+   Antworten nach draußen nicht. Für den Produktionszugang bei AWS einen Antrag
+   stellen oder mit `--no-send` im Lesemodus bleiben.
+9. **Testmail schicken**, dann in s3mail „Neu laden".
+
+Ob das alles sitzt, muss man nicht raten: Schritt 3 des Assistenten prüft der
+Reihe nach Bucket lesen, Mail lesen, Schreiben, Löschen, Zustand von mehreren
+Rechnern, Verschlüsselung und SES-Absender – und schreibt zu jedem fehlenden Punkt
+die IAM-Aktion dazu, die dafür nötig wäre.
+
 ## Erster Start
 
 ```bash
@@ -133,9 +221,25 @@ has:anhang has:spam is:ungelesen is:stern tag:wichtig in:archiv
 
 Fertig gebaut liegt das jeweils aktuelle Paket unter
 [Releases](https://git.ole-hartwig.eu/development/s3mail/-/releases) – bisher nur
-für **macOS auf Apple Silicon**. `s3mail-macos-arm64.zip` entpacken und den
-darin liegenden `s3mail` starten; beim ersten Mal blockt macOS das unsignierte
-Programm, das geht über Rechtsklick → Öffnen.
+für **macOS auf Apple Silicon**. Zwei Assets:
+
+- `s3mail-macos-arm64.zip` – der entpackte Ordner, **empfohlen**, startet in einer
+  halben Sekunde.
+- `s3mail-macos-arm64-onefile.zip` – eine einzelne Datei, bequemer zum Weitergeben,
+  aber rund 7 Sekunden pro Start.
+
+Beide sind ZIPs, und zwar mit Absicht: eine roh heruntergeladene Datei verliert ihr
+Ausführungs-Bit und lässt sich dann gar nicht erst starten. Dazu hängt macOS jedem
+Download ein Quarantäne-Attribut an, und weil das Programm nicht signiert ist,
+blockt Gatekeeper. Beides ist einmalig erledigt:
+
+```bash
+unzip s3mail-macos-arm64.zip
+xattr -dr com.apple.quarantine s3mail
+./s3mail/s3mail
+```
+
+Wer lieber klickt: Finder → Rechtsklick auf `s3mail` → Öffnen, dann bestätigen.
 
 Für jede andere Plattform einmal selbst bauen – PyInstaller baut immer für das
 System, auf dem es läuft:
@@ -270,15 +374,6 @@ Optional, macht den Assistenten bequemer: `s3:ListAllMyBuckets` (Bucket-Dropdown
 `s3:GetLifecycleConfiguration` + `s3:PutLifecycleConfiguration` (Papierkorb-Automatik).
 Fehlt eins davon, funktioniert der Assistent trotzdem – die Felder werden dann
 eingetippt statt ausgewählt.
-
-## SES-Seite (Kurzfassung)
-
-1. Domain in SES verifizieren (DKIM-CNAMEs setzen).
-2. MX-Record der Domain auf `inbound-smtp.<region>.amazonaws.com` (Priorität 10).
-3. Receipt-Rule-Set anlegen, Regel mit Aktion **S3** → Bucket + Prefix `mail/`.
-4. Bucket-Policy muss SES das Schreiben erlauben (`ses.amazonaws.com`, Bedingung
-   `aws:SourceAccount` = deine Account-ID) – die SES-Konsole bietet das an.
-5. Rule-Set aktivieren. Testmail schicken, dann in s3mail „Neu laden“.
 
 ## Grenzen
 
