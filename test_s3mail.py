@@ -741,6 +741,53 @@ def test_credentials_written_as_profile():
     assert "[s3mail]" in open(cred).read() and "[privat]" in open(cred).read()
     ok("zugangsdaten landen als aws-profil in ~/.aws (600), validiert, additiv")
 
+def test_aws_error_messages():
+    """boto3 meldet fehlende Zugangsdaten in einem halben Dutzend Ausnahmen - der
+    Assistent muss daraus einen Satz machen, der sagt, was zu tun ist."""
+    class NoCredentialsError(Exception): pass
+    class ProfileNotFound(Exception): pass
+    class MissingDependencyException(Exception): pass
+    class EndpointConnectionError(Exception): pass
+
+    def t(exc, profile=""):
+        return s3mail.aws_error(exc, profile)
+
+    # der Fall, der in freier Wildbahn auftrat: default-Profil nutzt "aws login"
+    msg = t(MissingDependencyException('pip install "botocore[crt]"'), "default")
+    assert "aws login" in msg and "Access Key" in msg, msg
+    assert "botocore" not in msg and "pip install" not in msg, "roher boto3-text durchgereicht"
+
+    msg = t(NoCredentialsError("Unable to locate credentials"))
+    assert "Standardprofil" in msg and "Zugangsdaten speichern" in msg, msg
+    assert "Unable to locate" not in msg, msg
+
+    msg = t(ProfileNotFound("x"), "gibtsnicht")
+    assert "gibtsnicht" in msg and "gibt es auf diesem Rechner nicht" in msg, msg
+
+    assert "Secret Access Key" in t(_err("SignatureDoesNotMatch", 403))
+    assert "Access Key ID" in t(_err("InvalidClientTokenId", 403))
+    assert "andere" in t(_err("PermanentRedirect", 301))
+    assert "Verbindung" in t(EndpointConnectionError("nope"))
+
+    # Unbekanntes wird nicht verschluckt
+    assert "Boom" in t(RuntimeError("Boom"))
+    ok("aws-fehler werden in klartext mit naechstem schritt uebersetzt")
+
+def test_buckets_without_credentials():
+    """Der Klick auf „Buckets laden“ ohne Zugangsdaten muss eine Anleitung liefern,
+    keinen Traceback."""
+    _sandbox_home()
+    class KaputteSession:
+        def client(self, name, **kw):
+            raise type("NoCredentialsError", (Exception,), {})("Unable to locate credentials")
+    s3mail.make_session = lambda p, r: KaputteSession()
+    try:
+        s3mail.setup_api("/api/setup/buckets", {"region": "eu-central-1"})
+        raise AssertionError("kein fehler gemeldet")
+    except ValueError as exc:
+        assert "Zugangsdaten speichern" in str(exc), exc
+    ok("buckets ohne zugangsdaten: anleitung statt NoCredentialsError")
+
 def test_connection_checks():
     _sandbox_home()
     s3 = FakeS3(build_mails()); sess = FakeSession(s3)

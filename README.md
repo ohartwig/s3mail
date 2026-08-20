@@ -77,8 +77,16 @@ Nicht gebraucht werden Lambda, EC2, VPC oder eine WorkMail-Organisation.
 6. **Receipt-Rule-Set** anlegen, darin eine Regel mit der Aktion **S3** → Bucket
    und Prefix `mail/`. Danach **das Rule-Set aktivieren** – ein angelegtes, aber
    inaktives Rule-Set ist der häufigste Grund dafür, dass nichts ankommt.
-7. **IAM-Identität** für s3mail: Benutzer mit Access Key oder ein Profil, das auf
-   dem Rechner schon existiert, mit der [Policy weiter unten](#iam-policy).
+7. **IAM-Identität** für s3mail: ein IAM-Benutzer mit **Access Key ID und Secret**,
+   ausgestattet mit der [Policy weiter unten](#iam-policy). Entweder trägst du die
+   beiden im Assistenten ein – er legt daraus ein AWS-Profil an, die AWS CLI muss
+   dafür nicht installiert sein –, oder du wählst ein Profil, das auf dem Rechner
+   schon existiert.
+
+   Was **nicht** funktioniert: ein Profil, das sich über das neue `aws login`
+   anmeldet (Eintrag `login_session` in `~/.aws/config`). Das arbeitet mit einem
+   Token statt mit Schlüsseln und bräuchte `botocore[crt]`, das im fertigen Paket
+   nicht enthalten ist. Der Assistent sagt es dir in dem Fall im Klartext.
 8. **Absenderadresse verifizieren**, wenn geantwortet werden soll. Solange das
    SES-Konto in der **Sandbox** steckt, kann es außerdem nur an verifizierte
    Adressen senden – Empfang funktioniert in der Sandbox uneingeschränkt, das
@@ -392,12 +400,12 @@ eingetippt statt ausgewählt.
 ## Tests
 
 `test_s3mail.py` fährt die ganze Logik gegen einen Fake-S3 mit ETags, Präfix-Listing
-und echt verschlüsselten Testmails – 36 Testgruppen: Index, Ordner, Verschieben mit
+und echt verschlüsselten Testmails – 38 Testgruppen: Index, Ordner, Verschieben mit
 Zustandsübernahme, Papierkorb-Regeln, Tags, Regel-Engine, Suche, Versand-Header,
 Zustand von mehreren Rechnern (Ops, Zusammenfassen, Wasserstand), KMS-Entschlüsselung
 (GCM und CBC), Konfiguration, Credentials-Datei, Verbindungstest, Lifecycle,
-HTTP-Schicht, Zugangskontrolle. Kein AWS-Zugriff, aber `boto3` und `cryptography`
-müssen installiert sein.
+HTTP-Schicht, Zugangskontrolle, Fehlerübersetzung. Kein AWS-Zugriff, aber `boto3`
+und `cryptography` müssen installiert sein.
 
 `ui_check.py` und `ui_setup_check.py` klicken zusätzlich mit Playwright durch die
 laufende Oberfläche (Postfach bzw. Assistent).

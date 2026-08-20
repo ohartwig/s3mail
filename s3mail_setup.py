@@ -136,6 +136,54 @@ def make_session(profile: str | None, region: str | None):
 # --------------------------------------------------------------------------- #
 # Verbindungstest
 # --------------------------------------------------------------------------- #
+def aws_error(exc: Exception, profile: str = "") -> str:
+    """Eine AWS-Ausnahme in einen Satz uebersetzen, der sagt, was zu tun ist.
+
+    boto3 meldet fehlende oder falsche Zugangsdaten in einem halben Dutzend
+    verschiedener Ausnahmen, alle auf Englisch und alle ohne Hinweis darauf, dass
+    der Assistent zwei Felder weiter oben genau das loesen wuerde.
+    """
+    name = type(exc).__name__
+    code = ""
+    if isinstance(exc, ClientError):
+        code = str((exc.response.get("Error") or {}).get("Code", ""))
+    wo = f"Profil „{profile}“" if profile else "das Standardprofil"
+    keys = ("Trag in Schritt 1 unter „Neue Zugangsdaten“ Access Key ID und Secret "
+            "ein und klick auf „Zugangsdaten speichern“.")
+
+    if name == "MissingDependencyException" or "botocore[crt]" in str(exc):
+        return (f"{wo} meldet sich über „aws login“ an (Token statt Access Key). "
+                f"Damit kann s3mail nicht arbeiten. Wähle ein Profil mit Access Key – "
+                f"oder leg dir eins an: {keys}")
+    if name in ("NoCredentialsError", "PartialCredentialsError",
+                "CredentialRetrievalError", "UnauthorizedSSOTokenError",
+                "SSOTokenLoadError", "TokenRetrievalError"):
+        return f"Für {wo} sind keine brauchbaren Zugangsdaten hinterlegt. {keys}"
+    if name == "ProfileNotFound":
+        return (f"Das AWS-Profil „{profile}“ gibt es auf diesem Rechner nicht. "
+                f"Wähle ein anderes – oder leg eins an: {keys}")
+    if code in ("InvalidClientTokenId", "UnrecognizedClientException", "AuthFailure",
+                "InvalidAccessKeyId"):
+        return "Die Access Key ID stimmt nicht. Bitte in Schritt 1 noch einmal prüfen."
+    if code == "SignatureDoesNotMatch":
+        return ("Der Secret Access Key stimmt nicht. Bitte in Schritt 1 noch einmal "
+                "eintragen – beim Kopieren geht gern ein Zeichen verloren.")
+    if code in ("ExpiredToken", "ExpiredTokenException", "TokenRefreshRequired"):
+        return f"Die Zugangsdaten für {wo} sind abgelaufen. {keys}"
+    if code in ("AccessDenied", "AccessDeniedException"):
+        return ("Die Zugangsdaten stimmen, aber ihnen fehlt ein Recht. Welches, sagt "
+                "der Verbindungstest in Schritt 3 im Klartext.")
+    if code in ("NoSuchBucket", "404"):
+        return "Diesen Bucket gibt es nicht – Name oder Region stimmen nicht."
+    if code in ("PermanentRedirect", "IllegalLocationConstraintException",
+                "AuthorizationHeaderMalformed"):
+        return "Der Bucket liegt in einer anderen Region. Region oben umstellen."
+    if name in ("EndpointConnectionError", "ConnectTimeoutError", "ConnectionError",
+                "ReadTimeoutError", "ConnectionClosedError"):
+        return "Keine Verbindung zu AWS. Internet erreichbar? Proxy dazwischen?"
+    return f"{name}: {exc}" if not code else f"{code}: {exc}"
+
+
 def _check(name, ok, detail="", hint="", skipped=False):
     return {"name": name, "ok": bool(ok), "detail": detail, "hint": hint, "skipped": skipped}
 
@@ -175,12 +223,13 @@ def test_connection(session, bucket: str, prefix: str, sender: str = "",
             else f"Zugriff klappt, aber unter „{prefix or '/'}“ liegt noch nichts",
             "" if n else "Sobald SES die erste Mail ablegt, taucht sie hier auf."))
     except ClientError as exc:
-        code = exc.response.get("Error", {}).get("Code", "")
+        code = (exc.response.get("Error") or {}).get("Code", "")
         checks.append(_check("Bucket lesen", False, code,
-                             "Fehlt s3:ListBucket, oder Bucket/Region stimmen nicht."))
+                             aws_error(exc) if code not in ("AccessDenied",)
+                             else "Fehlt s3:ListBucket, oder Bucket/Region stimmen nicht."))
         return checks
     except Exception as exc:
-        checks.append(_check("Bucket lesen", False, str(exc)))
+        checks.append(_check("Bucket lesen", False, aws_error(exc)))
         return checks
 
     # 2. Eine Mail wirklich lesen
@@ -345,22 +394,27 @@ def setup_api(path: str, data: dict) -> dict:
         return {"profile": name, "profiles": aws_profiles()}
 
     if path == "/api/setup/buckets":
-        session = make_session(profile, region)
         try:
+            session = make_session(profile, region)
             return {"buckets": list_buckets(session), "identities": ses_identities(session)}
         except ClientError as exc:
-            code = exc.response.get("Error", {}).get("Code", "")
+            code = (exc.response.get("Error") or {}).get("Code", "")
             if code in ("AccessDenied", "AccessDeniedException"):
-                return {"buckets": [], "identities": ses_identities(session),
+                return {"buckets": [], "identities": ses_identities(make_session(profile, region)),
                         "note": "Kein Recht zum Auflisten aller Buckets "
                                 "(s3:ListAllMyBuckets) – Namen bitte direkt eintippen."}
-            raise
+            raise ValueError(aws_error(exc, profile))
+        except Exception as exc:
+            raise ValueError(aws_error(exc, profile))
 
     if path == "/api/setup/test":
-        session = make_session(profile, region)
         bucket = (data.get("bucket") or "").strip()
         if not bucket:
             raise ValueError("Bitte einen Bucket angeben")
+        try:
+            session = make_session(profile, region)
+        except Exception as exc:
+            raise ValueError(aws_error(exc, profile))
         checks = test_connection(session, bucket, data.get("prefix", ""),
                                  data.get("from", ""))
         return {"checks": checks,
@@ -368,7 +422,10 @@ def setup_api(path: str, data: dict) -> dict:
                 "ok": all(c["ok"] or c["skipped"] for c in checks)}
 
     if path == "/api/setup/lifecycle":
-        session = make_session(profile, region)
+        try:
+            session = make_session(profile, region)
+        except Exception as exc:
+            raise ValueError(aws_error(exc, profile))
         return {"message": set_trash_lifecycle(session, data["bucket"],
                                                data.get("prefix", ""), data.get("days", 30))}
 
@@ -472,13 +529,16 @@ SETUP_PAGE = r"""<!doctype html>
 
   <div class="card">
     <h2><span class="num">2</span> Postfach</h2>
-    <div class="hint">Der Bucket, in den deine SES-Regel die Mails schreibt.</div>
+    <div class="hint">Der Bucket, in den deine SES-Regel die Mails schreibt.
+      „Buckets laden“ geht erst, wenn Schritt 1 steht – vorher weiß s3mail nicht,
+      in welchem Konto es nachsehen soll.</div>
     <label>Bucket</label>
     <div class="row">
       <select id="bucketSel"><option value="">– Buckets laden –</option></select>
       <button id="loadBuckets" style="flex:none">Buckets laden</button>
     </div>
     <input id="bucket" placeholder="oder Bucket-Namen hier eintippen" style="margin-top:8px">
+    <div id="bucketMsg" class="msg"></div>
     <label>Ordner im Bucket (Prefix)</label>
     <input id="prefix" placeholder="mail/">
     <div class="hint">Genau das Prefix aus deiner SES-Regel. Darunter legt s3mail
@@ -582,6 +642,7 @@ $("#saveCreds").onclick = async () => {
     $("#secret").value = "";
     $("#tabExisting").click();
     say("#credMsg", "Profil „" + d.profile + "“ gespeichert.");
+    $("#loadBuckets").click();          // ein Klick weniger
   } catch (e) { say("#credMsg", e.message, true); }
 };
 
@@ -593,8 +654,11 @@ $("#loadBuckets").onclick = async () => {
       d.buckets.map(x => `<option${x === $("#bucket").value ? " selected" : ""}>${x}</option>`).join("");
     $("#identSel").innerHTML = '<option value="">– verifizierte Adressen –</option>' +
       d.identities.map(x => `<option>${x}</option>`).join("");
-    if (d.note) say("#saveMsg", d.note, true);
-  } catch (e) { say("#saveMsg", e.message, true); }
+    if (d.note) say("#bucketMsg", d.note, true);
+    else if (!d.buckets.length) say("#bucketMsg",
+      "Keine Buckets gefunden – Namen bitte direkt eintippen.", true);
+    else say("#bucketMsg", d.buckets.length + " Bucket(s) gefunden.");
+  } catch (e) { say("#bucketMsg", e.message, true); }
   finally { b.disabled = false; b.textContent = "Buckets laden"; }
 };
 $("#bucketSel").onchange = e => { if (e.target.value) $("#bucket").value = e.target.value; };
