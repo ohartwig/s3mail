@@ -33,8 +33,8 @@ Postfachs. Dort in drei Schritten:
    SES-Regel, Absenderadresse für Antworten (Dropdown zeigt die in SES verifizierten
    Adressen).
 3. **Prüfen** – legt kurz ein Testobjekt an und löscht es wieder. Ergebnis ist eine
-   Checkliste: Bucket lesen, Mail lesen, Schreiben, Löschen, Conditional Writes,
-   SES-Absender. Was fehlt, steht im Klartext dabei, inklusive der IAM-Aktion.
+   Checkliste: Bucket lesen, Mail lesen, Schreiben, Löschen, Zustand von mehreren
+   Rechnern, SES-Absender. Was fehlt, steht im Klartext dabei, inklusive der IAM-Aktion.
    Danach lässt sich optional eine Lifecycle-Regel setzen, die den Papierkorb nach
    7/30/90 Tagen automatisch leert.
 
@@ -73,7 +73,8 @@ mail/archiv/              ← Archiv
 mail/spam/                ← Spam
 mail/trash/               ← Papierkorb
 mail/kunden/              ← selbst angelegt
-mail/.s3mail-state.json   ← Tags, gelesen/ungelesen, Stern, Regeln
+mail/.s3mail-state.json   ← Tags, gelesen/ungelesen, Stern, Regeln (Snapshot)
+mail/.s3mail-state/       ← die einzelnen Änderungen seit dem Snapshot
 ```
 
 Verschieben = `CopyObject` + `DeleteObject`. Du siehst die Ordner also in der
@@ -199,54 +200,50 @@ Der Verbindungstest im Assistenten sagt dir, was Sache ist: er schaut sich eine 
 Mail an und meldet „client-seitig mit KMS – Entschlüsseln klappt", „serverseitig mit
 KMS", „serverseitig (AES256)" oder „keine – die Mails liegen im Klartext".
 
-## Zustand: geteilt, mit Conditional Write
+## Zustand: geteilt, ohne Sperre
 
-Tags, gelesen/ungelesen, Stern und Regeln stehen in `<prefix>.s3mail-state.json`
-**im Bucket**, damit mehrere Rechner denselben Stand sehen. Schlüssel ist der
-Objekt-Basename, nicht der volle Key – deshalb überlebt der Zustand das Verschieben
-zwischen Ordnern.
+Tags, gelesen/ungelesen, Stern und Regeln stehen **im Bucket**, damit mehrere
+Rechner denselben Stand sehen. Schlüssel ist der Objekt-Basename, nicht der volle
+Key – deshalb überlebt der Zustand das Verschieben zwischen Ordnern.
 
-Geschrieben wird mit **Conditional Writes**: `If-None-Match: *` beim ersten Anlegen,
-danach `If-Match: <ETag>`. Hat in der Zwischenzeit jemand anderes geschrieben, antwortet
-S3 mit `412 PreconditionFailed`. Statt zu überschreiben, lädt s3mail dann den fremden
-Stand und **wiederholt die eigenen, noch nicht bestätigten Änderungen darauf** – jede
-Änderung ist intern eine kleine Operation (`tags add`, `flags`, `drop`, …), keine
-Momentaufnahme der ganzen Datei. Ergebnis: taggt Rechner A eine Mail und Rechner B
-gleichzeitig eine andere, sind hinterher beide Tags da. Beim selben Objekt werden Tags
-vereinigt und fremde Flags bleiben stehen.
+Geschrieben wird aber nicht das ganze Dokument, sondern **die einzelne Änderung**.
+Jeder Schreibvorgang legt ein kleines Objekt unter `<prefix>.s3mail-state/` ab,
+auf dessen Schlüssel nur er selbst schreibt:
 
-Läuft s3mail gegen einen S3-Klon ohne Conditional Writes (manche MinIO-Versionen),
-merkt es das am `NotImplemented` und schreibt ohne Sperre weiter – dann gilt wieder
-„letzter gewinnt“. Der Verbindungstest im Assistenten zeigt, was der Bucket kann.
+```
+mail/.s3mail-state.json                          ← Snapshot, selten geschrieben
+mail/.s3mail-state/20260820T2131...-0001-a7f3.json   {"ops":[{"t":"flags",…}]}
+mail/.s3mail-state/20260820T2131...-0002-b1c9.json   {"ops":[{"t":"tags",…}]}
+```
 
-Fehlt das Schreibrecht ganz, fällt s3mail still auf einen lokalen Zustand zurück und
-zeigt das in der Seitenleiste an.
+Zwei Rechner können sich dabei nicht ins Gehege kommen – es gibt keinen
+gemeinsamen Schlüssel, auf den beide zeigen, und damit weder Sperre noch
+`If-Match` noch `412`. Eine Mail als gelesen zu markieren kostet ein paar hundert
+Byte statt des ganzen Postfachs.
 
-## Wer darf ran
+Gelesen wird der Snapshot plus alle Änderungen, die neuer sind als sein
+Wasserstand (`upto`), in Schlüsselreihenfolge. Die Schlüssel beginnen mit dem
+Zeitstempel, sortieren sich also von selbst. Ab 50 offenen Änderungen wird
+zusammengefasst: neuer Snapshot mit neuem Wasserstand, danach fliegen die
+eingearbeiteten Objekte weg.
 
-Der Server bindet an 127.0.0.1. Das allein ist keine Zugangskontrolle: Auf
-127.0.0.1 kommt jeder andere Benutzer desselben Rechners, und eine beliebige
-Webseite im Browser kann dorthin Anfragen schicken. Deshalb prüft s3mail drei
-Dinge, bevor es irgendetwas tut:
+Der Wasserstand ist das, was die Sache gutmütig macht. Bleibt beim Aufräumen ein
+Objekt liegen, weil das Löschen scheitert, wird es beim nächsten Laden
+übersprungen statt ein zweites Mal angewandt – Löschen ist Müllabfuhr, keine
+Buchhaltung.
 
-- **Token.** Bei jedem Start wird eins gewürfelt; es steht in der Adresse im
-  Terminal und wandert beim ersten Aufruf in ein `SameSite=Strict`-Cookie, damit
-  Anhänge und Folgeaufrufe ohne `?t=` in der Adresse auskommen. Ohne gültiges
-  Token gibt es 403 – auch auf die Startseite. Das Token lebt nur im Speicher;
-  nach einem Neustart gilt die neue Adresse aus dem Terminal.
-- **Origin.** Eine fremde Seite kann per `fetch()` einen POST hierher schicken,
-  ohne Preflight, wenn sie `Content-Type: text/plain` setzt. Lesen kann sie die
-  Antwort nicht, aber Löschen oder Versenden würden trotzdem laufen. Der Browser
-  verrät sich dabei über den `Origin`-Header, und s3mail lehnt fremde Herkunft ab.
-- **Host.** Eine Domain, die auf 127.0.0.1 zeigt (DNS-Rebinding), wäre für den
-  Browser dieselbe Herkunft wie s3mail und dürfte damit alles lesen – aber sie
-  steht im `Host`-Header. Akzeptiert wird nur `127.0.0.1`, `localhost` oder `::1`
-  mit dem richtigen Port.
+Zwei Dinge, die man wissen sollte:
 
-Wird `--host` auf eine öffentliche Adresse gelegt, entfällt die Host-Prüfung (der
-Name des Servers ist dann nicht vorhersagbar) und Token und Origin bleiben. Das
-ersetzt trotzdem keinen Reverse-Proxy mit richtiger Authentifizierung – s3mail
-kennt keine Benutzer, wer das Token hat, sieht das ganze Postfach.
+- **Die Uhr entscheidet die Reihenfolge.** Bei Änderungen, die aufeinander
+  aufbauen – ein Tag umbenennen, den ein anderer Rechner gerade erst angelegt hat
+  –, kann eine schief gehende Rechneruhr die Reihenfolge verdrehen. Für Tags
+  setzen, lesen markieren und Sternchen ist die Reihenfolge egal, da gewinnt
+  ohnehin die Vereinigung.
+- **Alle Rechner sollten dieselbe Version fahren.** Eine ältere s3mail-Version
+  liest nur den Snapshot und übersieht die Änderungen daneben.
+
+Fehlt das Schreibrecht ganz, fällt s3mail still auf einen lokalen Zustand zurück
+und zeigt das in der Seitenleiste an.
 
 ## IAM-Policy
 
@@ -299,12 +296,13 @@ eingetippt statt ausgewählt.
 
 ## Tests
 
-`test_s3mail.py` fährt die ganze Logik gegen einen Fake-S3 mit ETags, Conditional
-Writes und echt verschlüsselten Testmails – 33 Testgruppen: Index, Ordner, Verschieben
-mit Zustandsübernahme, Papierkorb-Regeln, Tags, Regel-Engine, Suche, Versand-Header,
-Schreibkonflikte, KMS-Entschlüsselung (GCM und CBC), Konfiguration, Credentials-Datei,
-Verbindungstest, Lifecycle, HTTP-Schicht, Zugangskontrolle. Kein AWS-Zugriff, aber
-`boto3` und `cryptography` müssen installiert sein.
+`test_s3mail.py` fährt die ganze Logik gegen einen Fake-S3 mit ETags, Präfix-Listing
+und echt verschlüsselten Testmails – 36 Testgruppen: Index, Ordner, Verschieben mit
+Zustandsübernahme, Papierkorb-Regeln, Tags, Regel-Engine, Suche, Versand-Header,
+Zustand von mehreren Rechnern (Ops, Zusammenfassen, Wasserstand), KMS-Entschlüsselung
+(GCM und CBC), Konfiguration, Credentials-Datei, Verbindungstest, Lifecycle,
+HTTP-Schicht, Zugangskontrolle. Kein AWS-Zugriff, aber `boto3` und `cryptography`
+müssen installiert sein.
 
 `ui_check.py` und `ui_setup_check.py` klicken zusätzlich mit Playwright durch die
 laufende Oberfläche (Postfach bzw. Assistent).

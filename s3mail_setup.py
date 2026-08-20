@@ -8,7 +8,7 @@ import json
 import os
 import stat
 
-from s3mail_core import (ClientError, STATE_OBJECT, TRASH, valid_folder,
+from s3mail_core import (ClientError, STATE_OBJECT, STATE_OPS, TRASH, valid_folder,
                          HAVE_CRYPTO, decrypt_envelope, is_encrypted_envelope)
 
 # === BUILD:SPLIT ===
@@ -222,23 +222,20 @@ def test_connection(session, bucket: str, prefix: str, sender: str = "",
                     "s3:DeleteObject fehlt. Starte mit „Löschen sperren“, "
                     "dann bleibt alles beim Lesen."))
 
-    # 5. Conditional Write (fuer gefahrloses Arbeiten von mehreren Rechnern)
+    # 5. Auflisten des Ops-Ordners (dort liegen die Zustandsaenderungen)
     try:
-        s3.put_object(Bucket=bucket, Key=f"{prefix}.s3mail-probe2", Body=b"x",
-                      IfNoneMatch="*")
-        s3.delete_object(Bucket=bucket, Key=f"{prefix}.s3mail-probe2")
-        checks.append(_check("Conditional Writes", True,
-                             "unterstützt – mehrere Rechner überschreiben sich nicht"))
+        s3.list_objects_v2(Bucket=bucket, Prefix=f"{prefix}{STATE_OPS}", MaxKeys=1)
+        checks.append(_check("Zustand von mehreren Rechnern", True,
+                             "Ordner für die Änderungen ist lesbar"))
     except ClientError as exc:
         code = exc.response.get("Error", {}).get("Code", "")
-        if code in ("PreconditionFailed", "ConditionalRequestConflict"):
-            checks.append(_check("Conditional Writes", True, "unterstützt"))
-        else:
-            checks.append(_check("Conditional Writes", False, code,
-                                 "Kein Beinbruch: s3mail schreibt dann ohne Sperre.",
-                                 skipped=True))
+        checks.append(_check(
+            "Zustand von mehreren Rechnern", False, code,
+            f"s3:ListBucket auf {prefix}{STATE_OPS}* fehlt. Ohne das sieht dieser "
+            "Rechner Änderungen der anderen erst nach dem nächsten Zusammenfassen."))
     except Exception as exc:
-        checks.append(_check("Conditional Writes", False, str(exc), skipped=True))
+        checks.append(_check("Zustand von mehreren Rechnern", False, str(exc),
+                             skipped=True))
 
     # 6. SES-Absender
     if sender:

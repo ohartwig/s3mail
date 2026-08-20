@@ -49,8 +49,7 @@ def _err(code, status, op="PutObject"):
                             "ResponseMetadata": {"HTTPStatusCode": status}}, op)
 
 class FakeS3:
-    """Fake-S3 mit ETags und Conditional Writes (If-Match / If-None-Match)."""
-    supports_conditional = True
+    """Fake-S3 mit ETags, Praefix-Listing und Metadaten."""
 
     def __init__(self, objs, meta=None, sse=None):
         self.objs = dict(objs); self.calls = []; self.lifecycle = None
@@ -84,15 +83,8 @@ class FakeS3:
             raise _err("NoSuchKey", 404, "HeadObject")
         return {"Metadata": dict(self.meta.get(Key, {})), "ContentLength": len(self.objs[Key]),
                 "ETag": '"%s"' % self._etag(Key), **self.sse.get(Key, {})}
-    def put_object(self, Bucket, Key, Body, IfMatch=None, IfNoneMatch=None, **kw):
+    def put_object(self, Bucket, Key, Body, **kw):
         self.calls.append(("put", Key))
-        if (IfMatch or IfNoneMatch) and not self.supports_conditional:
-            raise _err("NotImplemented", 501)
-        if IfNoneMatch == "*" and Key in self.objs:
-            raise _err("PreconditionFailed", 412)
-        if IfMatch is not None:
-            if Key not in self.objs or self._etag(Key) != IfMatch:
-                raise _err("PreconditionFailed", 412)
         self.objs[Key] = Body
         return {"ETag": '"%s"' % self._etag(Key)}
     def list_objects_v2(self, Bucket, Prefix="", MaxKeys=1000):
@@ -150,10 +142,11 @@ def test_index_and_folders():
 def test_state_object_not_indexed():
     s3 = FakeS3(build_mails()); st = new_store(s3)
     st.refresh(); st.state.set_flags(["m1"], read=True)
-    assert "mail/.s3mail-state.json" in s3.objs, "state nicht im bucket"
+    intern = [k for k in s3.objs if k.startswith("mail/.s3mail-state")]
+    assert intern, "zustand nicht im bucket"
     st.refresh()
-    assert "mail/.s3mail-state.json" not in st.index, "state-datei taucht als mail auf"
-    ok("state.json liegt im bucket und wird nicht als mail indexiert")
+    assert not any(k in st.index for k in intern), "zustand taucht als mail auf"
+    ok("der zustand liegt im bucket und wird nicht als mail indexiert")
 
 def test_move_keeps_state():
     s3 = FakeS3(build_mails()); st = new_store(s3); st.refresh()
@@ -564,62 +557,122 @@ def test_setup_encryption_check():
     ok("wizard erkennt client-seitige, serverseitige und fehlende verschluesselung")
 
 # --------------------------------------------------------------------------- #
-# Conditional Writes
+# Zustand: Ops statt Vollschreiben
 # --------------------------------------------------------------------------- #
-def test_conditional_first_write():
-    s3 = FakeS3(build_mails()); st = new_store(s3); st.refresh()
-    st.state.set_flags(["m1"], read=True)
-    puts = [c for c in s3.calls if c[0] == "put" and c[1].endswith("state.json")]
-    assert puts, "state wurde nie geschrieben"
-    assert st.state.etag, "kein ETag gemerkt"
-    assert st.state.conditional and st.state.conflicts == 0
-    ok("erster schreibvorgang legt state per If-None-Match an und merkt sich das ETag")
+def _ops(s3):
+    return sorted(k for k in s3.objs if "/.s3mail-state/" in k)
 
-def test_conditional_conflict_merges():
-    """Zwei Clients, beide haben denselben Stand geladen. A schreibt zuerst -
-    B bekommt 412 und muss den fremden Stand uebernehmen statt ihn zu ueberbuegeln."""
+def _snapshot(s3):
+    key = [k for k in s3.objs if k.endswith(".s3mail-state.json")]
+    return json.loads(s3.objs[key[0]]) if key else None
+
+def test_write_is_one_small_op():
+    s3 = FakeS3(build_mails()); st = new_store(s3); st.refresh()
+    before = len(_ops(s3))
+    st.state.set_flags(["m1"], read=True)
+    ops = _ops(s3)
+    assert len(ops) == before + 1, f"{len(ops) - before} objekte fuer eine aenderung"
+    payload = json.loads(s3.objs[ops[-1]])
+    assert payload["ops"][0]["t"] == "flags" and payload["ops"][0]["mids"] == ["m1"]
+    assert len(s3.objs[ops[-1]]) < 400, "das sieht nach dem ganzen dokument aus"
+    assert st.state.remote_ok
+    ok("eine aenderung = ein kleines op-objekt, nicht das ganze dokument")
+
+def test_two_clients_no_conflict():
+    """Zwei Clients mit demselben Ausgangsstand schreiben nacheinander. Keiner
+    ueberschreibt den anderen - es gibt gar keinen gemeinsamen Schluessel."""
     s3 = FakeS3(build_mails())
     a = new_store(s3, cache=tempfile.mkdtemp()); a.refresh()
     b = new_store(s3, cache=tempfile.mkdtemp()); b.refresh()
-    a.state.set_tags(["m1"], add=["von-A"])          # A schreibt
-    assert b.state.conflicts == 0
-    b.state.set_tags(["m2"], add=["von-B"])          # B schreibt auf veraltetem ETag
-    assert b.state.conflicts == 1, "kein Konflikt erkannt - schreibt ungeprueft?"
-    assert b.state.get("m1")["tags"] == ["von-A"], "fremde aenderung verloren"
-    assert b.state.get("m2")["tags"] == ["von-B"], "eigene aenderung verloren"
-    c = new_store(s3, cache=tempfile.mkdtemp())      # dritter Client liest nach
-    assert c.state.get("m1")["tags"] == ["von-A"] and c.state.get("m2")["tags"] == ["von-B"]
-    ok("schreibkonflikt: fremder stand wird geladen, eigene aenderung darauf wiederholt")
+    a.state.set_tags(["m1"], add=["von-A"])
+    b.state.set_tags(["m2"], add=["von-B"])          # kennt A's aenderung noch nicht
+    assert len(_ops(s3)) == 2, "die beiden schreiben auf denselben schluessel"
+    c = new_store(s3, cache=tempfile.mkdtemp())      # dritter client liest nach
+    assert c.state.get("m1")["tags"] == ["von-A"], "aenderung von A verloren"
+    assert c.state.get("m2")["tags"] == ["von-B"], "aenderung von B verloren"
+    ok("zwei rechner schreiben nebeneinander, beide aenderungen ueberleben")
 
-def test_conditional_conflict_same_message():
+def test_two_clients_same_message():
     s3 = FakeS3(build_mails())
     a = new_store(s3, cache=tempfile.mkdtemp()); a.refresh()
     b = new_store(s3, cache=tempfile.mkdtemp()); b.refresh()
     a.state.set_tags(["m1"], add=["A"]); a.state.set_flags(["m1"], star=True)
-    b.state.set_tags(["m1"], add=["B"])              # dieselbe Mail, anderer Tag
-    e = b.state.get("m1")
+    b.state.set_tags(["m1"], add=["B"])              # dieselbe mail, anderer tag
+    c = new_store(s3, cache=tempfile.mkdtemp())
+    e = c.state.get("m1")
     assert set(e["tags"]) == {"A", "B"}, e
-    assert e["star"] is True, "fremdes stern-flag ueberschrieben"
-    ok("konflikt auf derselben mail: tags werden vereinigt, fremde flags bleiben")
+    assert e["star"] is True, "fremdes stern-flag verloren"
+    ok("dieselbe mail von zwei rechnern: tags vereinigt, fremde flags bleiben")
 
-def test_conditional_fallback():
-    s3 = FakeS3(build_mails()); s3.supports_conditional = False
-    st = new_store(s3); st.refresh()
+def test_compaction():
+    s3 = FakeS3(build_mails()); st = new_store(s3); st.refresh()
+    alt = s3mail.COMPACT_AFTER
+    s3mail.COMPACT_AFTER = 3
+    try:
+        for i in range(4):
+            st.state.set_tags(["m1"], add=[f"t{i}"])
+    finally:
+        s3mail.COMPACT_AFTER = alt
+    snap = _snapshot(s3)
+    assert snap and snap.get("upto"), "kein snapshot mit wasserstand geschrieben"
+    assert len(_ops(s3)) <= 1, f"{len(_ops(s3))} ops nach dem zusammenfassen uebrig"
+    c = new_store(s3, cache=tempfile.mkdtemp())      # frischer client sieht alles
+    assert set(c.state.get("m1")["tags"]) == {"t0", "t1", "t2", "t3"}
+    ok("ab COMPACT_AFTER wird zusammengefasst: snapshot + wasserstand, ops weg")
+
+def test_watermark_ignores_merged_op():
+    """Bleibt beim Aufraeumen ein Op liegen, darf es nicht ein zweites Mal wirken."""
+    s3 = FakeS3(build_mails()); st = new_store(s3); st.refresh()
     st.state.set_flags(["m1"], read=True)
-    assert st.state.conditional is False and st.state.remote_ok
-    assert st.state.get("m1")["read"]
-    ok("s3-klon ohne conditional writes: faellt auf normales put zurueck")
+    alt_key = _ops(s3)[-1]
+    alt_body = s3.objs[alt_key]
+    alt = s3mail.COMPACT_AFTER
+    s3mail.COMPACT_AFTER = 1
+    try:
+        st.state.set_flags(["m2"], read=True)         # loest das zusammenfassen aus
+    finally:
+        s3mail.COMPACT_AFTER = alt
+    assert _snapshot(s3).get("upto"), "kein wasserstand"
+    st.state.set_flags(["m1"], read=False)            # neuer stand: ungelesen
+    s3.objs[alt_key] = alt_body                       # geloeschtes op taucht wieder auf
+    c = new_store(s3, cache=tempfile.mkdtemp())
+    assert c.state.get("m1")["read"] is False, "altes op wurde erneut angewandt"
+    ok("wasserstand: ein liegengebliebenes op wird uebersprungen, nicht wiederholt")
+
+def test_ops_are_not_mail():
+    """Die Ops liegen unter dem Prefix - sie duerfen weder im Index noch ueber die
+    API erreichbar sein."""
+    s3 = FakeS3(build_mails()); st = new_store(s3); st.refresh()
+    st.state.set_flags(["m1"], read=True)
+    st.refresh()
+    assert not any("s3mail-state" in k for k in st.index), "ops als mail indexiert"
+    assert not any(f["name"].startswith(".") for f in st.folders()), "ops als ordner"
+    for op in _ops(s3):
+        try:
+            st.move([op], "archiv"); raise AssertionError("op verschiebbar")
+        except PermissionError: pass
+    ok("ops tauchen nicht als mail, ordner oder verschiebbares objekt auf")
+
+def test_write_failure_keeps_change():
+    s3 = FakeS3(build_mails()); st = new_store(s3); st.refresh()
+    def kaputt(**kw): raise _err("AccessDenied", 403)
+    s3.put_object = kaputt
+    st.state.set_flags(["m1"], read=True)
+    assert st.state.remote_ok is False, "schreibfehler nicht gemerkt"
+    assert st.state.get("m1")["read"] is True, "aenderung lokal verloren"
+    assert st.state.pending, "aenderung nicht fuer den naechsten versuch gemerkt"
+    ok("schreibfehler: lokal sichtbar, gemerkt fuer spaeter, remote_ok faellt")
 
 def test_batch_writes_once():
     s3 = FakeS3(build_mails()); st = new_store(s3)
     st.state.set_rules([{"contains": "rechnungen.de", "field": "from", "folder": "archiv",
                          "tags": ["Buchhaltung"]}])
-    before = len([c for c in s3.calls if c[0] == "put" and "state" in c[1]])
+    before = len(_ops(s3))
     st.refresh()   # indexiert 5 mails, wendet regeln an
-    after = len([c for c in s3.calls if c[0] == "put" and "state" in c[1]])
-    assert after - before <= 2, f"{after - before} state-puts fuer einen refresh"
+    after = len(_ops(s3))
+    assert after - before <= 2, f"{after - before} op-objekte fuer einen refresh"
     assert st.state.get("m3")["tags"] == ["Buchhaltung"]
-    ok("batch: ein refresh mit regeln schreibt den state nicht pro mail neu")
+    ok("batch: ein refresh mit regeln schreibt ein op, nicht eins pro mail")
 
 # --------------------------------------------------------------------------- #
 # Einrichtung
@@ -695,7 +748,7 @@ def test_connection_checks():
     assert checks["Bucket lesen"]["ok"] and "Objekt" in checks["Bucket lesen"]["detail"]
     assert checks["Mail lesen"]["ok"]
     assert checks["Schreiben"]["ok"] and checks["Löschen"]["ok"]
-    assert checks["Conditional Writes"]["ok"]
+    assert checks["Zustand von mehreren Rechnern"]["ok"]
     assert checks["SES-Absender"]["ok"]
     assert not any(k.startswith(".s3mail-probe") for k in s3.objs), "testobjekt blieb liegen"
 
@@ -709,7 +762,7 @@ def test_connection_checks():
     c3 = {c["name"]: c for c in s3mail.test_connection(FakeSession(ReadOnly(build_mails())), "b", "mail/", "")}
     assert not c3["Schreiben"]["ok"] and "Papierkorb" in c3["Schreiben"]["hint"]
     assert "Löschen" not in c3, "loeschen wurde geprueft, obwohl schreiben schon scheiterte"
-    ok("verbindungstest: lesen/schreiben/loeschen/conditional/ses, klartext-hinweise")
+    ok("verbindungstest: lesen/schreiben/loeschen/zustand/ses, klartext-hinweise")
 
 def test_lifecycle_rule():
     s3 = FakeS3(build_mails()); sess = FakeSession(s3)

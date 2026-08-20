@@ -64,7 +64,9 @@ except ImportError:  # pragma: no cover
 
 HEADER_CHUNK = 65536      # Bytes, die fuer den Index per Range-GET geholt werden
 POLICY = email.policy.default
-STATE_OBJECT = ".s3mail-state.json"
+STATE_OBJECT = ".s3mail-state.json"   # Snapshot des Zustands
+STATE_OPS = ".s3mail-state/"          # darunter liegen die einzelnen Aenderungen
+COMPACT_AFTER = 50                    # ab so vielen offenen Ops wird zusammengefasst
 
 INBOX = ""                # Posteingang = Objekte direkt unter dem Root-Prefix
 TRASH = "trash"
@@ -334,45 +336,58 @@ class Batch:
 
 class State:
     """
-    Tags, gelesen/ungelesen, Stern und Regeln. Liegt als JSON im Bucket
-    (<root>.s3mail-state.json), damit mehrere Rechner denselben Stand sehen.
-    Schluessel ist der Basename des S3-Objekts, nicht der volle Key - so
-    ueberlebt der Zustand das Verschieben zwischen Ordnern.
+    Tags, gelesen/ungelesen, Stern und Regeln. Liegt im Bucket, damit mehrere
+    Rechner denselben Stand sehen. Schluessel ist der Basename des S3-Objekts,
+    nicht der volle Key - so ueberlebt der Zustand das Verschieben zwischen
+    Ordnern.
 
-    Geschrieben wird mit Conditional Write (If-Match auf das ETag, If-None-Match: *
-    beim ersten Anlegen). Hat in der Zwischenzeit jemand anderes geschrieben,
-    antwortet S3 mit 412; dann wird der fremde Stand geladen und die eigenen,
-    noch nicht bestaetigten Aenderungen werden darauf wiederholt. Nichts wird
-    blind ueberschrieben.
+    Geschrieben wird nicht das ganze Dokument, sondern die einzelne Aenderung:
+    jedes save() legt ein kleines Objekt unter <root>.s3mail-state/ ab, auf dessen
+    Schluessel nur dieser eine Schreibvorgang schreibt. Zwei Rechner koennen sich
+    dabei nicht ins Gehege kommen - es gibt keinen gemeinsamen Schluessel, auf den
+    beide zeigen, und damit weder Sperre noch If-Match noch 412. Eine Mail als
+    gelesen zu markieren kostet ein paar hundert Byte statt des ganzen Postfachs.
+
+    Gelesen wird der Snapshot (<root>.s3mail-state.json) und darauf alle Ops, die
+    neuer sind als sein Wasserstand ("upto"), in Schluesselreihenfolge durch
+    apply_op. Ab COMPACT_AFTER offenen Ops wird zusammengefasst: neuer Snapshot mit
+    neuem Wasserstand, danach fliegen die eingearbeiteten Ops weg.
+
+    Der Wasserstand ist das, was die Sache gutmuetig macht. Bleibt beim Aufraeumen
+    ein Op liegen, weil das Loeschen scheitert, wird es beim naechsten Laden
+    uebersprungen statt ein zweites Mal angewandt - Loeschen ist Muellabfuhr, keine
+    Buchhaltung. Und weil die Schluessel die Schreibreihenfolge tragen, sortiert
+    sich der Stand von mehreren Rechnern von selbst.
+
+    Fehlt das Schreibrecht, faellt s3mail still auf eine lokale Datei zurueck
+    (remote_ok = False).
     """
-
-    MAX_ATTEMPTS = 5
 
     def __init__(self, s3, bucket: str, root: str, local_file: str):
         self.s3 = s3
         self.bucket = bucket
         self.key = root + STATE_OBJECT
+        self.ops_prefix = root + STATE_OPS
         self.local_file = local_file
         self.lock = threading.RLock()
         self.data = _default_state()
-        self.etag: str | None = None
-        self.pending: list[dict] = []      # lokal angewandt, noch nicht in S3 bestaetigt
-        self.conditional = True            # faellt auf False, wenn S3 das nicht kann
+        self.pending: list[dict] = []      # angewandt, noch nicht in S3
+        self.upto = ""                     # bis hierhin steckt alles im Snapshot
+        self.open_ops = 0                  # Ops neben dem Snapshot
         self.remote_ok = True
-        self.conflicts = 0
         self._defer = 0
         self._dirty = False
+        self._seq = 0
         self.load()
 
     # -- Laden -------------------------------------------------------------- #
-    def _fetch(self) -> tuple[dict | None, str | None]:
+    def _fetch_snapshot(self) -> dict | None:
         try:
             r = self.s3.get_object(Bucket=self.bucket, Key=self.key)
             data = json.loads(r["Body"].read().decode("utf-8"))
-            etag = (r.get("ETag") or "").strip('"') or None
-            return (data if isinstance(data, dict) else None), etag
+            return data if isinstance(data, dict) else None
         except Exception:
-            return None, None
+            return None
 
     def _read_local(self) -> dict | None:
         try:
@@ -382,24 +397,60 @@ class State:
         except (OSError, ValueError):
             return None
 
+    def _list_ops(self) -> list[str]:
+        """Schluessel aller abgelegten Ops, aelteste zuerst."""
+        keys: list[str] = []
+        try:
+            pages = self.s3.get_paginator("list_objects_v2").paginate(
+                Bucket=self.bucket, Prefix=self.ops_prefix)
+            for page in pages:
+                keys += [o["Key"] for o in page.get("Contents", [])]
+        except Exception:
+            return []
+        return sorted(keys)
+
+    def _fetch_ops(self, keys: list[str]) -> list[list[dict]]:
+        """Op-Objekte parallel holen. Reihenfolge bleibt die der Schluessel."""
+        def one(key):
+            try:
+                r = self.s3.get_object(Bucket=self.bucket, Key=key)
+                payload = json.loads(r["Body"].read().decode("utf-8"))
+            except Exception:
+                return []                  # kaputtes Op kippt nicht den Rest
+            return payload.get("ops") or []
+        if not keys:
+            return []
+        with ThreadPoolExecutor(max_workers=min(8, len(keys))) as pool:
+            return list(pool.map(one, keys))
+
     def load(self):
         with self.lock:
             local = self._read_local()
-            remote, etag = self._fetch()
-            if remote is not None:
-                base = remote
-                self.etag = etag
+            snap = self._fetch_snapshot()
+            if snap is not None:
+                base = snap
+                self.upto = str(snap.get("upto") or "")
                 if local:
                     _merge_missing(base, local)   # offline Gemachtes nicht verlieren
             else:
                 base = local or _default_state()
-                self.etag = None
+                self.upto = ""
+            base.pop("upto", None)
             base.setdefault("messages", {})
             base.setdefault("tags", {})
             base.setdefault("rules", [])
+
+            cut = len(self.ops_prefix)
+            keys = [k for k in self._list_ops() if k[cut:] > self.upto]
+            for ops in self._fetch_ops(keys):
+                for op in ops:
+                    apply_op(base, op)
             self.data = base
+            self.open_ops = len(keys)
             for op in self.pending:               # eigene offene Aenderungen erneut drauf
                 apply_op(self.data, op)
+        if len(keys) >= COMPACT_AFTER:
+            self._compact(keys)
 
     # -- Schreiben ---------------------------------------------------------- #
     def batch(self) -> Batch:
@@ -414,61 +465,73 @@ class State:
         except OSError:
             pass
 
-    def _put(self, payload: bytes):
-        kwargs = {}
-        if self.conditional:
-            if self.etag:
-                kwargs["IfMatch"] = self.etag
-            else:
-                kwargs["IfNoneMatch"] = "*"
-        return self.s3.put_object(Bucket=self.bucket, Key=self.key, Body=payload,
-                                  ContentType="application/json", **kwargs)
+    def _op_name(self) -> str:
+        """Eindeutiger, nach Schreibzeit sortierbarer Name fuer einen Schreibvorgang."""
+        with self.lock:
+            self._seq += 1
+            seq = self._seq
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%f")
+        return f"{stamp}-{seq:04d}-{os.urandom(3).hex()}.json"
+
+    def _compact(self, merged: list[str]) -> None:
+        """Snapshot mit neuem Wasserstand schreiben, die eingearbeiteten Ops wegraeumen.
+
+        `merged` sind genau die Ops, die in self.data stecken - nur bis dorthin darf
+        der Wasserstand steigen, sonst gingen fremde Aenderungen verloren.
+        """
+        if not merged:
+            return
+        cut = len(self.ops_prefix)
+        with self.lock:
+            snapshot = dict(self.data)
+            snapshot["upto"] = merged[-1][cut:]
+            payload = json.dumps(snapshot, ensure_ascii=False).encode("utf-8")
+        try:
+            self.s3.put_object(Bucket=self.bucket, Key=self.key, Body=payload,
+                               ContentType="application/json")
+        except Exception:
+            return                  # bleibt eben liegen, beim naechsten Mal wieder
+        with self.lock:
+            self.upto = snapshot["upto"]
+            self.open_ops = 0
+
+        def rm(key):
+            try:
+                self.s3.delete_object(Bucket=self.bucket, Key=key)
+            except Exception:
+                pass                # der Wasserstand faengt das ab
+        with ThreadPoolExecutor(max_workers=min(8, len(merged))) as pool:
+            list(pool.map(rm, merged))
 
     def save(self) -> bool:
         with self.lock:
             if self._defer:
                 self._dirty = True
                 return True
-            for _ in range(self.MAX_ATTEMPTS):
-                payload = json.dumps(self.data, ensure_ascii=False).encode("utf-8")
-                self._write_local(payload)
-                try:
-                    resp = self._put(payload) or {}
-                    self.etag = (resp.get("ETag") or "").strip('"') or None
-                    if self.etag is None:         # Antwort ohne ETag -> nachschlagen
-                        _, self.etag = self._fetch()
-                    self.pending.clear()
-                    self.remote_ok = True
-                    self._dirty = False
-                    return True
-                except ClientError as exc:
-                    err = getattr(exc, "response", {}).get("Error", {}) or {}
-                    code = str(err.get("Code", ""))
-                    status = str(getattr(exc, "response", {})
-                                 .get("ResponseMetadata", {}).get("HTTPStatusCode", ""))
-                    if code in ("PreconditionFailed", "ConditionalRequestConflict",
-                                "OperationAborted") or status in ("412", "409"):
-                        self.conflicts += 1
-                        remote, etag = self._fetch()   # fremden Stand holen ...
-                        self.data = remote or _default_state()
-                        self.data.setdefault("messages", {})
-                        self.data.setdefault("tags", {})
-                        self.data.setdefault("rules", [])
-                        self.etag = etag
-                        for op in self.pending:        # ... und eigene Aenderungen wiederholen
-                            apply_op(self.data, op)
-                        continue
-                    if code in ("NotImplemented", "InvalidRequest", "InvalidArgument",
-                                "MethodNotAllowed") or status == "501":
-                        self.conditional = False       # S3-Klon ohne Conditional Writes
-                        continue
-                    self.remote_ok = False
-                    return False
-                except Exception:
-                    self.remote_ok = False
-                    return False
-            self.remote_ok = False
+            ops, self.pending = self.pending, []
+            self._write_local(json.dumps(self.data, ensure_ascii=False).encode("utf-8"))
+            if not ops:
+                self._dirty = False
+                return True
+            name = self._op_name()
+        try:
+            self.s3.put_object(
+                Bucket=self.bucket, Key=self.ops_prefix + name,
+                Body=json.dumps({"ops": ops}, ensure_ascii=False).encode("utf-8"),
+                ContentType="application/json")
+        except Exception:
+            with self.lock:
+                self.pending = ops + self.pending      # nichts verlieren
+                self.remote_ok = False
             return False
+        with self.lock:
+            self.remote_ok = True
+            self._dirty = False
+            self.open_ops += 1
+            due = self.open_ops >= COMPACT_AFTER
+        if due:
+            self.load()             # holt fremde Ops mit dazu und kompaktiert
+        return True
 
     def _mutate(self, op: dict) -> bool:
         with self.lock:
@@ -575,10 +638,15 @@ class MailStore:
         folder = valid_folder(folder)
         return f"{self.root}{folder + '/' if folder else ''}{mid}"
 
+    def _internal(self, key: str) -> bool:
+        """Alles, was unterhalb der Wurzel mit einem Punkt beginnt, gehoert s3mail
+        selbst: der Snapshot und der Ops-Ordner darunter."""
+        return any(part.startswith(".") for part in key[len(self.root):].split("/"))
+
     def _own(self, key: str):
         if not key.startswith(self.root):
             raise PermissionError("Key liegt ausserhalb des Prefix")
-        if self.mid(key).startswith("."):
+        if self._internal(key):
             raise PermissionError("Interne Datei")
 
     def folders(self) -> list[dict]:
@@ -730,7 +798,7 @@ class MailStore:
                     key = obj["Key"]
                     if key.endswith("/") or obj["Size"] == 0:
                         continue
-                    if self.mid(key).startswith("."):      # state.json & Co.
+                    if self._internal(key):               # Snapshot, Ops & Co.
                         continue
                     lm = obj["LastModified"]
                     if lm.tzinfo is None:
@@ -1277,23 +1345,20 @@ def test_connection(session, bucket: str, prefix: str, sender: str = "",
                     "s3:DeleteObject fehlt. Starte mit „Löschen sperren“, "
                     "dann bleibt alles beim Lesen."))
 
-    # 5. Conditional Write (fuer gefahrloses Arbeiten von mehreren Rechnern)
+    # 5. Auflisten des Ops-Ordners (dort liegen die Zustandsaenderungen)
     try:
-        s3.put_object(Bucket=bucket, Key=f"{prefix}.s3mail-probe2", Body=b"x",
-                      IfNoneMatch="*")
-        s3.delete_object(Bucket=bucket, Key=f"{prefix}.s3mail-probe2")
-        checks.append(_check("Conditional Writes", True,
-                             "unterstützt – mehrere Rechner überschreiben sich nicht"))
+        s3.list_objects_v2(Bucket=bucket, Prefix=f"{prefix}{STATE_OPS}", MaxKeys=1)
+        checks.append(_check("Zustand von mehreren Rechnern", True,
+                             "Ordner für die Änderungen ist lesbar"))
     except ClientError as exc:
         code = exc.response.get("Error", {}).get("Code", "")
-        if code in ("PreconditionFailed", "ConditionalRequestConflict"):
-            checks.append(_check("Conditional Writes", True, "unterstützt"))
-        else:
-            checks.append(_check("Conditional Writes", False, code,
-                                 "Kein Beinbruch: s3mail schreibt dann ohne Sperre.",
-                                 skipped=True))
+        checks.append(_check(
+            "Zustand von mehreren Rechnern", False, code,
+            f"s3:ListBucket auf {prefix}{STATE_OPS}* fehlt. Ohne das sieht dieser "
+            "Rechner Änderungen der anderen erst nach dem nächsten Zusammenfassen."))
     except Exception as exc:
-        checks.append(_check("Conditional Writes", False, str(exc), skipped=True))
+        checks.append(_check("Zustand von mehreren Rechnern", False, str(exc),
+                             skipped=True))
 
     # 6. SES-Absender
     if sender:
