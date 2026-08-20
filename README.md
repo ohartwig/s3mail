@@ -85,9 +85,25 @@ Nicht gebraucht werden Lambda, EC2, VPC oder eine WorkMail-Organisation.
    | **Vorhandenes Profil mit Schlüsseln** | Im Assistenten aus der Liste wählen | nein |
    | **AWS SSO / IAM Identity Center** | Einmal `aws sso login --profile NAME`, dann das Profil im Assistenten wählen | ja, zum Anmelden |
 
+   **IAM-Benutzer anlegen, Schritt für Schritt** (einmalig, ein paar Minuten):
+
+   1. AWS-Konsole → **IAM** → *Benutzer* → **Benutzer erstellen**, Name z. B.
+      `s3mail`. Zugriff auf die Konsole braucht er nicht.
+   2. Berechtigungen → *Richtlinien direkt anfügen* → **Richtlinie erstellen** →
+      Reiter **JSON** → die [Policy weiter unten](#iam-policy) einfügen und den
+      Bucket-Namen anpassen.
+   3. Beim fertigen Benutzer → **Sicherheitsanmeldeinformationen** →
+      *Zugriffsschlüssel erstellen*, Anwendungsfall „Anwendung außerhalb von AWS".
+      Das **Secret wird nur ein einziges Mal angezeigt** – jetzt kopieren.
+   4. Im Assistenten Reiter **„Neue Zugangsdaten"**, beides einfügen, speichern.
+      Die Bucket-Liste füllt sich danach von selbst.
+
    Der Assistent schreibt eingetippte Schlüssel als **eigenes, zusätzliches Profil**
-   nach `~/.aws/credentials` (Standard-Name `s3mail`, chmod 600). Vorhandene Profile
-   bleiben unangetastet – auch ein `default`, das anders arbeitet.
+   nach `~/.aws/credentials` (Standard-Name `s3mail`, chmod 600) und ergänzt in
+   `~/.aws/config` nur `[profile s3mail]` mit der Region. Vorhandene Profile bleiben
+   unangetastet – auch ein `default`, das sich ganz anders anmeldet. Die AWS CLI wird
+   auf diesem Weg nirgends gebraucht; `~/.aws/credentials` ist bloß die Datei, an der
+   alle AWS-Werkzeuge nachsehen.
 
    Was **nicht** funktioniert: ein Profil, das sich über das neue `aws login`
    anmeldet (Eintrag `login_session` in `~/.aws/config`). Das bräuchte
