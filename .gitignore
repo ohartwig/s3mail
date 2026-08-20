@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# s3mail
+config.json
+*.state.json
+.s3mail-state.json
+s3mail-cache/
+
+# Test-Artefakte
+*.png
+.pytest_cache/
+
+# macOS
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
