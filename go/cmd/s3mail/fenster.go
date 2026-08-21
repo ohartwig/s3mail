@@ -25,17 +25,12 @@ func oeffneFenster(url string) {
 	oeffneBrowser(url)
 }
 
-// appModusBrowser sind die Browser, die --app= koennen, in der Reihenfolge, in
-// der wir sie ausprobieren.
+// appModusBrowser nennt die Browser, die --app= koennen, in der Reihenfolge, in
+// der wir sie ausprobieren. Unter macOS der Bundle-Name, sonst der Programmpfad.
 func appModusBrowser() []string {
 	switch runtime.GOOS {
 	case "darwin":
-		return []string{
-			"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-			"/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
-			"/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
-			"/Applications/Chromium.app/Contents/MacOS/Chromium",
-		}
+		return []string{"Google Chrome", "Microsoft Edge", "Brave Browser", "Chromium"}
 	case "windows":
 		var pfade []string
 		for _, basis := range []string{os.Getenv("ProgramFiles"),
@@ -55,7 +50,21 @@ func appModusBrowser() []string {
 	}
 }
 
+// fensterArgumente sind die Schalter, die aus einem Browser ein Programmfenster machen.
+func fensterArgumente(url string) []string {
+	return []string{
+		"--app=" + url,
+		"--window-size=1280,860",
+		// Eigenes Profil, damit s3mail nicht die Sitzung eines laufenden
+		// Browserfensters mitbenutzt.
+		"--user-data-dir=" + filepath.Join(os.TempDir(), "s3mail-fenster"),
+	}
+}
+
 func starteAppModus(url string) bool {
+	if runtime.GOOS == "darwin" {
+		return starteAppModusMac(url)
+	}
 	for _, kandidat := range appModusBrowser() {
 		pfad := kandidat
 		if !filepath.IsAbs(pfad) {
@@ -67,16 +76,40 @@ func starteAppModus(url string) bool {
 		} else if _, err := os.Stat(pfad); err != nil {
 			continue
 		}
-		cmd := exec.Command(pfad, "--app="+url,
-			"--window-size=1280,860",
-			// Eigenes Profil, damit s3mail nicht in einem laufenden Browserfenster
-			// landet und dessen Sitzung mitbenutzt.
-			"--user-data-dir="+filepath.Join(os.TempDir(), "s3mail-fenster"))
-		if cmd.Start() == nil {
+		if exec.Command(pfad, fensterArgumente(url)...).Start() == nil {
 			return true
 		}
 	}
 	return false
+}
+
+// starteAppModusMac geht ueber `open -na`.
+//
+// Das Browser-Binary direkt aufzurufen funktioniert unter macOS nicht, wenn der
+// Browser schon laeuft: der Aufruf reicht die Adresse nur an die bestehende
+// Instanz weiter ("Wird in einer aktuellen Browsersitzung geoeffnet") und
+// verwirft --app= und --user-data-dir, weil das Startparameter sind. Es entsteht
+// dann bestenfalls ein Tab im Hintergrund - und fuer den, der doppelgeklickt
+// hat, sieht es aus, als passiere nichts. `open -n` erzwingt eine neue Instanz,
+// die die Schalter auch beachtet.
+func starteAppModusMac(url string) bool {
+	for _, name := range appModusBrowser() {
+		if _, err := os.Stat("/Applications/" + name + ".app"); err != nil {
+			continue
+		}
+		prog, args := macKommando(name, url)
+		if exec.Command(prog, args...).Run() == nil {
+			return true
+		}
+	}
+	return false
+}
+
+// macKommando baut den Aufruf. Eigene Funktion, damit der Test festhalten kann,
+// dass "-n" dabei ist - ohne das reicht macOS die Adresse an eine laufende
+// Browserinstanz weiter, und es geht kein Fenster auf.
+func macKommando(name, url string) (string, []string) {
+	return "open", append([]string{"-na", name, "--args"}, fensterArgumente(url)...)
 }
 
 // oeffneBrowser ist der Rueckfall: normale Adresse im Standardbrowser.
