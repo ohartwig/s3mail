@@ -22,11 +22,13 @@ stages:
   - release
 
 variables:
-  # Direkt von Docker Hub: CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX ist auf dieser
-  # Instanz leer, das Image löste sich damit zu "/golang:1.25" auf und der Job
-  # brach beim Pull ab. Ist der Proxy für die Gruppe eingerichtet, gehört der
-  # Präfix wieder davor.
-  GO_IMAGE: "golang:1.25"
+  # Beide Images aus unserem Mirror, nicht von Docker Hub – siehe
+  # okf://core/engineering/ci-image-access.md und die Katalog-Konvention in
+  # devops/ci-cd-components. `development/s3mail` steht auf der
+  # Job-Token-Allowlist von devops/ci-mirrors; ohne die kämen bot-getriggerte
+  # Pipelines nicht an die Images, während von Hand angestoßene noch liefen.
+  GO_IMAGE: "registry.ole-hartwig.eu/devops/ci-mirrors/golang:1.25"
+  CURL_IMAGE: "registry.ole-hartwig.eu/devops/ci-mirrors/curl:8.19.0-dev"
   # Nicht heimlich eine andere Go-Version ziehen: was im Image ist, gilt.
   GOTOOLCHAIN: "local"
   GOFLAGS: "-mod=readonly"
@@ -77,8 +79,12 @@ test:
         -o "dist/${DATEI}" ./cmd/s3mail
     # Als ZIP, damit das Ausführungs-Bit den Download übersteht – eine roh
     # heruntergeladene Datei kommt ohne +x an und lässt sich nicht starten.
-    - cd dist && zip -q "s3mail-${LABEL}.zip" "${DATEI}" && rm "${DATEI}"
-    - sha256sum "s3mail-${LABEL}.zip" > "s3mail-${LABEL}.zip.sha256"
+    # Gepackt wird mit Go, nicht mit /usr/bin/zip: das golang-Image bringt es
+    # nicht mit, und ein apt-get dafür wäre ein zweiter Paketkanal in einer
+    # Pipeline, die sonst nur Go braucht.
+    - go run tools/zippen.go "dist/s3mail-${LABEL}.zip" "dist/${DATEI}"
+    - rm "dist/${DATEI}"
+    - cd dist && sha256sum "s3mail-${LABEL}.zip" > "s3mail-${LABEL}.zip.sha256"
   artifacts:
     paths:
       - go/dist/
@@ -105,7 +111,7 @@ build:linux-amd64:
 # --------------------------------------------------------------------------- #
 upload:
   stage: release
-  image: curlimages/curl:latest
+  image: ${CURL_IMAGE}
   before_script: []
   rules:
     - if: $CI_COMMIT_TAG
