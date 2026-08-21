@@ -2,6 +2,7 @@ package awsx_test
 
 import (
 	"context"
+	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -437,4 +438,42 @@ func schluessel(s *s3Server) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// TestBucketsOhneRechtLiefertLeereListe prueft den Pfad, der jeden
+// Postfach-Benutzer traf: deren IAM-Policy gibt absichtlich kein
+// s3:ListAllMyBuckets, der Aufruf laeuft also in ein AccessDenied.
+//
+// Entscheidend ist, dass dabei ein LEERES Slice herauskommt und nicht nil: ein
+// nil-Slice wird zu JSON `null`, und die Oberflaeche ruft darauf .map() auf.
+// Der Nutzer sah dann nicht "kein Recht zum Auflisten", sondern
+// "Cannot read properties of null (reading 'map')" - und nichts ging mehr.
+func TestBucketsOhneRechtLiefertLeereListe(t *testing.T) {
+	srv := neuerS3Server()
+	verweigern := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/" {
+			w.Header().Set("Content-Type", "application/xml")
+			w.WriteHeader(403)
+			_, _ = w.Write([]byte("<Error><Code>AccessDenied</Code><Message>nope</Message></Error>"))
+			return
+		}
+		srv.ServeHTTP(w, r)
+	})
+	ts := httptest.NewServer(verweigern)
+	defer ts.Close()
+	cfg := aws.Config{Region: "eu-north-1",
+		Credentials: credentials.NewStaticCredentialsProvider("AKIATEST", "geheim", "")}
+	a := awsx.NeuS3(cfg, ts.URL)
+
+	buckets, err := a.Buckets(context.Background())
+	if err != nil {
+		t.Fatalf("AccessDenied soll kein Fehler sein: %v", err)
+	}
+	if buckets == nil {
+		t.Fatal("nil statt leerer Liste - daran stirbt die Oberflaeche")
+	}
+	blob, _ := json.Marshal(map[string]any{"buckets": buckets})
+	if string(blob) != `{"buckets":[]}` {
+		t.Errorf("JSON: %s", blob)
+	}
 }

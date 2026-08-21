@@ -40,14 +40,14 @@ func (s *SES) Identitaeten(ctx context.Context) []string {
 	resp, err := s.c.ListIdentities(ctx, &ses.ListIdentitiesInput{
 		IdentityType: types.IdentityTypeEmailAddress})
 	if err != nil || len(resp.Identities) == 0 {
-		return nil
+		return []string{} // nie nil - siehe Buckets()
 	}
 	attrs, err := s.c.GetIdentityVerificationAttributes(ctx,
 		&ses.GetIdentityVerificationAttributesInput{Identities: resp.Identities})
 	if err != nil {
 		return resp.Identities
 	}
-	var out []string
+	out := []string{}
 	for _, id := range resp.Identities {
 		if a, da := attrs.VerificationAttributes[id]; da &&
 			a.VerificationStatus == types.VerificationStatusSuccess {

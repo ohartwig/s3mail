@@ -203,13 +203,13 @@ $("#loadBuckets").onclick = async () => {
   try {
     const d = await api("/api/setup/buckets", collect());
     $("#bucketSel").innerHTML = '<option value="">– auswählen –</option>' +
-      d.buckets.map(x => `<option${x === $("#bucket").value ? " selected" : ""}>${x}</option>`).join("");
+      (d.buckets || []).map(x => `<option${x === $("#bucket").value ? " selected" : ""}>${x}</option>`).join("");
     $("#identSel").innerHTML = '<option value="">– verifizierte Adressen –</option>' +
-      d.identities.map(x => `<option>${x}</option>`).join("");
+      (d.identities || []).map(x => `<option>${x}</option>`).join("");
     if (d.note) say("#bucketMsg", d.note, true);
-    else if (!d.buckets.length) say("#bucketMsg",
+    else if (!(d.buckets || []).length) say("#bucketMsg",
       "Keine Buckets gefunden – Namen bitte direkt eintippen.", true);
-    else say("#bucketMsg", d.buckets.length + " Bucket(s) gefunden.");
+    else say("#bucketMsg", (d.buckets || []).length + " Bucket(s) gefunden.");
   } catch (e) { say("#bucketMsg", e.message, true); }
   finally { b.disabled = false; b.textContent = "Buckets laden"; }
 };

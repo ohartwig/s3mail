@@ -23,9 +23,12 @@ func (a *S3) Buckets(ctx context.Context) ([]string, error) {
 		var api smithy.APIError
 		if errors.As(err, &api) && (api.ErrorCode() == "AccessDenied" ||
 			api.ErrorCode() == "AccessDeniedException") {
-			return nil, nil
+			// Leeres Slice, nicht nil: ein nil-Slice wird zu JSON `null`, und die
+			// Oberflaeche ruft darauf .map() auf. Fehlendes s3:ListAllMyBuckets ist
+			// der Normalfall - die Postfach-Benutzer bekommen es absichtlich nicht.
+			return []string{}, nil
 		}
-		return nil, err
+		return []string{}, err
 	}
 	out := make([]string, 0, len(resp.Buckets))
 	for _, b := range resp.Buckets {

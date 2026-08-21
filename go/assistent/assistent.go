@@ -96,9 +96,12 @@ func (a *Assistent) Buckets(ctx context.Context, d Daten) (map[string]any, error
 	if err != nil {
 		return nil, Eingabefehler{awsx.Klartext(err, d.Profil)}
 	}
+	// Nie nil an die Oberflaeche geben: ein nil-Slice wird zu JSON `null`, und
+	// `null.map(...)` beendet das Skript der Seite - der Nutzer sieht dann nicht
+	// "kein Recht zum Auflisten", sondern gar nichts mehr.
 	out := map[string]any{
-		"buckets":    buckets,
-		"identities": awsx.NeuSES(cfg, "").Identitaeten(ctx),
+		"buckets":    nichtNil(buckets),
+		"identities": nichtNil(awsx.NeuSES(cfg, "").Identitaeten(ctx)),
 	}
 	if len(buckets) == 0 {
 		out["note"] = "Kein Recht zum Auflisten aller Buckets (s3:ListAllMyBuckets) – " +
@@ -182,4 +185,11 @@ func (a *Assistent) Route(pfad string) (func(context.Context, Daten) (map[string
 		return a.Speichern, true
 	}
 	return nil, false
+}
+
+func nichtNil(l []string) []string {
+	if l == nil {
+		return []string{}
+	}
+	return l
 }
