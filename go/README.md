@@ -271,3 +271,64 @@ Zum Vergleich: das PyInstaller-Paket war 37 MB als Ordner, 15 MB als Einzeldatei
 mit 7 Sekunden Startzeit.
 
 **69 Testfunktionen**, 32 Module in der Abhängigkeitskette.
+
+---
+
+# Portierung: SES, Assistent, CLI
+
+Der letzte Block. Damit läuft s3mail vollständig in Go – ein `go build`, vier
+Plattformen, je **eine Datei**:
+
+```
+windows/amd64   13M      darwin/amd64    13M
+darwin/arm64    12M      linux/amd64     12M
+```
+
+## `mailer` – die ausgehende Mail
+
+Bauen und Zustellen sind getrennt, damit die Kopfzeilen ohne AWS prüfbar sind. An
+ihnen hängt mehr, als man denkt:
+
+- **`In-Reply-To` und `References`** – ohne die macht die Antwort im Postfach des
+  Empfängers einen neuen Strang auf. Das fällt beim Testen nie auf und beim
+  Empfänger sofort.
+- **Betreff mit Umlauten** wird RFC-2047-kodiert; roh im Header wäre das ein
+  8-Bit-Zeichen, das je nach Server abgelehnt oder verstümmelt wird.
+- **SES bekommt reine Adressen**, keine Anzeigenamen.
+- **Weiterleiten** hängt die Originalmail als `message/rfc822` an.
+
+## `pruefung` – die Checkliste aus Schritt 3
+
+Geht der Reihe nach durch, was s3mail braucht, und schreibt zu jedem fehlenden
+Punkt **die IAM-Aktion dazu**. Das ist die Stelle, an der jemand ohne AWS-Vorwissen
+erfährt, woran es liegt. Geprüft ist auch, dass ein leeres Postfach als
+„übersprungen" gilt und nicht als Fehler, und dass die Zustandsdateien nicht als
+Beispielmail herhalten.
+
+## `konfig` – plattformgerechte Pfade
+
+`os.UserConfigDir()` und `os.UserCacheDir()` statt eines fest verdrahteten
+`~/.config`: unter Windows landet die Konfiguration in `%AppData%\s3mail`, der
+Index in `%LocalAppData%\s3mail`. Die AWS-Zugangsdaten werden **additiv** in
+`~/.aws/credentials` geschrieben – zeilenweise, nicht über eine INI-Bibliothek,
+die die Datei neu schriebe und Kommentare und fremde Formatierung wegwürfe. Ein
+bestehendes `default`-Profil bleibt unangetastet.
+
+## Zwei Fehler, die der erste Start gefunden hat
+
+**Das SDK las woanders, als der Assistent schrieb.** Der Assistent legt die
+Zugangsdaten in `konfig.AWSVerzeichnis()` ab, das SDK suchte in seinem eigenen
+Vorgabepfad. In der Praxis ist beides `~/.aws`, aber wer `AWS_SHARED_CREDENTIALS_FILE`
+setzt, hätte ein Profil angelegt, das nie gefunden wird. `awsx.GeteiltesVerzeichnis`
+bindet beides zusammen.
+
+**Ohne Konfiguration gibt es kein Postfach** – die Postfach-Routen wären in einen
+Nil-Zeiger gelaufen. Sie antworten jetzt mit 503, der Assistent bleibt erreichbar,
+und die Startseite zeigt ihn.
+
+**89 Testfunktionen.**
+
+## Was noch fehlt
+
+Eine `.gitlab-ci.yml`, die auf einem Linux-Runner alle vier Plattformen baut und
+ans Release hängt – danach ist die Handarbeit pro Plattform vorbei.

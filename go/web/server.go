@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"s3mail/assistent"
 	"s3mail/core"
 	"s3mail/mimeparse"
 	"s3mail/store"
@@ -26,6 +27,10 @@ type Server struct {
 	Port    int
 	Config  map[string]any
 
+	versender        Versender
+	standardAbsender string
+	assistent        *assistent.Assistent
+
 	mux *http.ServeMux
 }
 
@@ -33,12 +38,21 @@ func NewServer(mb *store.Mailbox, token, bind string, port int, config map[strin
 	s := &Server{Mailbox: mb, Token: token, Bind: bind, Port: port, Config: config}
 	s.mux = http.NewServeMux()
 	s.routen()
+	s.sendenRoute()
+	s.assistentRouten()
 	return s
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	if !s.zugangPruefen(w, r) {
+		return
+	}
+	// Ohne Konfiguration gibt es noch kein Postfach - dann bedient nur der
+	// Assistent. Sonst liefen die Postfach-Routen in einen Nil-Zeiger.
+	if s.Mailbox == nil && strings.HasPrefix(r.URL.Path, "/api/") &&
+		!strings.HasPrefix(r.URL.Path, "/api/setup/") {
+		s.fehler(w, http.StatusServiceUnavailable, "s3mail ist noch nicht eingerichtet")
 		return
 	}
 	s.mux.ServeHTTP(w, r)
@@ -213,6 +227,10 @@ func (a anfrage) alleKeys() []string {
 
 func (s *Server) routen() {
 	s.mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+		if s.Mailbox == nil {
+			s.seite(w, SeiteAssistent) // noch nicht eingerichtet
+			return
+		}
 		blob, _ := json.Marshal(s.Config)
 		s.seite(w, strings.Replace(SeitePostfach, "__CONFIG__", string(blob), 1))
 	})

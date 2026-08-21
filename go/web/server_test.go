@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"s3mail/assistent"
 	"s3mail/s3fake"
 	"s3mail/store"
 )
@@ -272,5 +273,35 @@ func TestOberflaecheIstVollstaendig(t *testing.T) {
 	}
 	if !strings.Contains(SeitePostfach, "__CONFIG__") {
 		t.Error("Postfachseite hat keinen Platzhalter fuer die Konfiguration")
+	}
+}
+
+// TestOhnePostfach - vor der Einrichtung gibt es kein Postfach. Die Routen
+// duerfen dann nicht in einen Nil-Zeiger laufen.
+func TestOhnePostfach(t *testing.T) {
+	srv := NewServer(nil, testToken, "127.0.0.1", 0, nil)
+	srv.MitAssistent(&assistent.Assistent{})
+	ts := httptest.NewServer(srv)
+	defer ts.Close()
+	srv.Port = portVon(ts.URL)
+
+	for _, pfad := range []string{"/api/messages?folder=", "/api/overview",
+		"/api/message?key=mail/m1", "/api/raw?key=mail/m1"} {
+		r := rufen(t, ts, "GET", pfad, "", nil)
+		if r.Code != 503 {
+			t.Errorf("%s: HTTP %d, erwartet 503", pfad, r.Code)
+		}
+	}
+	if r := rufen(t, ts, "POST", "/api/refresh", "{}", nil); r.Code != 503 {
+		t.Errorf("refresh: HTTP %d", r.Code)
+	}
+	// Der Assistent muss erreichbar bleiben
+	if r := rufen(t, ts, "POST", "/api/setup/info", "{}", nil); r.Code == 503 {
+		t.Error("Assistent gesperrt, obwohl er gebraucht wird")
+	}
+	// und die Startseite zeigt ihn
+	r := rufen(t, ts, "GET", "/", "", nil)
+	if r.Code != 200 || !strings.Contains(string(r.Body), "s3mail einrichten") {
+		t.Errorf("Startseite ohne Postfach: HTTP %d", r.Code)
 	}
 }

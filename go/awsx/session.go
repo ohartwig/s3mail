@@ -7,12 +7,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/smithy-go"
 )
+
+// GeteiltesVerzeichnis ist der Ort von credentials und config. Leer heisst: was
+// das SDK von sich aus nimmt (~/.aws).
+//
+// Der Assistent schreibt die Zugangsdaten irgendwohin - das SDK muss sie an
+// derselben Stelle suchen, sonst legt jemand ein Profil an, das nie gefunden wird.
+var GeteiltesVerzeichnis string
 
 // Sitzung baut die AWS-Konfiguration aus Profil und Region. Beides darf leer sein;
 // dann greift, was in der Umgebung steht.
@@ -23,6 +31,13 @@ func Sitzung(ctx context.Context, profil, region string) (aws.Config, error) {
 	}
 	if region != "" {
 		opts = append(opts, config.WithRegion(region))
+	}
+	if GeteiltesVerzeichnis != "" {
+		opts = append(opts,
+			config.WithSharedCredentialsFiles([]string{
+				filepath.Join(GeteiltesVerzeichnis, "credentials")}),
+			config.WithSharedConfigFiles([]string{
+				filepath.Join(GeteiltesVerzeichnis, "config")}))
 	}
 	cfg, err := config.LoadDefaultConfig(ctx, opts...)
 	if err != nil {
