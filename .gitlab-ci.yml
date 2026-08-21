@@ -1,0 +1,162 @@
+# SPDX-FileCopyrightText: 2026 Kai Ole Hartwig <mail@ole-hartwig.eu>
+#
+# Pipeline für s3mail (Go).
+#
+# Alle Jobs laufen untagged und landen damit auf `aws-spot-runner` – dem
+# einzigen Runner des Projekts, der untagged Jobs annimmt (Docker, Linux/arm64).
+# Die anderen verlangen ihre eigenen Tags und sind für Signing- und apk-Arbeit
+# reserviert.
+#
+# Dass der Runner arm64 ist, spielt keine Rolle: Go kompiliert von dort für alle
+# Zielplattformen, weil nichts in der Abhängigkeitskette CGO braucht. Genau
+# deshalb ist das Projekt von Python nach Go gewandert – PyInstaller konnte
+# grundsätzlich nur für die Plattform bauen, auf der es lief, und ein
+# Windows-Paket war damit gar nicht herstellbar.
+#
+# Der Katalog unter devops/ci-cd-components ist PHP/TYPO3-seitig, für Go gibt es
+# dort nichts – deshalb hier von Hand.
+
+stages:
+  - test
+  - build
+  - release
+
+variables:
+  # Über den Dependency-Proxy, damit die Läufe nicht an Docker Hubs Ratelimit
+  # hängen. Ist er für die Gruppe abgeschaltet, tut es auch schlicht "golang:1.25".
+  GO_IMAGE: "${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/golang:1.25"
+  # Nicht heimlich eine andere Go-Version ziehen: was im Image ist, gilt.
+  GOTOOLCHAIN: "local"
+  GOFLAGS: "-mod=readonly"
+  GOPATH: "${CI_PROJECT_DIR}/.go"
+  PAKET_URL: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/s3mail"
+
+default:
+  image: ${GO_IMAGE}
+  before_script:
+    - cd go
+  cache:
+    key:
+      files:
+        - go/go.sum
+    paths:
+      - .go/pkg/mod
+
+# --------------------------------------------------------------------------- #
+# Test
+# --------------------------------------------------------------------------- #
+test:
+  stage: test
+  script:
+    - test -z "$(gofmt -l .)" || { echo "nicht formatiert:"; gofmt -l .; exit 1; }
+    - go vet ./...
+    - go test -race -coverprofile=coverage.out ./...
+    - go tool cover -func=coverage.out | tail -1
+  coverage: '/total:\s+\(statements\)\s+(\d+\.\d+)%/'
+  artifacts:
+    paths:
+      - go/coverage.out
+    expire_in: 1 week
+
+# --------------------------------------------------------------------------- #
+# Bauen – vier Plattformen aus einem Lauf
+# --------------------------------------------------------------------------- #
+.build:
+  stage: build
+  needs: [test]
+  script:
+    # -trimpath nimmt die Pfade des Baurechners aus dem Binary, damit zwei Läufe
+    # dasselbe Ergebnis liefern.
+    - VERSION="${CI_COMMIT_TAG:-$CI_COMMIT_SHORT_SHA}"
+    - mkdir -p dist
+    - |
+      CGO_ENABLED=0 GOOS="$ZIEL_OS" GOARCH="$ZIEL_ARCH" \
+        go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" \
+        -o "dist/${DATEI}" ./cmd/s3mail
+    # Als ZIP, damit das Ausführungs-Bit den Download übersteht – eine roh
+    # heruntergeladene Datei kommt ohne +x an und lässt sich nicht starten.
+    - cd dist && zip -q "s3mail-${LABEL}.zip" "${DATEI}" && rm "${DATEI}"
+    - sha256sum "s3mail-${LABEL}.zip" > "s3mail-${LABEL}.zip.sha256"
+  artifacts:
+    paths:
+      - go/dist/
+    expire_in: 1 month
+
+build:windows-amd64:
+  extends: .build
+  variables: { ZIEL_OS: windows, ZIEL_ARCH: amd64, LABEL: windows-amd64, DATEI: s3mail.exe }
+
+build:macos-arm64:
+  extends: .build
+  variables: { ZIEL_OS: darwin, ZIEL_ARCH: arm64, LABEL: macos-arm64, DATEI: s3mail }
+
+build:macos-amd64:
+  extends: .build
+  variables: { ZIEL_OS: darwin, ZIEL_ARCH: amd64, LABEL: macos-amd64, DATEI: s3mail }
+
+build:linux-amd64:
+  extends: .build
+  variables: { ZIEL_OS: linux, ZIEL_ARCH: amd64, LABEL: linux-amd64, DATEI: s3mail }
+
+# --------------------------------------------------------------------------- #
+# Veröffentlichen – nur auf einem Tag
+# --------------------------------------------------------------------------- #
+upload:
+  stage: release
+  image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/curlimages/curl:latest
+  before_script: []
+  rules:
+    - if: $CI_COMMIT_TAG
+  script:
+    # Paketversion ist der Tag, wie er ist - dieselbe Zeichenkette, die unten in
+    # den Asset-Links steht. Ein hier abgeschnittenes "v" haette Links erzeugt,
+    # die ins Leere zeigen.
+    - cd go/dist
+    - |
+      for f in *.zip *.sha256; do
+        echo "lade hoch: $f"
+        curl --fail-with-body --silent --show-error \
+          --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
+          --upload-file "$f" "${PAKET_URL}/${CI_COMMIT_TAG}/${f}"
+        echo
+      done
+
+release:
+  stage: release
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  before_script: []
+  needs: [upload]
+  rules:
+    - if: $CI_COMMIT_TAG
+  script:
+    - echo "Release ${CI_COMMIT_TAG}"
+  release:
+    tag_name: $CI_COMMIT_TAG
+    name: s3mail $CI_COMMIT_TAG
+    description: |
+      Gebaut aus $CI_COMMIT_SHA.
+
+      **Starten:** ZIP entpacken und `s3mail` ausführen. Auf macOS blockt
+      Gatekeeper das unsignierte Programm beim ersten Mal – einmal
+      `xattr -dr com.apple.quarantine s3mail` genügt; unter Windows meldet sich
+      SmartScreen mit *Weitere Informationen → Trotzdem ausführen*.
+
+      Danach steht im Terminal eine Adresse mit Token; **ohne die antwortet der
+      Server nicht.** Sie steht außerdem in `adresse.txt` im
+      Konfigurationsverzeichnis, falls das Fenster zugeht.
+
+      Zu jedem Paket liegt eine `.sha256`-Datei daneben.
+    assets:
+      links:
+        - name: s3mail-windows-amd64.zip
+          url: ${PAKET_URL}/${CI_COMMIT_TAG}/s3mail-windows-amd64.zip
+          link_type: package
+        - name: s3mail-macos-arm64.zip (Apple Silicon)
+          url: ${PAKET_URL}/${CI_COMMIT_TAG}/s3mail-macos-arm64.zip
+          link_type: package
+        - name: s3mail-macos-amd64.zip (Intel)
+          url: ${PAKET_URL}/${CI_COMMIT_TAG}/s3mail-macos-amd64.zip
+          link_type: package
+        - name: s3mail-linux-amd64.zip
+          url: ${PAKET_URL}/${CI_COMMIT_TAG}/s3mail-linux-amd64.zip
+          link_type: package

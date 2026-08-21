@@ -27,21 +27,30 @@ import (
 	"s3mail/web"
 )
 
+// version wird beim Bauen gesetzt: -ldflags "-X main.version=v0.2.0".
+var version = "dev"
+
 func main() {
 	var (
-		bucket    = flag.String("bucket", "", "S3-Bucket mit den Rohmails")
-		prefix    = flag.String("prefix", "", "Wurzel-Prefix, z.B. mail/")
-		region    = flag.String("region", "", "AWS-Region, z.B. eu-central-1")
-		profil    = flag.String("profile", "", "AWS-Profil aus ~/.aws/credentials")
-		absender  = flag.String("from", "", "Absender fuer Antworten (in SES verifiziert)")
-		port      = flag.Int("port", 0, "Standard 8765")
-		host      = flag.String("host", "", "Standard 127.0.0.1")
-		setup     = flag.Bool("setup", false, "Assistent oeffnen, auch wenn schon konfiguriert")
-		noSend    = flag.Bool("no-send", false, "SES-Versand deaktivieren (reiner Lesemodus)")
-		noDelete  = flag.Bool("no-delete", false, "Endgueltiges Loeschen sperren")
-		noBrowser = flag.Bool("no-browser", false, "Browser nicht automatisch oeffnen")
+		bucket      = flag.String("bucket", "", "S3-Bucket mit den Rohmails")
+		prefix      = flag.String("prefix", "", "Wurzel-Prefix, z.B. mail/")
+		region      = flag.String("region", "", "AWS-Region, z.B. eu-central-1")
+		profil      = flag.String("profile", "", "AWS-Profil aus ~/.aws/credentials")
+		absender    = flag.String("from", "", "Absender fuer Antworten (in SES verifiziert)")
+		port        = flag.Int("port", 0, "Standard 8765")
+		host        = flag.String("host", "", "Standard 127.0.0.1")
+		setup       = flag.Bool("setup", false, "Assistent oeffnen, auch wenn schon konfiguriert")
+		noSend      = flag.Bool("no-send", false, "SES-Versand deaktivieren (reiner Lesemodus)")
+		noDelete    = flag.Bool("no-delete", false, "Endgueltiges Loeschen sperren")
+		noBrowser   = flag.Bool("no-browser", false, "Browser nicht automatisch oeffnen")
+		zeigVersion = flag.Bool("version", false, "Version ausgeben und beenden")
 	)
 	flag.Parse()
+
+	if *zeigVersion {
+		fmt.Printf("s3mail %s (%s/%s, %s)\n", version, runtime.GOOS, runtime.GOARCH, runtime.Version())
+		return
+	}
 
 	// Das SDK muss die Zugangsdaten dort suchen, wo der Assistent sie hinschreibt.
 	awsx.GeteiltesVerzeichnis = konfig.AWSVerzeichnis()
