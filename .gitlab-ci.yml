@@ -22,9 +22,11 @@ stages:
   - release
 
 variables:
-  # Über den Dependency-Proxy, damit die Läufe nicht an Docker Hubs Ratelimit
-  # hängen. Ist er für die Gruppe abgeschaltet, tut es auch schlicht "golang:1.25".
-  GO_IMAGE: "${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/golang:1.25"
+  # Direkt von Docker Hub: CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX ist auf dieser
+  # Instanz leer, das Image löste sich damit zu "/golang:1.25" auf und der Job
+  # brach beim Pull ab. Ist der Proxy für die Gruppe eingerichtet, gehört der
+  # Präfix wieder davor.
+  GO_IMAGE: "golang:1.25"
   # Nicht heimlich eine andere Go-Version ziehen: was im Image ist, gilt.
   GOTOOLCHAIN: "local"
   GOFLAGS: "-mod=readonly"
@@ -103,7 +105,7 @@ build:linux-amd64:
 # --------------------------------------------------------------------------- #
 upload:
   stage: release
-  image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/curlimages/curl:latest
+  image: curlimages/curl:latest
   before_script: []
   rules:
     - if: $CI_COMMIT_TAG
