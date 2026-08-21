@@ -1,0 +1,32 @@
+From: Buchhaltung <rechnung@rechnungen.de>
+To: post@firma.de
+Cc: "Chef, Der" <chef@firma.de>, zweiter@firma.de
+Subject: Rechnung 4711
+Date: Fri, 07 Aug 2026 07:30:00 +0200
+Message-ID: <a5@rechnungen.de>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="OUTER"
+
+--OUTER
+Content-Type: multipart/alternative; boundary="INNER"
+
+--INNER
+Content-Type: text/plain; charset=utf-8
+
+Anbei die Rechnung.
+
+--INNER
+Content-Type: text/html; charset=utf-8
+
+<p>Anbei die Rechnung.</p>
+
+--INNER--
+
+--OUTER
+Content-Type: application/pdf; name="Rechnung.pdf"
+Content-Disposition: attachment; filename="Rechnung.pdf"
+Content-Transfer-Encoding: base64
+
+JVBERi0xLjQgZmFrZQ==
+
+--OUTER--

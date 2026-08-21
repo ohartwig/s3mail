@@ -1,0 +1,10 @@
+From: Spammer <spam@bad.example>
+To: post@firma.de
+Subject: Gewinn!
+Date: Sun, 16 Aug 2026 10:00:00 +0000
+Message-ID: <a15@bad.example>
+X-SES-Spam-Verdict: FAIL
+X-SES-Virus-Verdict: PASS
+Content-Type: text/plain
+
+Text.

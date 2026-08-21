@@ -1,0 +1,191 @@
+{
+  "01-b64-subject": {
+    "from": "Müller, Anna <anna@example.de>",
+    "to": "post@firma.de",
+    "cc": "",
+    "subject": "Rückfrage zur Rechnung über 89,€",
+    "date": "2026-08-03T09:14:00+02:00",
+    "preview": "Hallo, kurze Rückfrage zur Rechnung.",
+    "has_html": false,
+    "attachments": [],
+    "spam": ""
+  },
+  "02-qp-folded-subject": {
+    "from": "Bob <bob@example.com>",
+    "to": "post@firma.de",
+    "cc": "",
+    "subject": "Angebot für die Größe XL - dringend",
+    "date": "2026-08-04T11:00:00+00:00",
+    "preview": "Grüße aus München, die Größe passt.",
+    "has_html": false,
+    "attachments": [],
+    "spam": ""
+  },
+  "03-cp1252-8bit": {
+    "from": "Legacy <legacy@old.example>",
+    "to": "post@firma.de",
+    "cc": "",
+    "subject": "Angebot �ber 250�",
+    "date": "2026-08-05T08:00:00+01:00",
+    "preview": "Preis: 250€ – gültig bis Monatsende.",
+    "has_html": false,
+    "attachments": [],
+    "spam": ""
+  },
+  "04-alternative": {
+    "from": "Newsletter <news@shop.io>",
+    "to": "post@firma.de",
+    "cc": "",
+    "subject": "Neu im Sortiment",
+    "date": "2026-08-06T12:00:00+00:00",
+    "preview": "Nur-Text-Fassung mit Ümlaut.",
+    "has_html": true,
+    "attachments": [],
+    "spam": ""
+  },
+  "05-nested-mixed": {
+    "from": "Buchhaltung <rechnung@rechnungen.de>",
+    "to": "post@firma.de",
+    "cc": "Chef, Der <chef@firma.de>, zweiter@firma.de",
+    "subject": "Rechnung 4711",
+    "date": "2026-08-07T07:30:00+02:00",
+    "preview": "Anbei die Rechnung.",
+    "has_html": true,
+    "attachments": [
+      {
+        "index": 2,
+        "name": "Rechnung.pdf",
+        "ctype": "application/pdf"
+      }
+    ],
+    "spam": ""
+  },
+  "06-rfc2231-filename": {
+    "from": "Amt <amt@behoerde.de>",
+    "to": "post@firma.de",
+    "cc": "",
+    "subject": "Bescheid",
+    "date": "2026-08-08T10:00:00+00:00",
+    "preview": "Siehe Anhang.",
+    "has_html": false,
+    "attachments": [
+      {
+        "index": 1,
+        "name": "Bescheid Übersicht.pdf",
+        "ctype": "application/pdf"
+      }
+    ],
+    "spam": ""
+  },
+  "07-raw-filename": {
+    "from": "Outlook <o@example.com>",
+    "to": "post@firma.de",
+    "cc": "",
+    "subject": "Anhang",
+    "date": "2026-08-09T10:00:00+00:00",
+    "preview": "Text.",
+    "has_html": false,
+    "attachments": [
+      {
+        "index": 1,
+        "name": "Übersicht Größe.xlsx",
+        "ctype": "application/octet-stream"
+      }
+    ],
+    "spam": ""
+  },
+  "08-inline-cid": {
+    "from": "Signatur <sig@example.com>",
+    "to": "post@firma.de",
+    "cc": "",
+    "subject": "Mit Logo",
+    "date": "2026-08-10T10:00:00+00:00",
+    "preview": "Hallo",
+    "has_html": true,
+    "attachments": [
+      {
+        "index": 1,
+        "name": "logo.png",
+        "ctype": "image/png"
+      }
+    ],
+    "spam": ""
+  },
+  "09-no-content-type": {
+    "from": "Simpel <simpel@example.com>",
+    "to": "post@firma.de",
+    "cc": "",
+    "subject": "Ohne alles",
+    "date": "2026-08-11T10:00:00+00:00",
+    "preview": "Nur eine Zeile.",
+    "has_html": false,
+    "attachments": [],
+    "spam": ""
+  },
+  "10-lying-charset": {
+    "from": "Luegner <l@example.com>",
+    "to": "post@firma.de",
+    "cc": "",
+    "subject": "Falsch deklariert",
+    "date": "2026-08-12T10:00:00+00:00",
+    "preview": "Hier stehen ��mlaute, obwohl us-ascii behauptet wird.",
+    "has_html": false,
+    "attachments": [],
+    "spam": ""
+  },
+  "11-broken": {
+    "from": "",
+    "to": "",
+    "cc": "",
+    "subject": "",
+    "date": "2000-01-01T00:00:00+00:00",
+    "preview": "kein gueltiges mime kein gueltiges mime",
+    "has_html": false,
+    "attachments": [],
+    "spam": ""
+  },
+  "12-odd-date": {
+    "from": "Alt <alt@example.com>",
+    "to": "post@firma.de",
+    "cc": "",
+    "subject": "Altes Datum",
+    "date": "2026-08-13T10:00:00+00:00",
+    "preview": "Text.",
+    "has_html": false,
+    "attachments": [],
+    "spam": ""
+  },
+  "13-address-commas": {
+    "from": "Firma GmbH, Abteilung Vertrieb <vertrieb@firma.de>",
+    "to": "Nachname, Vorname <a@x.de>, plain@y.de, Zweiter, Name <b@z.de>",
+    "cc": "",
+    "subject": "Verteiler",
+    "date": "2026-08-14T10:00:00+00:00",
+    "preview": "Text.",
+    "has_html": false,
+    "attachments": [],
+    "spam": ""
+  },
+  "14-no-subject": {
+    "from": "leer@example.com",
+    "to": "post@firma.de",
+    "cc": "",
+    "subject": "",
+    "date": "2026-08-15T10:00:00+00:00",
+    "preview": "Ohne Betreff.",
+    "has_html": false,
+    "attachments": [],
+    "spam": ""
+  },
+  "15-ses-verdicts": {
+    "from": "Spammer <spam@bad.example>",
+    "to": "post@firma.de",
+    "cc": "",
+    "subject": "Gewinn!",
+    "date": "2026-08-16T10:00:00+00:00",
+    "preview": "Text.",
+    "has_html": false,
+    "attachments": [],
+    "spam": "FAIL"
+  }
+}

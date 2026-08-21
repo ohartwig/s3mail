@@ -1,0 +1,21 @@
+From: Outlook <o@example.com>
+To: post@firma.de
+Subject: Anhang
+Date: Sun, 09 Aug 2026 10:00:00 +0000
+Message-ID: <a7@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="B7"
+
+--B7
+Content-Type: text/plain
+
+Text.
+
+--B7
+Content-Type: application/octet-stream; name="Übersicht Größe.xlsx"
+Content-Disposition: attachment; filename="Übersicht Größe.xlsx"
+Content-Transfer-Encoding: base64
+
+JVBERi0xLjQgZmFrZQ==
+
+--B7--

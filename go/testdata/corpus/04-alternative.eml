@@ -1,0 +1,20 @@
+From: Newsletter <news@shop.io>
+To: post@firma.de
+Subject: Neu im Sortiment
+Date: Thu, 06 Aug 2026 12:00:00 +0000
+Message-ID: <a4@shop.io>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="BOUND1"
+
+--BOUND1
+Content-Type: text/plain; charset=utf-8
+
+Nur-Text-Fassung mit Ümlaut.
+
+--BOUND1
+Content-Type: text/html; charset=utf-8
+
+<html><body><p>HTML-Fassung mit <b>Ümlaut</b>.</p>
+<img src="http://tracker.example/pixel.gif"></body></html>
+
+--BOUND1--

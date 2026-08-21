@@ -1,0 +1,22 @@
+From: Signatur <sig@example.com>
+To: post@firma.de
+Subject: Mit Logo
+Date: Mon, 10 Aug 2026 10:00:00 +0000
+Message-ID: <a8@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/related; boundary="B8"
+
+--B8
+Content-Type: text/html; charset=utf-8
+
+<p>Hallo <img src="cid:logo1"></p>
+
+--B8
+Content-Type: image/png
+Content-ID: <logo1>
+Content-Disposition: inline; filename="logo.png"
+Content-Transfer-Encoding: base64
+
+UE5HRkFLRQ==
+
+--B8--

@@ -1,0 +1,8 @@
+From: Luegner <l@example.com>
+To: post@firma.de
+Subject: Falsch deklariert
+Date: Wed, 12 Aug 2026 10:00:00 +0000
+Message-ID: <a10@example.com>
+Content-Type: text/plain; charset=us-ascii
+
+Hier stehen Ümlaute, obwohl us-ascii behauptet wird.

@@ -1,0 +1,21 @@
+From: Amt <amt@behoerde.de>
+To: post@firma.de
+Subject: Bescheid
+Date: Sat, 08 Aug 2026 10:00:00 +0000
+Message-ID: <a6@behoerde.de>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="B6"
+
+--B6
+Content-Type: text/plain; charset=utf-8
+
+Siehe Anhang.
+
+--B6
+Content-Type: application/pdf
+Content-Disposition: attachment; filename*=UTF-8''Bescheid%20%C3%9Cbersicht.pdf
+Content-Transfer-Encoding: base64
+
+JVBERi0xLjQgZmFrZQ==
+
+--B6--
