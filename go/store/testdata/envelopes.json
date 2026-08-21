@@ -1,0 +1,29 @@
+{
+  "plain": "RnJvbTogVmVyc2NobHVlc3NlbHQgPGdlaGVpbUBleGFtcGxlLmRlPg0KVG86IHBvc3RAZmlybWEuZGUNClN1YmplY3Q6ID0/VVRGLTg/Qj9WbVZ5YzJOb2JNTzhjM05sYkhRPT89DQpEYXRlOiBNb24sIDAzIEF1ZyAyMDI2IDA5OjAwOjAwICswMDAwDQpNZXNzYWdlLUlEOiA8ZW5jMUBleGFtcGxlLmRlPg0KQ29udGVudC1UeXBlOiB0ZXh0L3BsYWluOyBjaGFyc2V0PXV0Zi04DQoNCkluaGFsdCBtaXQgw5xtbGF1dGVuLCBkYW1pdCBtYW4gTXVya3Mgc29mb3J0IHNpZWh0Lg0K",
+  "faelle": {
+    "gcm": {
+      "body": "IfsV9MDEWIRiKLOlnATIXqIDZajueW5mohZZGRfH/bhV9uME2lnmQ9Rvyk6SsxcOWALKeLEqgNNmCygwjQV9GxX5mSWKL7ekAI+JNNcTC0FSwTA4yTzyDw8X3qVIkitWVaE/rF1nlLai4vXqFy9doMk6wfQZ0VzrOOpdVkPkZSZlrjPUEem/27X/hhjh62amhmlJd81dQ2hXqH7xIFKgXbnxU90Rw0Ywa75KCcAos2xzw7vO40Q0SfUyAhNYKfVRu4IiQZnKzAxlFZVS5AyBs7V4dkddbYlfU2gg7knjJQqTEsRhQFQzC7ZLlrui4l/6JgVfDw/IJB7oHseP09Nldyj4j7VLTRZIe3XuiuI+j63ZM6piUCR6fn/5BBi9hw==",
+      "meta": {
+        "x-amz-key-v2": "V1JBUDpLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLSw==",
+        "x-amz-iv": "SUlJSUlJSUlJSUlJ",
+        "x-amz-cek-alg": "AES/GCM/NoPadding",
+        "x-amz-wrap-alg": "kms+context",
+        "x-amz-tag-len": "128",
+        "x-amz-matdesc": "{\"aws:x-amz-cek-alg\": \"AES/GCM/NoPadding\"}",
+        "x-amz-unencrypted-content-length": "270"
+      },
+      "key": "S0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0s="
+    },
+    "cbc": {
+      "body": "uQlKNyWn3C899Sgta8rnAvTvvPO/OOVWON5fjvPrMncj2OYk4lXnvirs1zbEYtXPamKrSjs2o0yOcj/TD9Xd21EaKHg3mDoOb9JhyL+R40QDv6HEMgNJG8vHUBPyopBxgn3gDz4TFzMpkNi4CA+4UauHsNtRIGBwnbEIN9Oz/uDVptGI+RYp8+Vgm7Gr1fkofoeN+2BpNyftgMmalSUhq4ANkD0mhbt2b664IK3nkLeACRgyQ9z5upDoAAhu2kDTTw0G/smIOP0oDEmMAJx9lxUALkDFXCYPUVYuDu3zz8fXED4NmJ9tpXx2ruQlt0Y/t3RybYxU4Ar70M+VAsDWDWPRyZtiiqCEMOQD+3OlYuc=",
+      "meta": {
+        "x-amz-key": "V1JBUDpMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTA==",
+        "x-amz-iv": "SkpKSkpKSkpKSkpKSkpKSg==",
+        "x-amz-cek-alg": "AES/CBC/PKCS5Padding",
+        "x-amz-matdesc": "{\"kms_cmk_id\": \"arn:aws:kms:eu-central-1:1:key/abc\"}",
+        "x-amz-unencrypted-content-length": "270"
+      },
+      "key": "TExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTEw="
+    }
+  }
+}

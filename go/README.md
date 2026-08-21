@@ -97,3 +97,52 @@ statt Werte:
 `PlanRules` entscheidet nur, *was* zu tun wäre, und führt nichts aus – das
 Verschieben in S3 macht die Schicht darüber. Damit bleibt die Regel-Engine ohne
 Netz testbar.
+
+---
+
+# Portierung: `store`
+
+Alles, was mit S3 spricht: Index, Verschieben, Löschen, die Persistenz des
+Zustands als Op-Log und die KMS-Entschlüsselung. Der Zugriff läuft über eine
+schmale Schnittstelle (`S3`, `KMS`), deshalb braucht kein Test ein AWS-Konto.
+
+## KMS gegen echte Chiffrate geprüft
+
+`testdata/envelopes.json` enthält Umschläge, die die **Python-Testsuite erzeugt
+hat** – AES-GCM (aktuelles Format) und AES-CBC (älteres), mit den echten
+Metadaten. Der Go-Code entschlüsselt beide zum selben Klartext. Dazu geprüft:
+der Encryption Context aus `x-amz-matdesc` wird durchgereicht (ohne ihn lehnt KMS
+ab), fehlende Rechte kippen nur die betroffene Mail, und Metadaten-Schlüssel
+werden unabhängig von der Schreibweise erkannt.
+
+## Was die Tests festhalten
+
+- **Ein Op-Objekt pro Änderung**, nicht das ganze Dokument – inklusive Prüfung,
+  dass es unter 200 Byte bleibt und kein Snapshot geschrieben wird.
+- **Zwei Rechner ohne Konflikt**: beide schreiben, keiner überschreibt, ein
+  dritter sieht beide Änderungen.
+- **Wasserstand**: ein Op-Objekt, dessen Löschen scheiterte und das wieder
+  auftaucht, wird übersprungen statt erneut angewandt.
+- **Schreibfehler** behält die Änderung lokal und holt sie beim nächsten Versuch
+  nach; ohne Schreibrecht trägt die lokale Datei.
+- **Verschieben** nimmt Verschlüsselung und Speicherklasse mit, zieht den Zustand
+  nach und entschärft Namenskollisionen (`m1` → `m1-1`), ohne die bestehende Mail
+  zu überschreiben.
+- **Löschen** nur aus dem Papierkorb, mit `--no-delete` gar nicht – geprüft am
+  Store, nicht an der Oberfläche.
+- **Verschlüsselte Postfächer** fordern kein Teilstück mehr an, sobald das erste
+  solche Objekt auftaucht; eine Mail ohne `kms:Decrypt` fällt einzeln aus, der
+  Rest des Index bleibt brauchbar.
+
+## Ein Fehler, den der Test gefunden hat
+
+Zwei Rechner, die in derselben Mikrosekunde schrieben, konnten denselben Op-Namen
+erzeugen – einer der beiden wäre überschrieben worden. Jeder `State` hat jetzt
+eine eigene Kennung aus `crypto/rand`, die im Namen steckt:
+
+```
+20260821T100001.000000-a3f9c21b4e07-0001.json
+└ Zeitstempel (sortiert)  └ Prozess       └ laufende Nummer
+```
+
+45 Testfunktionen über alle Pakete, 82–91 % Anweisungsabdeckung.
