@@ -210,3 +210,64 @@ was die bessere Disziplin ist.
 - `/api/send` und `/api/setup/*` – gehören zum nächsten Schritt (SES und Assistent)
 - Der AWS-Adapter für `store.S3` und `store.KMS`
 - CLI, Konfigurationsdatei, Browser öffnen
+
+---
+
+# Portierung: `awsx`
+
+Die Umsetzungen von `store.S3` und `store.KMS` auf `aws-sdk-go-v2`, dazu die
+Übersetzung der AWS-Fehler in Sätze mit einem nächsten Schritt.
+
+## Gegen das echte SDK geprüft, ohne AWS-Konto
+
+Die Tests fahren das **echte** `aws-sdk-go-v2` gegen einen HTTP-Server, der genug
+vom S3-Protokoll spricht (`ListObjectsV2` mit Blättern, `GetObject` mit `Range`,
+`HeadObject`, `PutObject`, `DeleteObject`, `CopyObject`). Geprüft wird damit die
+Anfrage auf dem Draht – genau die Schicht, in der eine Portierung still danebengeht:
+
+- **Der Paginator blättert wirklich** – ein Postfach hat leicht mehr als die 1000
+  Objekte, die eine Seite fasst.
+- **Der `Range`-Header kommt an.** Fällt er weg, lädt s3mail bei jedem Abgleich
+  das ganze Postfach statt 64 KB pro Mail.
+- **Metadaten überstehen `Get` und `Head`.** Dort steckt der Krypto-Umschlag;
+  gehen sie verloren, ist eine verschlüsselte Mail nicht mehr zu öffnen.
+- **`CopyObject` schickt die Verschlüsselungs-Header mit** – sonst landet die
+  Kopie unter dem Standardschlüssel des Buckets statt unter dem des Originals.
+- **`x-amz-copy-source` wird kodiert**, damit Schlüssel mit Leerzeichen und
+  Umlauten die Signaturprüfung überstehen.
+- **`NoSuchKey` wird zu `store.ErrNichtGefunden`**, damit die Schichten darüber
+  nicht auf AWS-Typen angewiesen sind.
+
+Dazu ein Durchlauf des ganzen Postfachs über den Adapter: indexieren, verschieben,
+Zustand schreiben, und ein zweiter Client liest ihn wieder.
+
+## Der Fehler, der die Python-Fassung blockiert hat, existiert hier nicht
+
+Ein Profil mit `login_session` (das neue `aws login`) ließ botocore mit
+`MissingDependencyException` platzen und verlangte `botocore[crt]`. Das Go-SDK
+kennt den Eintrag nicht, ignoriert ihn und meldet schlicht, dass keine brauchbaren
+Zugangsdaten hinterlegt sind – woraus `Klartext` den passenden Satz macht:
+
+```
+profil=""           -> Für das Standardprofil sind keine brauchbaren Zugangsdaten
+                       hinterlegt. Trag in Schritt 1 …
+profil="gibtsnicht" -> Das AWS-Profil „gibtsnicht“ gibt es auf diesem Rechner
+                       nicht. Wähle ein anderes – oder leg eins an: …
+```
+
+`ZugangPruefen` holt die Zugangsdaten einmal aktiv ab. `config.LoadDefaultConfig`
+meldet nämlich noch keinen Fehler, wenn gar keine hinterlegt sind – das fiele sonst
+erst mitten in einer anderen Operation auf.
+
+## Größe
+
+Mit AWS-SDK, Oberfläche und allem darin, je **eine Datei**:
+
+```
+windows/amd64   8,5M      darwin/arm64    8,0M      linux/amd64     8,3M
+```
+
+Zum Vergleich: das PyInstaller-Paket war 37 MB als Ordner, 15 MB als Einzeldatei
+mit 7 Sekunden Startzeit.
+
+**69 Testfunktionen**, 32 Module in der Abhängigkeitskette.
