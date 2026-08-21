@@ -1,7 +1,7 @@
-// Package mimespike portiert die MIME-Schicht von s3mail nach Go - der Teil, an
+// Package mimeparse portiert die MIME-Schicht von s3mail nach Go - der Teil, an
 // dem eine Portierung scheitern wuerde, wenn sie scheitert. Gemessen wird gegen
 // die Ausgabe des bestehenden Python-Parsers (testdata/expected.json).
-package mimespike
+package mimeparse
 
 import (
 	"io"

@@ -1,4 +1,4 @@
-module s3mail/mimespike
+module s3mail
 
 go 1.25.0
 

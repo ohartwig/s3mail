@@ -1,0 +1,96 @@
+{
+  "": [
+    "m1",
+    "m2",
+    "m4-kaputt",
+    "m3",
+    "alt1"
+  ],
+  "rechnung": [
+    "m1",
+    "m3"
+  ],
+  "from:rechnungen.de": [
+    "m3"
+  ],
+  "from:RECHNUNGEN.DE": [
+    "m3"
+  ],
+  "subject:\"Angebot\"": [
+    "m2"
+  ],
+  "betreff:angebot": [
+    "m2"
+  ],
+  "tag:wichtig": [
+    "m1"
+  ],
+  "tag:WICHTIG": [
+    "m1"
+  ],
+  "is:ungelesen": [
+    "m1",
+    "m4-kaputt",
+    "m3",
+    "alt1"
+  ],
+  "is:unread": [
+    "m1",
+    "m4-kaputt",
+    "m3",
+    "alt1"
+  ],
+  "is:gelesen": [
+    "m2"
+  ],
+  "is:stern": [
+    "m1"
+  ],
+  "has:anhang": [
+    "m1"
+  ],
+  "has:att": [
+    "m1"
+  ],
+  "has:spam": [
+    "m2"
+  ],
+  "in:archiv": [
+    "m2",
+    "alt1"
+  ],
+  "in:posteingang": [
+    "m1",
+    "m4-kaputt",
+    "m3"
+  ],
+  "after:2026-01-01": [
+    "m1",
+    "m2",
+    "m4-kaputt",
+    "m3",
+    "alt1"
+  ],
+  "before:2026-01-01": [],
+  "after:2026-07-01 before:2026-12-31": [
+    "m1",
+    "m2",
+    "m4-kaputt",
+    "m3",
+    "alt1"
+  ],
+  "rechnung tag:Buchhaltung": [
+    "m3"
+  ],
+  "mail": [
+    "m1",
+    "m2",
+    "m4-kaputt",
+    "m3",
+    "alt1"
+  ],
+  "\"kein gueltiges\"": [
+    "m4-kaputt"
+  ],
+  "gibtsnichtimpostfach": []
+}

@@ -1,0 +1,55 @@
+{
+  "messages": {
+    "m2": {
+      "read": false,
+      "star": true,
+      "tags": [
+        "wichtig",
+        "Kundschaft",
+        "Projekt"
+      ],
+      "ruled": true
+    },
+    "m3": {
+      "read": false,
+      "star": false,
+      "tags": [
+        "Kundschaft"
+      ],
+      "ruled": true
+    },
+    "m3-verschoben": {
+      "read": false,
+      "star": false,
+      "tags": [
+        "Kundschaft"
+      ],
+      "ruled": true
+    },
+    "m9-neu": {
+      "read": false,
+      "star": false,
+      "tags": [],
+      "ruled": false
+    }
+  },
+  "tags": {
+    "wichtig": "#4c8dff",
+    "Projekt": "#ff0000",
+    "Kundschaft": "#38b48b"
+  },
+  "rules": [
+    {
+      "name": "R",
+      "field": "from",
+      "contains": "x.de",
+      "folder": "archiv",
+      "tags": [
+        "A"
+      ],
+      "star": false,
+      "read": false,
+      "enabled": true
+    }
+  ]
+}

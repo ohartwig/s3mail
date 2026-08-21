@@ -1,0 +1,33 @@
+{
+  "messages": {
+    "m1": {
+      "read": false,
+      "star": true,
+      "tags": [
+        "wichtig",
+        "Kunde"
+      ],
+      "ruled": false
+    },
+    "m3": {
+      "read": false,
+      "star": false,
+      "tags": [
+        "Buchhaltung"
+      ],
+      "ruled": false
+    },
+    "m2": {
+      "read": true,
+      "star": false,
+      "tags": [],
+      "ruled": false
+    }
+  },
+  "tags": {
+    "wichtig": "#4c8dff",
+    "Kunde": "#38b48b",
+    "Buchhaltung": "#e0a33e"
+  },
+  "rules": []
+}

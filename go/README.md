@@ -55,3 +55,45 @@ MIME, krumme Datumsformate, Kommas in Anzeigenamen.
 macht – erzeugt mit den echten Funktionen aus `s3mail_core.py`, nicht von Hand
 geschrieben. Der Go-Test vergleicht Feld für Feld dagegen. Wächst der Korpus um
 echte Mails aus dem Bucket, wird die Erwartungsdatei neu erzeugt.
+
+---
+
+# Portierung: `core`
+
+Zustand (Op-Log), Ordnerlogik, Regel-Engine und Suche. Spricht weder mit S3 noch
+mit HTTP – deshalb lässt sich die Schicht vollständig gegen die Python-Fassung
+prüfen, ohne AWS und ohne Netz.
+
+## Geprüft, nicht behauptet
+
+Dieselbe Methode wie beim MIME-Spike: **Python erzeugt die Erwartung, Go muss sie
+reproduzieren.** Alles unter `core/testdata/` ist aus `s3mail_core.py` exportiert,
+nichts davon von Hand geschrieben.
+
+| Datei | Woher | Was sie absichert |
+|---|---|---|
+| `index.json`, `state.json` | echter `MailStore` gegen den Fake-S3 | Ausgangslage für alle Vergleiche |
+| `searches.json` | 24 Abfragen durch `MailStore.search` | Treffer **und** Reihenfolge |
+| `ops.json`, `ops_result.json` | 14 Operationen durch `apply_op` | Ergebnis der Op-Folge |
+| `folders.json` | 25 Ordnernamen durch `valid_folder` | was ein gültiger Name ist |
+| `rulehits.json` | 7 Regeln × 5 Mails durch `_rule_hits` | Regeltreffer |
+
+Dazu Tests, die keine Entsprechung in Python haben, weil sie Eigenschaften prüfen
+statt Werte:
+
+- **`TestOpsIdempotent`** ist die Invariante, auf der der Wasserstand ruht: jede
+  Operation zweimal angewandt muss dasselbe ergeben wie einmal. Fällt der Test,
+  ist das Op-Log-Design kaputt, nicht der Test. `TestOpsEinzelnIdempotent` zeigt
+  zusätzlich, *welche* Operation es wäre.
+- **`TestZweiRechner`** fährt zwei Änderungsfolgen in beiden Reihenfolgen und
+  prüft, dass in keiner etwas verlorengeht.
+- **`TestSicherheitsgrenze`** hält fest, dass weder Snapshot noch Ops-Ordner über
+  einen Key erreichbar sind.
+
+19 Testfunktionen, 91 % der Anweisungen in `core` abgedeckt.
+
+## Absichtlich noch nicht hier
+
+`PlanRules` entscheidet nur, *was* zu tun wäre, und führt nichts aus – das
+Verschieben in S3 macht die Schicht darüber. Damit bleibt die Regel-Engine ohne
+Netz testbar.

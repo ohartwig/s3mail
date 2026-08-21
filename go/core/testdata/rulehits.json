@@ -1,0 +1,62 @@
+[
+  {
+    "regel": {
+      "contains": "rechnungen.de",
+      "field": "from"
+    },
+    "trifft": [
+      "m3"
+    ]
+  },
+  {
+    "regel": {
+      "contains": "RECHNUNGEN.DE",
+      "field": "from"
+    },
+    "trifft": [
+      "m3"
+    ]
+  },
+  {
+    "regel": {
+      "contains": "angebot",
+      "field": "subject"
+    },
+    "trifft": [
+      "m2"
+    ]
+  },
+  {
+    "regel": {
+      "contains": "post@firma.de",
+      "field": "to"
+    },
+    "trifft": []
+  },
+  {
+    "regel": {
+      "contains": "rechnung",
+      "field": "any"
+    },
+    "trifft": [
+      "m1",
+      "m3"
+    ]
+  },
+  {
+    "regel": {
+      "contains": "gibtsnicht",
+      "field": "any"
+    },
+    "trifft": []
+  },
+  {
+    "regel": {
+      "contains": "shop",
+      "field": "any"
+    },
+    "trifft": [
+      "m2"
+    ]
+  }
+]

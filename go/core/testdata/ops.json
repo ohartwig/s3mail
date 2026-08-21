@@ -1,0 +1,121 @@
+[
+  {
+    "t": "tags",
+    "mids": [
+      "m1",
+      "m2"
+    ],
+    "add": [
+      "wichtig"
+    ],
+    "remove": []
+  },
+  {
+    "t": "flags",
+    "mids": [
+      "m1"
+    ],
+    "read": true,
+    "star": null
+  },
+  {
+    "t": "tags",
+    "mids": [
+      "m2"
+    ],
+    "add": [
+      "Kunde",
+      "Projekt"
+    ],
+    "remove": []
+  },
+  {
+    "t": "flags",
+    "mids": [
+      "m2"
+    ],
+    "read": null,
+    "star": true
+  },
+  {
+    "t": "ruled",
+    "mids": [
+      "m1",
+      "m2",
+      "m3"
+    ]
+  },
+  {
+    "t": "tags",
+    "mids": [
+      "m1"
+    ],
+    "add": [],
+    "remove": [
+      "wichtig"
+    ]
+  },
+  {
+    "t": "tagren",
+    "old": "Kunde",
+    "new": "Kundschaft",
+    "color": null
+  },
+  {
+    "t": "tagren",
+    "old": "Projekt",
+    "new": "Projekt",
+    "color": "#ff0000"
+  },
+  {
+    "t": "tags",
+    "mids": [
+      "m3"
+    ],
+    "add": [
+      "Kundschaft",
+      "neu"
+    ],
+    "remove": []
+  },
+  {
+    "t": "rekey",
+    "old": "m3",
+    "new": "m3-verschoben"
+  },
+  {
+    "t": "tagdel",
+    "name": "neu"
+  },
+  {
+    "t": "drop",
+    "mids": [
+      "m1"
+    ]
+  },
+  {
+    "t": "rules",
+    "rules": [
+      {
+        "name": "R",
+        "field": "from",
+        "contains": "x.de",
+        "folder": "archiv",
+        "tags": [
+          "A"
+        ],
+        "star": false,
+        "read": false,
+        "enabled": true
+      }
+    ]
+  },
+  {
+    "t": "flags",
+    "mids": [
+      "m9-neu"
+    ],
+    "read": false,
+    "star": false
+  }
+]

@@ -1,0 +1,102 @@
+{
+  "": {
+    "ok": true,
+    "wert": ""
+  },
+  "/": {
+    "ok": true,
+    "wert": ""
+  },
+  "archiv": {
+    "ok": true,
+    "wert": "archiv"
+  },
+  "Archiv": {
+    "ok": true,
+    "wert": "Archiv"
+  },
+  "kunden": {
+    "ok": true,
+    "wert": "kunden"
+  },
+  "Projekt X": {
+    "ok": true,
+    "wert": "Projekt X"
+  },
+  "a.b-c": {
+    "ok": true,
+    "wert": "a.b-c"
+  },
+  "ä-ordner": {
+    "ok": true,
+    "wert": "ä-ordner"
+  },
+  "mit_unterstrich": {
+    "ok": true,
+    "wert": "mit_unterstrich"
+  },
+  "_start": {
+    "ok": false,
+    "wert": ""
+  },
+  "1zahl": {
+    "ok": false,
+    "wert": ""
+  },
+  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+    "ok": true,
+    "wert": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+    "ok": false,
+    "wert": ""
+  },
+  "..": {
+    "ok": false,
+    "wert": ""
+  },
+  ".": {
+    "ok": false,
+    "wert": ""
+  },
+  "a/b": {
+    "ok": false,
+    "wert": ""
+  },
+  "../boese": {
+    "ok": false,
+    "wert": ""
+  },
+  "mail/../x": {
+    "ok": false,
+    "wert": ""
+  },
+  " leer ": {
+    "ok": true,
+    "wert": "leer"
+  },
+  "  ": {
+    "ok": true,
+    "wert": ""
+  },
+  "trash": {
+    "ok": true,
+    "wert": "trash"
+  },
+  "übersicht": {
+    "ok": true,
+    "wert": "übersicht"
+  },
+  "Ordner-Mit-Bindestrich": {
+    "ok": true,
+    "wert": "Ordner-Mit-Bindestrich"
+  },
+  "punkt.": {
+    "ok": true,
+    "wert": "punkt."
+  },
+  "-minus": {
+    "ok": false,
+    "wert": ""
+  }
+}

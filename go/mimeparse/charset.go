@@ -1,4 +1,4 @@
-package mimespike
+package mimeparse
 
 import (
 	"io"

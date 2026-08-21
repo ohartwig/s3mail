@@ -8,7 +8,7 @@ import (
 	"os"
 	"time"
 
-	"s3mail/mimespike"
+	"s3mail/mimeparse"
 )
 
 func main() {
@@ -21,7 +21,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	s := mimespike.Summarize(raw, time.Unix(0, 0).UTC())
+	s := mimeparse.Summarize(raw, time.Unix(0, 0).UTC())
 	out, _ := json.MarshalIndent(s, "", "  ")
 	fmt.Println(string(out))
 }
