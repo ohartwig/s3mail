@@ -133,6 +133,7 @@
   <button id="rulesBtn" title="Automatische Regeln">Regeln</button>
   <button onclick="location.href='/setup'" title="Verbindung, Bucket, Papierkorb">Einstellungen</button>
   <button id="refresh">Neu laden</button>
+  <button id="quit" title="s3mail beenden">Beenden</button>
 </header>
 <main>
   <div id="side"></div>
@@ -632,6 +633,17 @@ $("#ruleApply").onclick = guard(async () => {
 });
 
 /* ---------------- Start / Tastatur ---------------- */
+$("#quit").onclick = guard(async () => {
+  if (!confirm("s3mail beenden?")) return;
+  await api("/api/quit", {});
+  document.body.innerHTML =
+    '<div style="display:flex;height:100vh;align-items:center;justify-content:center;' +
+    'flex-direction:column;gap:10px;color:var(--muted);font:15px/1.6 -apple-system,sans-serif">' +
+    '<div style="font-size:34px">\uD83D\uDC4B</div><div>s3mail ist beendet.</div>' +
+    '<div style="font-size:13px">Dieses Fenster kann geschlossen werden.</div></div>';
+  setTimeout(() => window.close(), 600);   // im App-Fenster schliesst das wirklich
+});
+
 $("#refresh").onclick = guard(async () => {
   const b = $("#refresh"); b.disabled = true; b.textContent = "lädt…";
   try {

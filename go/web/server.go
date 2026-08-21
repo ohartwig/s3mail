@@ -31,6 +31,10 @@ type Server struct {
 	standardAbsender string
 	assistent        *assistent.Assistent
 
+	// BeimBeenden wird von /api/quit gerufen. Ohne das laeuft der Server nach
+	// dem Schliessen des Fensters weiter, und niemand sieht, dass er noch da ist.
+	BeimBeenden func()
+
 	mux *http.ServeMux
 }
 
@@ -48,10 +52,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !s.zugangPruefen(w, r) {
 		return
 	}
-	// Ohne Konfiguration gibt es noch kein Postfach - dann bedient nur der
-	// Assistent. Sonst liefen die Postfach-Routen in einen Nil-Zeiger.
+	// Ohne Konfiguration gibt es noch kein Postfach - dann bedienen nur der
+	// Assistent und /api/quit. Sonst liefen die Postfach-Routen in einen
+	// Nil-Zeiger; und ohne die Ausnahme fuer quit koennte man ausgerechnet im
+	// Assistenten nicht beenden, also in dem Zustand, in dem ein Erstnutzer steckt.
 	if s.Mailbox == nil && strings.HasPrefix(r.URL.Path, "/api/") &&
-		!strings.HasPrefix(r.URL.Path, "/api/setup/") {
+		!strings.HasPrefix(r.URL.Path, "/api/setup/") && r.URL.Path != "/api/quit" {
 		s.fehler(w, http.StatusServiceUnavailable, "s3mail ist noch nicht eingerichtet")
 		return
 	}
@@ -397,6 +403,18 @@ func (s *Server) routen() {
 			return
 		}
 		s.json(w, http.StatusOK, mit(s.uebersicht(), map[string]any{"rules": sauber}))
+	})
+
+	s.post("/api/quit", func(w http.ResponseWriter, r *http.Request, a anfrage) {
+		s.json(w, http.StatusOK, map[string]any{"ok": true})
+		if s.BeimBeenden != nil {
+			// Erst antworten, dann herunterfahren - sonst sieht die Oberflaeche
+			// einen Verbindungsabbruch statt einer Bestaetigung.
+			go func() {
+				time.Sleep(150 * time.Millisecond)
+				s.BeimBeenden()
+			}()
+		}
 	})
 
 	s.post("/api/rules/apply", func(w http.ResponseWriter, r *http.Request, a anfrage) {

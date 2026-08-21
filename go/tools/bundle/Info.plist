@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key>              <string>s3mail</string>
+  <key>CFBundleDisplayName</key>       <string>s3mail</string>
+  <key>CFBundleIdentifier</key>        <string>eu.ole-hartwig.s3mail</string>
+  <key>CFBundleExecutable</key>        <string>s3mail</string>
+  <key>CFBundlePackageType</key>       <string>APPL</string>
+  <key>CFBundleInfoDictionaryVersion</key> <string>6.0</string>
+  <key>CFBundleShortVersionString</key> <string>__VERSION__</string>
+  <key>CFBundleVersion</key>           <string>__VERSION__</string>
+  <key>LSMinimumSystemVersion</key>    <string>11.0</string>
+  <key>NSHighResolutionCapable</key>   <true/>
+  <!-- Kein Dock-Symbol und kein Menue: s3mail hat keine Cocoa-Ereignisschleife,
+       ein Dock-Eintrag ohne Menueleiste und ohne funktionierendes Cmd+Q waere
+       schlechter als keiner. Beendet wird ueber den Knopf in der Oberflaeche. -->
+  <key>LSUIElement</key>               <true/>
+</dict>
+</plist>

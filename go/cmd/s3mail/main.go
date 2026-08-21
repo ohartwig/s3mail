@@ -13,7 +13,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"os/signal"
 	"runtime"
 	"strconv"
@@ -74,6 +73,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	var startfehler string
 	srv := web.NewServer(nil, web.NeuesToken(), k.Host, k.Port, nil)
 
 	// Der Assistent schaltet das Postfach im laufenden Prozess scharf - nach
@@ -86,10 +86,14 @@ func main() {
 
 	if k.Bucket != "" && !*setup {
 		if err := scharfschalten(ctx, srv, k, *noSend); err != nil {
-			fmt.Printf("Verbindung fehlgeschlagen: %s\nStarte den Assistenten.\n\n",
-				awsx.Klartext(err, k.Profil))
+			startfehler = awsx.Klartext(err, k.Profil)
 		}
 	}
+
+	// Ohne Konsolenfenster (macOS-Bundle, Windows-GUI-Modus) geht jede Meldung ins
+	// Nichts. Deshalb landet der Start zusaetzlich in einer Datei.
+	protokoll := starteProtokoll()
+	defer protokoll.Close()
 
 	adresse := net.JoinHostPort(k.Host, strconv.Itoa(k.Port))
 	lauscher, err := net.Listen("tcp", adresse)
@@ -100,24 +104,30 @@ func main() {
 	srv.Port = lauscher.Addr().(*net.TCPAddr).Port
 	url := fmt.Sprintf("http://%s:%d/?t=%s", k.Host, srv.Port, srv.Token)
 
+	if startfehler != "" {
+		melde(protokoll, "Verbindung fehlgeschlagen: %s", startfehler)
+	}
 	if srv.Mailbox == nil {
-		fmt.Printf("s3mail ist noch nicht eingerichtet - Assistent: %s\n", url)
+		melde(protokoll, "s3mail ist noch nicht eingerichtet - Assistent: %s", url)
 	} else {
-		fmt.Printf("s3mail laeuft auf %s   (Strg+C zum Beenden)\n", url)
-		fmt.Printf("Bucket: %s/%s\n", k.Bucket, k.Prefix)
+		melde(protokoll, "s3mail laeuft auf %s   (Strg+C zum Beenden)", url)
+		melde(protokoll, "Bucket: %s/%s", k.Bucket, k.Prefix)
 	}
 	// Unter Windows startet s3mail per Doppelklick; wer das Konsolenfenster
 	// schliesst, kaeme sonst nicht mehr an die Adresse heran.
 	if pfad, err := web.TokenDateiSchreiben(konfig.Verzeichnis(), url); err == nil && pfad != "" {
-		fmt.Printf("Adresse steht auch in: %s\n", pfad)
+		melde(protokoll, "Adresse steht auch in: %s", pfad)
 	}
 	defer web.TokenDateiEntfernen(konfig.Verzeichnis())
 
 	if !*noBrowser {
-		go oeffneBrowser(url)
+		go oeffneFenster(url)
 	}
 
 	httpSrv := &http.Server{Handler: srv, ReadHeaderTimeout: 10 * time.Second}
+	// Der Knopf "Beenden" in der Oberflaeche - ohne den liefe der Server nach dem
+	// Schliessen des Fensters weiter, sichtbar fuer niemanden.
+	srv.BeimBeenden = stop
 	go func() {
 		<-ctx.Done()
 		abschluss, abbrechen := context.WithTimeout(context.Background(), 3*time.Second)
@@ -157,19 +167,4 @@ func setzeWenn(ziel *string, wert string) {
 	if wert != "" {
 		*ziel = wert
 	}
-}
-
-// oeffneBrowser ruft auf jeder Plattform das Richtige auf.
-func oeffneBrowser(url string) {
-	time.Sleep(400 * time.Millisecond)
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "darwin":
-		cmd = exec.Command("open", url)
-	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
-	default:
-		cmd = exec.Command("xdg-open", url)
-	}
-	_ = cmd.Start()
 }

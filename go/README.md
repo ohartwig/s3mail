@@ -332,3 +332,38 @@ und die Startseite zeigt ihn.
 
 Eine `.gitlab-ci.yml`, die auf einem Linux-Runner alle vier Plattformen baut und
 ans Release hängt – danach ist die Handarbeit pro Plattform vorbei.
+
+
+---
+
+# Starten wie ein Programm
+
+Eine nackte Unix-Datei, die man im Finder doppelklickt, ist keine zumutbare
+Auslieferung: sie reißt ein Terminal auf, dessen Zustand über Erfolg oder
+Misserfolg entscheidet. Deshalb:
+
+- **macOS** bekommt ein **App-Bundle**. `tools/bundle/bauen.sh` erzeugt es — ein
+  Bundle ist nur eine Verzeichnisstruktur mit einer `Info.plist`, das entsteht
+  auch auf Linux, ohne Apple-Werkzeug und ohne den Mac, den die Portierung
+  losgeworden ist. `LSUIElement` ist gesetzt: kein Dock-Symbol, weil s3mail keine
+  Cocoa-Ereignisschleife hat und ein Dock-Eintrag ohne Menüleiste und ohne
+  funktionierendes Cmd+Q schlechter wäre als keiner.
+- **Windows** wird mit `-H windowsgui` gebaut — kein Konsolenfenster, dessen
+  Schließen den Server mitnimmt.
+- **Die Oberfläche öffnet im App-Modus** (`--app=`), also in einem Fenster ohne
+  Tableiste und Adresszeile. Findet sich kein Chromium-Browser, geht sie in einem
+  normalen Tab auf.
+- **Beendet wird über einen Knopf in der Oberfläche** (`/api/quit`). Ohne den
+  liefe der Server nach dem Schließen des Fensters weiter, sichtbar für niemanden.
+- **`start.log`** im Konfigurationsverzeichnis hält den Start fest. Ohne Konsole
+  geht sonst jede Meldung ins Nichts, und ein Fehler sähe aus wie ein Programm,
+  das einfach nichts tut.
+
+## Was das ausdrücklich nicht ist
+
+Ein natives Fenster. Die Oberfläche läuft in einem Browser, der wie ein Programm
+aussieht — nicht in einem eigenen WebView. Der Unterschied ist keine Bequemlichkeit:
+**jede WebView-Anbindung in Go hängt an CGO**, und Wails kann nicht einmal nach
+macOS cross-kompilieren. Ein natives Fenster kostet also genau die Eigenschaft,
+wegen der dieses Projekt überhaupt in Go geschrieben ist — vier Plattformen aus
+einem Lauf. Siehe `okf://core/engineering/decisions/go-for-desktop-and-cluster-tools.md`.

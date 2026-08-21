@@ -16,6 +16,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 func main() {
@@ -35,30 +36,76 @@ func main() {
 		if err != nil {
 			abbruch(err)
 		}
-		kopf, err := zip.FileInfoHeader(info)
+		if info.IsDir() {
+			// Ein macOS-App-Bundle ist ein Verzeichnis. Die Struktur darunter muss
+			// erhalten bleiben, sonst ist es kein Bundle mehr, sondern ein Ordner.
+			wurzel := filepath.Dir(strings.TrimSuffix(name, string(filepath.Separator)))
+			err = filepath.WalkDir(name, func(pfad string, d os.DirEntry, err error) error {
+				if err != nil || d.IsDir() {
+					return err
+				}
+				rel, err := filepath.Rel(wurzel, pfad)
+				if err != nil {
+					return err
+				}
+				return schreibe(w, pfad, filepath.ToSlash(rel), d)
+			})
+			if err != nil {
+				abbruch(err)
+			}
+			continue
+		}
+		eintrag, err := os.Lstat(name)
 		if err != nil {
 			abbruch(err)
 		}
-		kopf.Name = filepath.Base(name)
-		kopf.Method = zip.Deflate
-		kopf.SetMode(info.Mode() | 0o111) // ausfuehrbar, auch wenn die Quelle es nicht war
-		teil, err := w.CreateHeader(kopf)
-		if err != nil {
+		if err := schreibe(w, name, filepath.Base(name), fsEintrag{eintrag}); err != nil {
 			abbruch(err)
 		}
-		quelle, err := os.Open(name)
-		if err != nil {
-			abbruch(err)
-		}
-		if _, err := io.Copy(teil, quelle); err != nil {
-			abbruch(err)
-		}
-		quelle.Close()
 	}
 	if err := w.Close(); err != nil {
 		abbruch(err)
 	}
 }
+
+// schreibe legt eine Datei ins Archiv und behaelt ihre Rechte.
+func schreibe(w *zip.Writer, pfad, name string, d os.DirEntry) error {
+	info, err := d.Info()
+	if err != nil {
+		return err
+	}
+	kopf, err := zip.FileInfoHeader(info)
+	if err != nil {
+		return err
+	}
+	kopf.Name = name
+	kopf.Method = zip.Deflate
+	// Alles, was ausfuehrbar war, bleibt es - und das Startprogramm eines Bundles
+	// muss es sein, sonst startet der Doppelklick nichts.
+	modus := info.Mode()
+	if modus&0o111 != 0 || filepath.Ext(name) == "" {
+		modus |= 0o111
+	}
+	kopf.SetMode(modus)
+	teil, err := w.CreateHeader(kopf)
+	if err != nil {
+		return err
+	}
+	quelle, err := os.Open(pfad)
+	if err != nil {
+		return err
+	}
+	defer quelle.Close()
+	_, err = io.Copy(teil, quelle)
+	return err
+}
+
+type fsEintrag struct{ os.FileInfo }
+
+func (f fsEintrag) Name() string               { return f.FileInfo.Name() }
+func (f fsEintrag) IsDir() bool                { return f.FileInfo.IsDir() }
+func (f fsEintrag) Type() os.FileMode          { return f.FileInfo.Mode().Type() }
+func (f fsEintrag) Info() (os.FileInfo, error) { return f.FileInfo, nil }
 
 func abbruch(err error) {
 	fmt.Fprintln(os.Stderr, "zippen:", err)

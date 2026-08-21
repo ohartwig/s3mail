@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"s3mail/assistent"
 	"s3mail/s3fake"
@@ -299,6 +300,19 @@ func TestOhnePostfach(t *testing.T) {
 	if r := rufen(t, ts, "POST", "/api/setup/info", "{}", nil); r.Code == 503 {
 		t.Error("Assistent gesperrt, obwohl er gebraucht wird")
 	}
+	// Beenden muss gerade hier gehen - das ist der Zustand, in dem ein
+	// Erstnutzer steckt, und ohne Konsole ist der Knopf der einzige Ausweg.
+	beendet := make(chan struct{}, 1)
+	srv.BeimBeenden = func() { beendet <- struct{}{} }
+	if r := rufen(t, ts, "POST", "/api/quit", "{}", nil); r.Code != 200 {
+		t.Errorf("Beenden im Assistenten: HTTP %d", r.Code)
+	}
+	select {
+	case <-beendet:
+	case <-time.After(2 * time.Second):
+		t.Error("BeimBeenden wurde nicht gerufen")
+	}
+
 	// und die Startseite zeigt ihn
 	r := rufen(t, ts, "GET", "/", "", nil)
 	if r.Code != 200 || !strings.Contains(string(r.Body), "s3mail einrichten") {
