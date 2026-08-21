@@ -37,6 +37,16 @@ variables:
 
 default:
   image: ${GO_IMAGE}
+  # Die Flotte besteht aus Spot-Instanzen: eine kann mitten im Job zurückgezogen
+  # werden, und der Job stirbt dann mit "instance no longer running". Das ist
+  # kein Fehler im Gebauten – beim ersten v0.2.1-Lauf traf es zwei von vier
+  # Build-Jobs, während die anderen beiden auf demselben Commit durchliefen.
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - stuck_or_timeout_failure
+      - scheduler_failure
   before_script:
     - cd go
   cache:
