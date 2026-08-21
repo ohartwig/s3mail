@@ -105,6 +105,12 @@ func (a *Assistent) Buckets(ctx context.Context, d Daten) (map[string]any, error
 		"identities": nichtNil(ses.Identitaeten(ctx)),
 		"domains":    nichtNil(ses.VerifizierteDomains(ctx)),
 	}
+	// Was der Zugang ueber sich selbst verraet, muss niemand abtippen. Scheitert
+	// das (aeltere Postfaecher duerfen ihre Policy nicht lesen), bleibt der
+	// Assistent bei der Handeingabe - deshalb hier kein Fehler nach aussen.
+	if f, err := awsx.Erkunden(ctx, cfg); err == nil && (f.Bucket != "" || f.Absender != "") {
+		out["found"] = f
+	}
 	if len(buckets) == 0 {
 		// Fuer die Postfach-Benutzer ist das der Normalfall und kein Mangel: ihre
 		// Policy gibt bewusst kein s3:ListAllMyBuckets, sonst saehe jeder alle

@@ -84,6 +84,7 @@
     <div class="hint">Der Bucket, in den deine SES-Regel die Mails schreibt.
       „Buckets laden“ geht erst, wenn Schritt 1 steht – vorher weiß s3mail nicht,
       in welchem Konto es nachsehen soll.</div>
+    <div id="fundMsg" class="msg" style="margin:0 0 12px"></div>
     <label>Bucket</label>
     <div class="row">
       <select id="bucketSel"><option value="">– Buckets laden –</option></select>
@@ -219,6 +220,7 @@ $("#loadBuckets").onclick = async () => {
     }
     // Kein "true": das ist ein Hinweis, kein Fehlschlag. Fuer jeden
     // Postfach-Benutzer ist die leere Liste der Normalfall.
+    if (d.found) uebernehmen(d.found);
     if (d.note) say("#bucketMsg", d.note);
     else if (!(d.buckets || []).length) say("#bucketMsg",
       "Keine Buckets gefunden – Namen bitte direkt eintippen.", true);
@@ -226,6 +228,29 @@ $("#loadBuckets").onclick = async () => {
   } catch (e) { say("#bucketMsg", e.message, true); }
   finally { b.disabled = false; b.textContent = "Buckets laden"; }
 };
+// uebernehmen traegt ein, was s3mail aus der eigenen IAM-Policy des Zugangs
+// gelesen hat. Leere Felder und der Vorgabewert "mail/" gelten als unbesetzt -
+// was der Nutzer selbst eingetippt hat, bleibt stehen.
+function uebernehmen(f) {
+  const setzen = (feld, wert, leer) => {
+    const e = $(feld), jetzt = e.value.trim();
+    if (!wert || (jetzt && jetzt !== leer)) return false;
+    e.value = wert; return true;
+  };
+  const teile = [];
+  if (setzen("#bucket", f.bucket, "")) teile.push("Bucket <code>" + f.bucket + "</code>");
+  if (setzen("#prefix", f.prefix, "mail/")) teile.push("Ordner <code>" + f.prefix + "</code>");
+  if (setzen("#from", f.from, "")) teile.push("Absender <code>" + f.from + "</code>");
+  if (f.region && $("#region").value !== f.region) {
+    $("#region").value = f.region;
+    teile.push("Region <code>" + f.region + "</code>");
+  }
+  if (!teile.length) return;
+  $("#fundMsg").innerHTML = '<span class="ok">\u2713</span> Aus deinem Zugang gelesen: '
+    + teile.join(", ") + ". Anpassen kannst du das unten jederzeit.";
+  // Alles beisammen: dann gleich pruefen, statt es den Nutzer anklicken zu lassen.
+  if ($("#bucket").value.trim() && $("#prefix").value.trim()) $("#test").click();
+}
 $("#bucketSel").onchange = e => { if (e.target.value) $("#bucket").value = e.target.value; };
 $("#identSel").onchange = e => { if (e.target.value) $("#from").value = e.target.value; };
 
