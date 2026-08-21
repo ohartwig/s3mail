@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>s3mail einrichten</title>
+<style>
+  :root { --bg:#0f1216; --panel:#161b22; --panel2:#1c232c; --line:#2a323d;
+          --text:#e6edf3; --muted:#8b98a5; --accent:#4c8dff; --ok:#38b48b; --danger:#f2596b; }
+  @media (prefers-color-scheme: light) {
+    :root { --bg:#f5f7fa; --panel:#fff; --panel2:#eef2f7; --line:#dce3ec;
+            --text:#16202b; --muted:#5d6b7a; } }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:32px 16px 60px; background:var(--bg); color:var(--text);
+         font:14.5px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  .wrap { max-width:660px; margin:0 auto; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  .sub { color:var(--muted); margin-bottom:22px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:14px;
+          padding:18px 20px; margin-bottom:14px; }
+  .card h2 { font-size:15px; margin:0 0 4px; display:flex; gap:8px; align-items:center; }
+  .card h2 .num { width:22px; height:22px; border-radius:50%; background:var(--panel2);
+                  color:var(--muted); font-size:12px; display:grid; place-items:center; }
+  .hint { color:var(--muted); font-size:12.5px; margin:2px 0 12px; }
+  label { display:block; font-size:12px; color:var(--muted); margin:10px 0 3px; }
+  input, select { width:100%; padding:8px 10px; border-radius:8px; font:inherit;
+                  border:1px solid var(--line); background:var(--panel2); color:var(--text); }
+  input:focus, select:focus { outline:2px solid var(--accent); outline-offset:-1px; }
+  .row { display:flex; gap:10px; } .row > * { flex:1; }
+  button { font:inherit; background:var(--panel2); color:var(--text); cursor:pointer;
+           border:1px solid var(--line); border-radius:8px; padding:8px 14px; }
+  button:hover:not(:disabled) { border-color:var(--accent); }
+  button:disabled { opacity:.5; cursor:default; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .bar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:14px; }
+  .tabs { display:flex; gap:6px; margin-bottom:6px; }
+  .tabs button.on { border-color:var(--accent); color:var(--accent); }
+  .check { display:flex; gap:9px; padding:6px 0; border-bottom:1px solid var(--line);
+           align-items:flex-start; }
+  .check:last-child { border-bottom:none; }
+  .mark { width:18px; flex:none; text-align:center; }
+  .ok { color:var(--ok); } .bad { color:var(--danger); } .skip { color:var(--muted); }
+  .check .d { color:var(--muted); font-size:12.5px; }
+  .msg { margin-top:10px; font-size:13px; }
+  code { background:var(--panel2); padding:1px 5px; border-radius:5px; font-size:12.5px; }
+  .foot { color:var(--muted); font-size:12px; text-align:center; margin-top:20px; }
+</style>
+</head>
+<body><div class="wrap">
+  <h1>s3mail einrichten</h1>
+  <div class="sub">Einmal ausfüllen – danach startet s3mail direkt ins Postfach.</div>
+
+  <div class="card">
+    <h2><span class="num">1</span> AWS-Zugang</h2>
+    <div class="hint">s3mail braucht einen Zugang zu deinem AWS-Konto, um die Mails aus
+      S3 zu holen. Wenn auf diesem Rechner schon ein Profil eingerichtet ist, nimm das.</div>
+    <div class="tabs">
+      <button id="tabExisting" class="on">Vorhandenes Profil</button>
+      <button id="tabNew">Neue Zugangsdaten</button>
+    </div>
+    <div id="paneExisting">
+      <label>Profil</label>
+      <select id="profile"></select>
+    </div>
+    <div id="paneNew" style="display:none">
+      <label>Name für das neue Profil</label>
+      <input id="new_profile" value="s3mail" placeholder="s3mail">
+      <label>Access Key ID</label>
+      <input id="key_id" placeholder="AKIA…" autocomplete="off" spellcheck="false">
+      <label>Secret Access Key</label>
+      <input id="secret" type="password" autocomplete="off" spellcheck="false">
+      <div class="hint">Wird als AWS-Profil in <code>~/.aws/credentials</code> gespeichert
+        (nur für dich lesbar) – dem Standardort, den auch die AWS-Werkzeuge nutzen.</div>
+      <button id="saveCreds">Zugangsdaten speichern</button>
+      <div id="credMsg" class="msg"></div>
+    </div>
+    <label>Region</label>
+    <select id="region"></select>
+    <div class="hint">Die Region, in der dein Bucket liegt und SES die Mails annimmt.</div>
+  </div>
+
+  <div class="card">
+    <h2><span class="num">2</span> Postfach</h2>
+    <div class="hint">Der Bucket, in den deine SES-Regel die Mails schreibt.
+      „Buckets laden“ geht erst, wenn Schritt 1 steht – vorher weiß s3mail nicht,
+      in welchem Konto es nachsehen soll.</div>
+    <label>Bucket</label>
+    <div class="row">
+      <select id="bucketSel"><option value="">– Buckets laden –</option></select>
+      <button id="loadBuckets" style="flex:none">Buckets laden</button>
+    </div>
+    <input id="bucket" placeholder="oder Bucket-Namen hier eintippen" style="margin-top:8px">
+    <div id="bucketMsg" class="msg"></div>
+    <label>Ordner im Bucket (Prefix)</label>
+    <input id="prefix" placeholder="mail/">
+    <div class="hint">Genau das Prefix aus deiner SES-Regel. Darunter legt s3mail
+      <code>spam/</code>, <code>trash/</code> und <code>archiv/</code> an.</div>
+    <label>Absender für Antworten</label>
+    <div class="row">
+      <select id="identSel"><option value="">– verifizierte Adressen –</option></select>
+    </div>
+    <input id="from" placeholder="oder Adresse eintippen – muss in SES verifiziert sein" style="margin-top:8px">
+    <label style="display:flex;gap:8px;align-items:center;margin-top:14px">
+      <input type="checkbox" id="allow_delete" checked style="width:auto">
+      <span style="color:var(--text)">Endgültiges Löschen erlauben (aus dem Papierkorb heraus)</span>
+    </label>
+  </div>
+
+  <div class="card">
+    <h2><span class="num">3</span> Prüfen</h2>
+    <div class="hint">Legt kurz ein Testobjekt an und löscht es wieder – so siehst du
+      sofort, ob alle Rechte da sind.</div>
+    <button class="primary" id="test">Verbindung testen</button>
+    <div id="checks" style="margin-top:12px"></div>
+    <div id="lifeBox" style="display:none;margin-top:14px">
+      <label>Papierkorb automatisch leeren nach</label>
+      <div class="row">
+        <select id="days">
+          <option value="0">gar nicht</option>
+          <option value="7">7 Tagen</option>
+          <option value="30" selected>30 Tagen</option>
+          <option value="90">90 Tagen</option>
+        </select>
+        <button id="setLife" style="flex:none">Regel setzen</button>
+      </div>
+      <div class="hint">Setzt eine S3-Lifecycle-Regel auf <code>…/trash/</code>.
+        AWS räumt dann selbst auf, ohne dass s3mail laufen muss.</div>
+      <div id="lifeMsg" class="msg"></div>
+    </div>
+  </div>
+
+  <div class="bar">
+    <button class="primary" id="save" style="padding:10px 20px">Speichern und starten</button>
+    <span id="saveMsg" class="msg"></span>
+  </div>
+  <div class="foot" id="foot"></div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+let info = {};
+
+const api = async (path, body) => {
+  const r = await fetch(path, {method:"POST", headers:{"Content-Type":"application/json"},
+                               body: JSON.stringify(body || {})});
+  const d = await r.json().catch(() => ({error:"Antwort nicht lesbar"}));
+  if (!r.ok || d.error) throw new Error(d.error || ("HTTP " + r.status));
+  return d;
+};
+const say = (el, text, bad) => {
+  $(el).innerHTML = `<span class="${bad ? "bad" : "ok"}">${bad ? "✕" : "✓"}</span> ` +
+    text.replace(/[<>]/g, "");
+};
+const collect = () => ({
+  profile: $("#profile").value, region: $("#region").value,
+  bucket: $("#bucket").value.trim(), prefix: $("#prefix").value.trim(),
+  from: $("#from").value.trim(), allow_delete: $("#allow_delete").checked,
+});
+
+async function boot() {
+  info = await api("/api/setup/info");
+  const c = info.config;
+  $("#region").innerHTML = info.regions.map(r =>
+    `<option value="${r.id}"${r.id === c.region ? " selected" : ""}>${r.label}</option>`).join("");
+  fillProfiles(c.profile);
+  $("#bucket").value = c.bucket; $("#prefix").value = c.prefix || "mail/";
+  $("#from").value = c.from; $("#allow_delete").checked = c.allow_delete !== false;
+  $("#foot").textContent = "Wird gespeichert in " + info.config_file;
+  if (!info.profiles.length && !info.has_env_keys) $("#tabNew").click();
+}
+function fillProfiles(sel) {
+  const opts = info.profiles.map(p =>
+    `<option value="${p}"${p === sel ? " selected" : ""}>${p}</option>`).join("");
+  $("#profile").innerHTML = (info.has_env_keys || !info.profiles.length
+      ? `<option value="">(Umgebungsvariablen / Standard)</option>` : "") + opts;
+}
+
+$("#tabExisting").onclick = () => {
+  $("#tabExisting").classList.add("on"); $("#tabNew").classList.remove("on");
+  $("#paneExisting").style.display = ""; $("#paneNew").style.display = "none";
+};
+$("#tabNew").onclick = () => {
+  $("#tabNew").classList.add("on"); $("#tabExisting").classList.remove("on");
+  $("#paneNew").style.display = ""; $("#paneExisting").style.display = "none";
+};
+
+$("#saveCreds").onclick = async () => {
+  try {
+    const d = await api("/api/setup/credentials", {
+      new_profile: $("#new_profile").value, key_id: $("#key_id").value,
+      secret: $("#secret").value, region: $("#region").value});
+    info.profiles = d.profiles;
+    fillProfiles(d.profile);
+    $("#secret").value = "";
+    $("#tabExisting").click();
+    say("#credMsg", "Profil „" + d.profile + "“ gespeichert.");
+    $("#loadBuckets").click();          // ein Klick weniger
+  } catch (e) { say("#credMsg", e.message, true); }
+};
+
+$("#loadBuckets").onclick = async () => {
+  const b = $("#loadBuckets"); b.disabled = true; b.textContent = "lädt…";
+  try {
+    const d = await api("/api/setup/buckets", collect());
+    $("#bucketSel").innerHTML = '<option value="">– auswählen –</option>' +
+      d.buckets.map(x => `<option${x === $("#bucket").value ? " selected" : ""}>${x}</option>`).join("");
+    $("#identSel").innerHTML = '<option value="">– verifizierte Adressen –</option>' +
+      d.identities.map(x => `<option>${x}</option>`).join("");
+    if (d.note) say("#bucketMsg", d.note, true);
+    else if (!d.buckets.length) say("#bucketMsg",
+      "Keine Buckets gefunden – Namen bitte direkt eintippen.", true);
+    else say("#bucketMsg", d.buckets.length + " Bucket(s) gefunden.");
+  } catch (e) { say("#bucketMsg", e.message, true); }
+  finally { b.disabled = false; b.textContent = "Buckets laden"; }
+};
+$("#bucketSel").onchange = e => { if (e.target.value) $("#bucket").value = e.target.value; };
+$("#identSel").onchange = e => { if (e.target.value) $("#from").value = e.target.value; };
+
+$("#test").onclick = async () => {
+  const b = $("#test"); b.disabled = true; b.textContent = "prüft…";
+  $("#checks").innerHTML = "";
+  try {
+    const d = await api("/api/setup/test", collect());
+    $("#checks").innerHTML = d.checks.map(c => `
+      <div class="check">
+        <span class="mark ${c.skipped ? "skip" : c.ok ? "ok" : "bad"}">${c.skipped ? "–" : c.ok ? "✓" : "✕"}</span>
+        <div><b>${c.name}</b>${c.detail ? ' <span class="d">· ' + c.detail + "</span>" : ""}
+        ${c.hint ? '<div class="d">' + c.hint + "</div>" : ""}</div>
+      </div>`).join("");
+    $("#lifeBox").style.display = "";
+    if (d.lifecycle_days) $("#days").value = String(d.lifecycle_days);
+  } catch (e) { say("#checks", e.message, true); }
+  finally { b.disabled = false; b.textContent = "Verbindung testen"; }
+};
+
+$("#setLife").onclick = async () => {
+  try {
+    const d = await api("/api/setup/lifecycle", {...collect(), days: +$("#days").value});
+    say("#lifeMsg", d.message);
+  } catch (e) { say("#lifeMsg", e.message, true); }
+};
+
+$("#save").onclick = async () => {
+  const b = $("#save"); b.disabled = true; b.textContent = "speichert…";
+  try {
+    await api("/api/setup/save", collect());
+    say("#saveMsg", "Gespeichert – Postfach wird geladen…");
+    setTimeout(() => location.href = "/", 700);
+  } catch (e) {
+    say("#saveMsg", e.message, true);
+    b.disabled = false; b.textContent = "Speichern und starten";
+  }
+};
+
+boot().catch(e => say("#saveMsg", e.message, true));
+</script>
+</body>
+</html>

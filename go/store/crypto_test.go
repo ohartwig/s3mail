@@ -1,4 +1,4 @@
-package store
+package store_test
 
 import (
 	"bytes"
@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"s3mail/store"
 )
 
 type fakeKMS struct {
@@ -69,7 +71,7 @@ func TestUmschlagGegenPython(t *testing.T) {
 	plain, faelle := umschlaegeLaden(t)
 	for name, f := range faelle {
 		body, key := entpacken(t, f)
-		got, err := Entschluesseln(body, f.Meta, &fakeKMS{key: key})
+		got, err := store.Entschluesseln(body, f.Meta, &fakeKMS{key: key})
 		if err != nil {
 			t.Errorf("%s: %v", name, err)
 			continue
@@ -81,18 +83,18 @@ func TestUmschlagGegenPython(t *testing.T) {
 	}
 }
 
-// TestEncryptionContext - fehlt der Context aus x-amz-matdesc, lehnt KMS ab.
+// TestEncryptionContext - fehlt der Context aus x-amz-matdesc, lehnt store.KMS ab.
 // Der Fehler waere im Betrieb schwer zu finden, deshalb hier festgenagelt.
 func TestEncryptionContext(t *testing.T) {
 	_, faelle := umschlaegeLaden(t)
 	f := faelle["cbc"]
 	body, key := entpacken(t, f)
 	kms := &fakeKMS{key: key}
-	if _, err := Entschluesseln(body, f.Meta, kms); err != nil {
+	if _, err := store.Entschluesseln(body, f.Meta, kms); err != nil {
 		t.Fatal(err)
 	}
 	if len(kms.kontexte) != 1 {
-		t.Fatalf("%d KMS-Aufrufe", len(kms.kontexte))
+		t.Fatalf("%d store.KMS-Aufrufe", len(kms.kontexte))
 	}
 	if kms.kontexte[0]["kms_cmk_id"] == "" {
 		t.Errorf("Encryption Context nicht durchgereicht: %v", kms.kontexte[0])
@@ -104,10 +106,10 @@ func TestOhneKMSRechte(t *testing.T) {
 	f := faelle["gcm"]
 	body, _ := entpacken(t, f)
 
-	if _, err := Entschluesseln(body, f.Meta, nil); !errors.Is(err, ErrKeinKMS) {
-		t.Errorf("ohne KMS-Client: %v", err)
+	if _, err := store.Entschluesseln(body, f.Meta, nil); !errors.Is(err, store.ErrKeinKMS) {
+		t.Errorf("ohne store.KMS-Client: %v", err)
 	}
-	_, err := Entschluesseln(body, f.Meta, &fakeKMS{fehler: errors.New("AccessDenied")})
+	_, err := store.Entschluesseln(body, f.Meta, &fakeKMS{fehler: errors.New("AccessDenied")})
 	if err == nil {
 		t.Error("fehlendes kms:Decrypt wurde verschluckt")
 	}
@@ -115,11 +117,11 @@ func TestOhneKMSRechte(t *testing.T) {
 
 func TestUnverschluesseltGehtDurch(t *testing.T) {
 	roh := []byte("From: a@b.de\r\n\r\nKlartext")
-	got, err := Entschluesseln(roh, map[string]string{"foo": "bar"}, nil)
+	got, err := store.Entschluesseln(roh, map[string]string{"foo": "bar"}, nil)
 	if err != nil || !bytes.Equal(got, roh) {
 		t.Errorf("unverschluesseltes Objekt wurde angefasst: %q, %v", got, err)
 	}
-	if IstUmschlag(map[string]string{"foo": "bar"}) {
+	if store.IstUmschlag(map[string]string{"foo": "bar"}) {
 		t.Error("IstUmschlag meldet falschen Alarm")
 	}
 }
@@ -132,10 +134,10 @@ func TestMetadatenGrossKleinEgal(t *testing.T) {
 	for k, v := range f.Meta {
 		gross[toUpperFirst(k)] = v
 	}
-	if !IstUmschlag(gross) {
+	if !store.IstUmschlag(gross) {
 		t.Fatal("Umschlag mit anders geschriebenen Metadaten nicht erkannt")
 	}
-	if _, err := Entschluesseln(body, gross, &fakeKMS{key: key}); err != nil {
+	if _, err := store.Entschluesseln(body, gross, &fakeKMS{key: key}); err != nil {
 		t.Errorf("Metadaten mit Grossbuchstaben: %v", err)
 	}
 }

@@ -1,4 +1,4 @@
-package store
+package store_test
 
 import (
 	"context"
@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"s3mail/core"
+	"s3mail/s3fake"
+	"s3mail/store"
 )
 
 func mailBauen(from, to, subject, body, date, mid string) []byte {
@@ -15,17 +17,17 @@ func mailBauen(from, to, subject, body, date, mid string) []byte {
 		"\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n" + body + "\r\n")
 }
 
-func postfachBauen(t *testing.T) (*fakeS3, *Mailbox) {
+func postfachBauen(t *testing.T) (*s3fake.Fake, *store.Mailbox) {
 	t.Helper()
-	f := neuerFake()
-	f.objs["mail/m1"] = mailBauen("Anna <anna@kunde.de>", "post@firma.de",
+	f := s3fake.Neu()
+	f.Objs["mail/m1"] = mailBauen("Anna <anna@kunde.de>", "post@firma.de",
 		"Rechnung 1", "Anbei die Rechnung.", "Mon, 03 Aug 2026 09:00:00 +0000", "<m1@x>")
-	f.objs["mail/m2"] = mailBauen("Shop <news@shop.io>", "post@firma.de",
+	f.Objs["mail/m2"] = mailBauen("Shop <news@shop.io>", "post@firma.de",
 		"Angebot", "Neu im Sortiment.", "Tue, 04 Aug 2026 09:00:00 +0000", "<m2@x>")
-	f.objs["mail/archiv/alt1"] = mailBauen("Alt <alt@firma.de>", "post@firma.de",
+	f.Objs["mail/archiv/alt1"] = mailBauen("Alt <alt@firma.de>", "post@firma.de",
 		"Altes", "Alter Text.", "Wed, 01 Jul 2026 08:00:00 +0000", "<alt1@x>")
-	f.objs["andere/nicht-meins"] = []byte("ausserhalb")
-	m := NewMailbox(context.Background(), f, nil, "test-bucket", "mail/", t.TempDir(), true)
+	f.Objs["andere/nicht-meins"] = []byte("ausserhalb")
+	m := store.NewMailbox(context.Background(), f, nil, "test-bucket", "mail/", t.TempDir(), true)
 	return f, m
 }
 
@@ -99,7 +101,7 @@ func TestVerschiebenNimmtZustandMit(t *testing.T) {
 	if len(erg) != 1 || erg[0].NewKey != "mail/archiv/m1" {
 		t.Fatalf("%+v", erg)
 	}
-	if _, da := f.objs["mail/m1"]; da {
+	if _, da := f.Objs["mail/m1"]; da {
 		t.Error("Original nicht geloescht")
 	}
 	e := m.State.Get("m1")
@@ -111,7 +113,7 @@ func TestVerschiebenNimmtZustandMit(t *testing.T) {
 func TestVerschiebenErbtVerschluesselung(t *testing.T) {
 	ctx := context.Background()
 	f, m := postfachBauen(t)
-	f.sse["mail/m1"] = CopyOpts{ServerSideEncryption: "aws:kms",
+	f.SSE["mail/m1"] = store.CopyOpts{ServerSideEncryption: "aws:kms",
 		SSEKMSKeyID: "arn:aws:kms:eu-central-1:1:key/abc", StorageClass: "STANDARD_IA"}
 	if _, err := m.Refresh(ctx); err != nil {
 		t.Fatal(err)
@@ -119,7 +121,7 @@ func TestVerschiebenErbtVerschluesselung(t *testing.T) {
 	if _, err := m.Move(ctx, []string{"mail/m1"}, core.Archive); err != nil {
 		t.Fatal(err)
 	}
-	neu := f.sse["mail/archiv/m1"]
+	neu := f.SSE["mail/archiv/m1"]
 	if neu.ServerSideEncryption != "aws:kms" || neu.SSEKMSKeyID == "" {
 		t.Errorf("Verschluesselung nicht mitgenommen: %+v", neu)
 	}
@@ -140,7 +142,7 @@ func TestVerschiebenPruefungen(t *testing.T) {
 	if _, err := m.Move(ctx, []string{"andere/nicht-meins"}, core.Archive); err == nil {
 		t.Error("Key ausserhalb des Prefix durchgelassen")
 	}
-	if _, err := m.Move(ctx, []string{"mail/" + StateObject}, core.Archive); err == nil {
+	if _, err := m.Move(ctx, []string{"mail/" + store.StateObject}, core.Archive); err == nil {
 		t.Error("Snapshot verschiebbar")
 	}
 	// in denselben Ordner: uebersprungen, nicht kopiert
@@ -153,7 +155,7 @@ func TestVerschiebenPruefungen(t *testing.T) {
 func TestNamenskollision(t *testing.T) {
 	ctx := context.Background()
 	f, m := postfachBauen(t)
-	f.objs["mail/archiv/m1"] = mailBauen("X <x@y.de>", "post@firma.de", "Kollision",
+	f.Objs["mail/archiv/m1"] = mailBauen("X <x@y.de>", "post@firma.de", "Kollision",
 		"Text", "Thu, 05 Aug 2026 09:00:00 +0000", "<k@x>")
 	if _, err := m.Refresh(ctx); err != nil {
 		t.Fatal(err)
@@ -165,7 +167,7 @@ func TestNamenskollision(t *testing.T) {
 	if erg[0].NewKey != "mail/archiv/m1-1" {
 		t.Errorf("Kollision nicht entschaerft: %q", erg[0].NewKey)
 	}
-	if _, da := f.objs["mail/archiv/m1"]; !da {
+	if _, da := f.Objs["mail/archiv/m1"]; !da {
 		t.Error("bestehende Mail ueberschrieben")
 	}
 }
@@ -177,7 +179,7 @@ func TestLoeschenNurAusPapierkorb(t *testing.T) {
 	if _, err := m.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := m.Delete(ctx, []string{"mail/m1"}, false); !errors.Is(err, ErrNurAusPapierkorb) {
+	if _, err := m.Delete(ctx, []string{"mail/m1"}, false); !errors.Is(err, store.ErrNurAusPapierkorb) {
 		t.Errorf("Loeschen ausserhalb des Papierkorbs: %v", err)
 	}
 	if _, err := m.Move(ctx, []string{"mail/m1"}, core.Trash); err != nil {
@@ -194,14 +196,14 @@ func TestLoeschenNurAusPapierkorb(t *testing.T) {
 
 func TestLoeschenGesperrt(t *testing.T) {
 	ctx := context.Background()
-	f := neuerFake()
-	f.objs["mail/trash/m1"] = mailBauen("a@b.de", "c@d.de", "x", "y",
+	f := s3fake.Neu()
+	f.Objs["mail/trash/m1"] = mailBauen("a@b.de", "c@d.de", "x", "y",
 		"Mon, 03 Aug 2026 09:00:00 +0000", "<m1@x>")
-	m := NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), false)
+	m := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), false)
 	if _, err := m.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := m.Delete(ctx, []string{"mail/trash/m1"}, false); !errors.Is(err, ErrLoeschenGesperrt) {
+	if _, err := m.Delete(ctx, []string{"mail/trash/m1"}, false); !errors.Is(err, store.ErrLoeschenGesperrt) {
 		t.Errorf("--no-delete nicht durchgesetzt: %v", err)
 	}
 }
@@ -211,13 +213,13 @@ func TestLoeschenGesperrt(t *testing.T) {
 func TestVerschluesseltKeinTeilstueck(t *testing.T) {
 	ctx := context.Background()
 	plain, faelle := umschlaegeLaden(t)
-	f := neuerFake()
+	f := s3fake.Neu()
 	body, key := entpacken(t, faelle["gcm"])
-	f.objs["mail/enc1"] = body
-	f.meta["mail/enc1"] = faelle["gcm"].Meta
+	f.Objs["mail/enc1"] = body
+	f.Meta["mail/enc1"] = faelle["gcm"].Meta
 
-	m := NewMailbox(ctx, f, &fakeKMS{key: key}, "test-bucket", "mail/", t.TempDir(), true)
-	roh, err := m.Fetch(ctx, "mail/enc1", HeaderChunk)
+	m := store.NewMailbox(ctx, f, &fakeKMS{key: key}, "test-bucket", "mail/", t.TempDir(), true)
+	roh, err := m.Fetch(ctx, "mail/enc1", store.HeaderChunk)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -228,8 +230,8 @@ func TestVerschluesseltKeinTeilstueck(t *testing.T) {
 		t.Error("Postfach nicht als verschluesselt gemerkt")
 	}
 	// zweiter Zugriff darf gar keinen Range mehr schicken
-	f.Aufrufe = nil
-	if _, err := m.Fetch(ctx, "mail/enc1", HeaderChunk); err != nil {
+	f.AufrufeLeeren()
+	if _, err := m.Fetch(ctx, "mail/enc1", store.HeaderChunk); err != nil {
 		t.Fatal(err)
 	}
 	for _, a := range f.Aufrufe {
@@ -242,14 +244,14 @@ func TestVerschluesseltKeinTeilstueck(t *testing.T) {
 func TestVerschluesseltOhneRechteKipptNurDieseMail(t *testing.T) {
 	ctx := context.Background()
 	_, faelle := umschlaegeLaden(t)
-	f := neuerFake()
+	f := s3fake.Neu()
 	body, _ := entpacken(t, faelle["gcm"])
-	f.objs["mail/enc1"] = body
-	f.meta["mail/enc1"] = faelle["gcm"].Meta
-	f.objs["mail/klar"] = mailBauen("a@b.de", "c@d.de", "Lesbar", "Text",
+	f.Objs["mail/enc1"] = body
+	f.Meta["mail/enc1"] = faelle["gcm"].Meta
+	f.Objs["mail/klar"] = mailBauen("a@b.de", "c@d.de", "Lesbar", "Text",
 		"Mon, 03 Aug 2026 09:00:00 +0000", "<k@x>")
 
-	m := NewMailbox(ctx, f, &fakeKMS{fehler: errors.New("AccessDenied")},
+	m := store.NewMailbox(ctx, f, &fakeKMS{fehler: errors.New("AccessDenied")},
 		"test-bucket", "mail/", t.TempDir(), true)
 	if _, err := m.Refresh(ctx); err != nil {
 		t.Fatal(err)
@@ -305,7 +307,7 @@ func TestZwischenspeicherSpartRequests(t *testing.T) {
 	if _, err := m.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
-	f.Aufrufe = nil
+	f.AufrufeLeeren()
 	erg, err := m.Refresh(ctx) // nichts hat sich geaendert
 	if err != nil {
 		t.Fatal(err)

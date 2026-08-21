@@ -1,4 +1,4 @@
-package store
+package store_test
 
 import (
 	"context"
@@ -6,23 +6,24 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"s3mail/core"
+	"s3mail/s3fake"
+	"s3mail/store"
 )
 
 // jede Testinstanz bekommt eine eigene Kennung - so wie zwei echte Rechner.
 var instanzZaehler atomic.Uint64
 
-// zustandBauen liefert einen State mit fester Uhr - sonst waeren die Op-Namen
+// zustandBauen liefert einen store.State mit fester Uhr - sonst waeren die Op-Namen
 // nicht reproduzierbar.
-func zustandBauen(t *testing.T, f *fakeS3) *State {
+func zustandBauen(t *testing.T, f *s3fake.Fake) *store.State {
 	t.Helper()
 	ctx := context.Background()
-	s := NewState(ctx, f, "test-bucket", "mail/", filepath.Join(t.TempDir(), "state.json"))
+	s := store.NewState(ctx, f, "test-bucket", "mail/", filepath.Join(t.TempDir(), "state.json"))
 	n := 0
 	s.Now = func() time.Time {
 		n++
@@ -32,11 +33,11 @@ func zustandBauen(t *testing.T, f *fakeS3) *State {
 	return s
 }
 
-func ops(f *fakeS3) []string { return f.keys("mail/" + StateOps) }
+func ops(f *s3fake.Fake) []string { return f.Keys("mail/" + store.StateOps) }
 
-func snapshot(t *testing.T, f *fakeS3) *core.Data {
+func snapshot(t *testing.T, f *s3fake.Fake) *core.Data {
 	t.Helper()
-	blob, da := f.objs["mail/"+StateObject]
+	blob, da := f.Objs["mail/"+store.StateObject]
 	if !da {
 		return nil
 	}
@@ -51,7 +52,7 @@ func snapshot(t *testing.T, f *fakeS3) *core.Data {
 // sondern die Aenderung.
 func TestEineAenderungEinKleinesOp(t *testing.T) {
 	ctx := context.Background()
-	f := neuerFake()
+	f := s3fake.Neu()
 	s := zustandBauen(t, f)
 
 	if err := s.Mutate(ctx, core.Op{T: "flags", Mids: []string{"m1"}, Read: core.Ptr(true)}); err != nil {
@@ -61,10 +62,10 @@ func TestEineAenderungEinKleinesOp(t *testing.T) {
 	if len(geschrieben) != 1 {
 		t.Fatalf("%d Objekte fuer eine Aenderung: %v", len(geschrieben), geschrieben)
 	}
-	if n := len(f.objs[geschrieben[0]]); n > 200 {
+	if n := len(f.Objs[geschrieben[0]]); n > 200 {
 		t.Errorf("%d Byte - das sieht nach dem ganzen Dokument aus", n)
 	}
-	if _, da := f.objs["mail/"+StateObject]; da {
+	if _, da := f.Objs["mail/"+store.StateObject]; da {
 		t.Error("Snapshot wurde bei einer einzelnen Aenderung geschrieben")
 	}
 	if !s.Get("m1").Read {
@@ -75,7 +76,7 @@ func TestEineAenderungEinKleinesOp(t *testing.T) {
 // TestZweiRechnerKeinKonflikt - beide schreiben, keiner ueberschreibt.
 func TestZweiRechnerKeinKonflikt(t *testing.T) {
 	ctx := context.Background()
-	f := neuerFake()
+	f := s3fake.Neu()
 	a, b := zustandBauen(t, f), zustandBauen(t, f)
 
 	if err := a.Mutate(ctx, core.Op{T: "tags", Mids: []string{"m1"}, Add: []string{"von-A"}}); err != nil {
@@ -99,9 +100,9 @@ func TestZweiRechnerKeinKonflikt(t *testing.T) {
 
 func TestZusammenfassen(t *testing.T) {
 	ctx := context.Background()
-	f := neuerFake()
+	f := s3fake.Neu()
 	s := zustandBauen(t, f)
-	for i := 0; i < CompactAfter+2; i++ {
+	for i := 0; i < store.CompactAfter+2; i++ {
 		if err := s.Mutate(ctx, core.Op{T: "tags", Mids: []string{"m1"},
 			Add: []string{fmt.Sprintf("t%02d", i)}}); err != nil {
 			t.Fatal(err)
@@ -115,8 +116,8 @@ func TestZusammenfassen(t *testing.T) {
 		t.Errorf("%d Ops nach dem Zusammenfassen uebrig", n)
 	}
 	frisch := zustandBauen(t, f)
-	if n := len(frisch.Get("m1").Tags); n != CompactAfter+2 {
-		t.Errorf("frischer Rechner sieht %d Tags, erwartet %d", n, CompactAfter+2)
+	if n := len(frisch.Get("m1").Tags); n != store.CompactAfter+2 {
+		t.Errorf("frischer Rechner sieht %d Tags, erwartet %d", n, store.CompactAfter+2)
 	}
 }
 
@@ -124,14 +125,14 @@ func TestZusammenfassen(t *testing.T) {
 // Wasserstand: ein liegengebliebenes Op darf nicht ein zweites Mal wirken.
 func TestWasserstandUeberspringtEingearbeitetes(t *testing.T) {
 	ctx := context.Background()
-	f := neuerFake()
+	f := s3fake.Neu()
 	s := zustandBauen(t, f)
 
 	if err := s.Mutate(ctx, core.Op{T: "flags", Mids: []string{"m1"}, Read: core.Ptr(true)}); err != nil {
 		t.Fatal(err)
 	}
 	altKey := ops(f)[0]
-	altBody := append([]byte(nil), f.objs[altKey]...)
+	altBody := append([]byte(nil), f.Objs[altKey]...)
 
 	s.Compact(ctx, []string{altKey}) // zusammenfassen, Op fliegt weg
 	if snapshot(t, f).Upto == "" {
@@ -140,7 +141,7 @@ func TestWasserstandUeberspringtEingearbeitetes(t *testing.T) {
 	if err := s.Mutate(ctx, core.Op{T: "flags", Mids: []string{"m1"}, Read: core.Ptr(false)}); err != nil {
 		t.Fatal(err)
 	}
-	f.objs[altKey] = altBody // Loeschen war gescheitert: altes Op ist wieder da
+	f.Objs[altKey] = altBody // Loeschen war gescheitert: altes Op ist wieder da
 
 	frisch := zustandBauen(t, f)
 	if frisch.Get("m1").Read {
@@ -150,7 +151,7 @@ func TestWasserstandUeberspringtEingearbeitetes(t *testing.T) {
 
 func TestBatchSchreibtEinmal(t *testing.T) {
 	ctx := context.Background()
-	f := neuerFake()
+	f := s3fake.Neu()
 	s := zustandBauen(t, f)
 
 	err := s.Batch(ctx, func() error {
@@ -178,7 +179,7 @@ func TestBatchSchreibtEinmal(t *testing.T) {
 
 func TestSchreibfehlerBehaeltAenderung(t *testing.T) {
 	ctx := context.Background()
-	f := neuerFake()
+	f := s3fake.Neu()
 	s := zustandBauen(t, f)
 	f.PutErr = errors.New("AccessDenied")
 
@@ -207,32 +208,16 @@ func TestSchreibfehlerBehaeltAenderung(t *testing.T) {
 
 func TestLokalerRueckfall(t *testing.T) {
 	ctx := context.Background()
-	f := neuerFake()
+	f := s3fake.Neu()
 	lokal := filepath.Join(t.TempDir(), "state.json")
-	s := NewState(ctx, f, "test-bucket", "mail/", lokal)
+	s := store.NewState(ctx, f, "test-bucket", "mail/", lokal)
 	f.PutErr = errors.New("AccessDenied")
 	_ = s.Mutate(ctx, core.Op{T: "tags", Mids: []string{"m1"}, Add: []string{"offline"}})
 
 	// neuer Prozess, immer noch kein Schreibrecht: der lokale Stand traegt
-	zweiter := NewState(ctx, f, "test-bucket", "mail/", lokal)
+	zweiter := store.NewState(ctx, f, "test-bucket", "mail/", lokal)
 	if !hat(zweiter.Get("m1").Tags, "offline") {
 		t.Error("lokaler Rueckfall greift nicht")
-	}
-}
-
-func TestOpNamenSindSortierbar(t *testing.T) {
-	f := neuerFake()
-	s := zustandBauen(t, f)
-	var vorher string
-	for i := 0; i < 5; i++ {
-		name := s.opName()
-		if !strings.HasSuffix(name, ".json") {
-			t.Fatalf("%q", name)
-		}
-		if name <= vorher {
-			t.Fatalf("nicht aufsteigend: %q nach %q", name, vorher)
-		}
-		vorher = name
 	}
 }
 

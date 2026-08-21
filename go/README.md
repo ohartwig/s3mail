@@ -146,3 +146,67 @@ eine eigene Kennung aus `crypto/rand`, die im Namen steckt:
 ```
 
 45 Testfunktionen über alle Pakete, 82–91 % Anweisungsabdeckung.
+
+---
+
+# Portierung: `web`
+
+HTTP-Schicht, Zugangskontrolle und die Oberfläche. Damit ist die gesamte Logik von
+s3mail in Go – es fehlen nur noch Konfiguration, Assistent und SES-Versand.
+
+## `build.py` ist hier überflüssig geworden
+
+Die Oberfläche liegt jetzt als **echte HTML-Dateien** unter `web/assets/` und wird
+mit `//go:embed` einkompiliert:
+
+```go
+//go:embed assets/inbox.html
+var SeitePostfach string
+```
+
+Kein Generator, kein Zusammenkleben von Zeichenketten, keine Datei, die man nicht
+editieren darf. Die Dateien sind unverändert aus `s3mail_web.py` und
+`s3mail_setup.py` herausgelöst – 667 und 258 Zeilen Vanilla-JS, die den Umbau
+nicht bemerken.
+
+Ein `go build` liefert eine Datei mit allem darin:
+
+```
+windows/amd64   4,6M      darwin/arm64    4,4M      linux/amd64     4,5M
+```
+
+## Zugangskontrolle
+
+Dieselben drei Prüfungen wie in der Python-Fassung, jede gegen einen anderen
+Angriff – und mit denselben Tests belegt:
+
+| Prüfung | blockt |
+|---|---|
+| `Host` nur Loopback + gebundener Port | DNS-Rebinding |
+| `Origin`, falls gesetzt, muss die eigene sein | CSRF ohne Preflight |
+| Token aus Header, Query oder `SameSite=Strict`-Cookie | Mitleser auf demselben Rechner |
+
+## Das Windows-Problem aus der Planung
+
+Unter Windows startet die `.exe` per Doppelklick, und wer das Konsolenfenster
+schließt, kommt an die Startadresse nicht mehr heran – der Server läuft dann noch,
+ist aber unerreichbar. `TokenDateiSchreiben` legt sie deshalb zusätzlich in einer
+nur für den Benutzer lesbaren Datei ab (`adresse.txt`, 0600), die beim Beenden
+wieder verschwindet. Eine abgelaufene Adresse in einer Datei stiftet sonst mehr
+Verwirrung, als sie hilft.
+
+## Fake-S3 als eigenes Paket
+
+`s3fake` implementiert `store.S3` mit Präfix-Listing, ETags, Metadaten und
+serverseitiger Verschlüsselung. Eigenes Paket, damit sowohl `store` als auch `web`
+es nutzen können und nichts davon im Binary landet. Die `store`-Tests laufen
+seither als `package store_test` – sie sehen nur die öffentliche Schnittstelle,
+was die bessere Disziplin ist.
+
+**59 Testfunktionen**, 86–91 % Abdeckung in der Logik.
+
+## Noch offen
+
+- `/api/send` und `/api/setup/*` – gehören zum nächsten Schritt (SES und Assistent)
+- Der AWS-Adapter für `store.S3` und `store.KMS`
+- CLI, Konfigurationsdatei, Browser öffnen
