@@ -100,6 +100,7 @@
       <select id="identSel"><option value="">– verifizierte Adressen –</option></select>
     </div>
     <input id="from" placeholder="oder Adresse eintippen – muss in SES verifiziert sein" style="margin-top:8px">
+    <div id="fromMsg" class="msg"></div>
     <label style="display:flex;gap:8px;align-items:center;margin-top:14px">
       <input type="checkbox" id="allow_delete" checked style="width:auto">
       <span style="color:var(--text)">Endgültiges Löschen erlauben (aus dem Papierkorb heraus)</span>
@@ -204,9 +205,21 @@ $("#loadBuckets").onclick = async () => {
     const d = await api("/api/setup/buckets", collect());
     $("#bucketSel").innerHTML = '<option value="">– auswählen –</option>' +
       (d.buckets || []).map(x => `<option${x === $("#bucket").value ? " selected" : ""}>${x}</option>`).join("");
-    $("#identSel").innerHTML = '<option value="">– verifizierte Adressen –</option>' +
-      (d.identities || []).map(x => `<option>${x}</option>`).join("");
-    if (d.note) say("#bucketMsg", d.note, true);
+    // Eine verifizierte DOMAIN erlaubt jede Adresse darunter - deshalb gehoert
+    // sie in dieselbe Liste, nur als Vorlage statt als fertige Adresse.
+    const adressen = (d.identities || []).map(x => `<option>${x}</option>`);
+    const domains = (d.domains || []).map(x =>
+      `<option value="@${x}">@${x} – jede Adresse darunter</option>`);
+    $("#identSel").innerHTML = '<option value="">– verifizierte Absender –</option>' +
+      adressen.join("") + domains.join("");
+    if (!adressen.length && domains.length) {
+      say("#fromMsg", "Die Domain " + (d.domains || [])[0] + " ist verifiziert – "
+        + "jede Adresse darunter darf senden. Trag deine ein, z. B. vorname@"
+        + (d.domains || [])[0] + ".");
+    }
+    // Kein "true": das ist ein Hinweis, kein Fehlschlag. Fuer jeden
+    // Postfach-Benutzer ist die leere Liste der Normalfall.
+    if (d.note) say("#bucketMsg", d.note);
     else if (!(d.buckets || []).length) say("#bucketMsg",
       "Keine Buckets gefunden – Namen bitte direkt eintippen.", true);
     else say("#bucketMsg", (d.buckets || []).length + " Bucket(s) gefunden.");

@@ -99,6 +99,17 @@ func main() {
 	adresse := net.JoinHostPort(k.Host, strconv.Itoa(k.Port))
 	lauscher, err := net.Listen("tcp", adresse)
 	if err != nil {
+		// Meistens heisst das: s3mail laeuft schon. Als Bundle ohne Konsole ist
+		// das die unangenehmste Variante - der Doppelklick meldet nur einen
+		// LaunchServices-Timeout (-1712), weil die App als LSUIElement nicht auf
+		// den Start-Request antwortet, und das Fenster steht irgendwo hinten.
+		// Also nicht mit einem Fehler abbrechen, sondern das vorhandene Fenster
+		// nach vorne holen und sich zurueckziehen.
+		if url, ok := laufendeInstanz(); ok {
+			melde(protokoll, "s3mail laeuft bereits - hole das Fenster nach vorne.")
+			oeffneFenster(url)
+			return
+		}
 		fmt.Fprintf(os.Stderr, "Kann nicht auf %s lauschen: %v\n", adresse, err)
 		os.Exit(1)
 	}

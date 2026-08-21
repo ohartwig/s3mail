@@ -24,6 +24,7 @@ type Fake struct {
 	SSE     map[string]store.CopyOpts
 	Aufrufe []string
 	PutErr  error // wenn gesetzt, scheitert jedes Put
+	ListErr error // wenn gesetzt, scheitert jedes List
 }
 
 func Neu() *Fake {
@@ -48,6 +49,9 @@ func (f *Fake) List(_ context.Context, _, prefix string) ([]store.ObjectInfo, er
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.merken("list " + prefix)
+	if f.ListErr != nil {
+		return nil, f.ListErr
+	}
 	var out []store.ObjectInfo
 	for k, v := range f.Objs {
 		if strings.HasPrefix(k, prefix) {

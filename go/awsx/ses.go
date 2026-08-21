@@ -57,6 +57,34 @@ func (s *SES) Identitaeten(ctx context.Context) []string {
 	return out
 }
 
+// VerifizierteDomains liefert die freigeschalteten Domains.
+//
+// Getrennt von Identitaeten(), weil beides Verschiedenes bedeutet: eine
+// verifizierte Adresse ist eine Adresse, eine verifizierte Domain erlaubt JEDE
+// Adresse darunter. Wer nur Adress-Identitaeten abfragt - so wie diese Datei es
+// zuerst tat - bekommt bei einem sauber ueber die Domain verifizierten Setup
+// eine leere Liste und haelt sie fuer einen Fehler.
+func (s *SES) VerifizierteDomains(ctx context.Context) []string {
+	resp, err := s.c.ListIdentities(ctx, &ses.ListIdentitiesInput{
+		IdentityType: types.IdentityTypeDomain})
+	if err != nil || len(resp.Identities) == 0 {
+		return []string{}
+	}
+	attrs, err := s.c.GetIdentityVerificationAttributes(ctx,
+		&ses.GetIdentityVerificationAttributesInput{Identities: resp.Identities})
+	if err != nil {
+		return resp.Identities
+	}
+	out := []string{}
+	for _, id := range resp.Identities {
+		if a, da := attrs.VerificationAttributes[id]; da &&
+			a.VerificationStatus == types.VerificationStatusSuccess {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
 // Verifiziert sagt, ob Adresse oder Domain in SES freigeschaltet sind.
 func (s *SES) Verifiziert(ctx context.Context, adresse, domain string) ([]string, error) {
 	resp, err := s.c.GetIdentityVerificationAttributes(ctx,

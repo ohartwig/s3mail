@@ -99,13 +99,20 @@ func (a *Assistent) Buckets(ctx context.Context, d Daten) (map[string]any, error
 	// Nie nil an die Oberflaeche geben: ein nil-Slice wird zu JSON `null`, und
 	// `null.map(...)` beendet das Skript der Seite - der Nutzer sieht dann nicht
 	// "kein Recht zum Auflisten", sondern gar nichts mehr.
+	ses := awsx.NeuSES(cfg, "")
 	out := map[string]any{
 		"buckets":    nichtNil(buckets),
-		"identities": nichtNil(awsx.NeuSES(cfg, "").Identitaeten(ctx)),
+		"identities": nichtNil(ses.Identitaeten(ctx)),
+		"domains":    nichtNil(ses.VerifizierteDomains(ctx)),
 	}
 	if len(buckets) == 0 {
-		out["note"] = "Kein Recht zum Auflisten aller Buckets (s3:ListAllMyBuckets) – " +
-			"Namen bitte direkt eintippen."
+		// Fuer die Postfach-Benutzer ist das der Normalfall und kein Mangel: ihre
+		// Policy gibt bewusst kein s3:ListAllMyBuckets, sonst saehe jeder alle
+		// Buckets des Kontos. Der Text fuehrt deshalb mit dem, was zu tun ist,
+		// und nicht mit dem, was fehlt.
+		out["note"] = "Bucket-Namen bitte direkt eintippen – dieser Zugang darf " +
+			"die Buckets des Kontos nicht auflisten (s3:ListAllMyBuckets). " +
+			"Das ist so gewollt und kein Fehler."
 	}
 	return out, nil
 }

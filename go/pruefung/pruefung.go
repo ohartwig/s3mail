@@ -44,7 +44,7 @@ func Ausfuehren(ctx context.Context, s3 store.S3, kms store.KMS, ses SESPruefer,
 	objs, err := s3.List(ctx, bucket, prefix)
 	if err != nil {
 		add(Punkt{Name: "Bucket lesen", Detail: kurz(err),
-			Hinweis: "Fehlt s3:ListBucket, oder Bucket und Region passen nicht zueinander."})
+			Hinweis: hinweisAuflisten(prefix)})
 		return punkte
 	}
 	var beispiel string
@@ -207,4 +207,25 @@ func kurz(err error) string {
 		s = s[:200] + "…"
 	}
 	return s
+}
+
+// hinweisAuflisten nennt die drei Ursachen in der Reihenfolge ihrer
+// Wahrscheinlichkeit - und die haeufigste zuerst.
+//
+// Ist der Zugang auf ein eigenes Prefix beschraenkt (ein Postfach pro Person),
+// dann scheitert das Auflisten an einem Prefix, das auch nur eine Ebene zu weit
+// oben liegt: die Bedingung s3:prefix vergleicht die Zeichenkette, nicht den
+// Pfad. "mail/" passt nicht auf "mail/person/*", und "mail/person" ohne
+// abschliessenden Schraegstrich ebenfalls nicht. Das sieht wie ein fehlendes
+// Recht aus und ist eine fehlende Stelle.
+func hinweisAuflisten(prefix string) string {
+	if prefix == "" {
+		return "Fehlt s3:ListBucket, oder Bucket und Region passen nicht zueinander."
+	}
+	return fmt.Sprintf(
+		"Am wahrscheinlichsten stimmt das Prefix nicht: Zugänge, die nur ein "+
+			"eigenes Postfach sehen dürfen, brauchen es exakt – „%s“ mit "+
+			"abschließendem Schrägstrich, nicht die Ebene darüber. Sonst fehlt "+
+			"s3:ListBucket, oder Bucket und Region passen nicht zueinander.",
+		prefix)
 }

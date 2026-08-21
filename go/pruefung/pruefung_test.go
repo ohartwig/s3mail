@@ -197,3 +197,25 @@ func TestSESAbsender(t *testing.T) {
 		t.Errorf("%+v", p["SES-Absender"])
 	}
 }
+
+// TestHinweisNenntDasPrefixZuerst - der haeufigste Grund fuer ein 403 beim
+// Auflisten ist bei prefix-beschraenkten Zugaengen nicht das fehlende Recht,
+// sondern ein Prefix eine Ebene zu weit oben. Die alte Fassung nannte genau das
+// nicht und schickte den Nutzer zur IAM-Konsole statt ins Feld darueber.
+func TestHinweisNenntDasPrefixZuerst(t *testing.T) {
+	f := s3fake.Neu()
+	f.ListErr = errors.New("AccessDenied")
+	p := nach(pruefung.Ausfuehren(context.Background(), f, nil, nil,
+		"test-bucket", "mail/ole/", ""))
+
+	h := p["Bucket lesen"].Hinweis
+	if !strings.Contains(h, "mail/ole/") {
+		t.Errorf("das erwartete Prefix wird nicht genannt: %q", h)
+	}
+	if !strings.Contains(h, "Prefix") {
+		t.Errorf("Prefix kommt im Hinweis nicht vor: %q", h)
+	}
+	if strings.Index(h, "Prefix") > strings.Index(h, "s3:ListBucket") {
+		t.Errorf("die unwahrscheinlichere Ursache steht zuerst: %q", h)
+	}
+}
