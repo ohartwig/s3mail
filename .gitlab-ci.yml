@@ -131,40 +131,36 @@ upload:
 
 release:
   stage: release
-  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  # Kein release-cli: dessen Image liegt in registry.gitlab.com, und die Runner
+  # erreichen den Host nicht – sie sind IPv6-only, die Registry ist IPv4-only.
+  # Genau dafür gibt es devops/ci-mirrors, aber ein weiteres Image dort zu
+  # spiegeln wäre der Umweg: die Releases-API tut dasselbe, und curl ist schon da.
+  image: ${CURL_IMAGE}
   before_script: []
   needs: [upload]
   rules:
     - if: $CI_COMMIT_TAG
   script:
-    - echo "Release ${CI_COMMIT_TAG}"
-  release:
-    tag_name: $CI_COMMIT_TAG
-    name: s3mail $CI_COMMIT_TAG
-    description: |
-      Gebaut aus $CI_COMMIT_SHA.
-
-      **Starten:** ZIP entpacken und `s3mail` ausführen. Auf macOS blockt
-      Gatekeeper das unsignierte Programm beim ersten Mal – einmal
-      `xattr -dr com.apple.quarantine s3mail` genügt; unter Windows meldet sich
-      SmartScreen mit *Weitere Informationen → Trotzdem ausführen*.
-
-      Danach steht im Terminal eine Adresse mit Token; **ohne die antwortet der
-      Server nicht.** Sie steht außerdem in `adresse.txt` im
-      Konfigurationsverzeichnis, falls das Fenster zugeht.
-
-      Zu jedem Paket liegt eine `.sha256`-Datei daneben.
-    assets:
-      links:
-        - name: s3mail-windows-amd64.zip
-          url: ${PAKET_URL}/${CI_COMMIT_TAG}/s3mail-windows-amd64.zip
-          link_type: package
-        - name: s3mail-macos-arm64.zip (Apple Silicon)
-          url: ${PAKET_URL}/${CI_COMMIT_TAG}/s3mail-macos-arm64.zip
-          link_type: package
-        - name: s3mail-macos-amd64.zip (Intel)
-          url: ${PAKET_URL}/${CI_COMMIT_TAG}/s3mail-macos-amd64.zip
-          link_type: package
-        - name: s3mail-linux-amd64.zip
-          url: ${PAKET_URL}/${CI_COMMIT_TAG}/s3mail-linux-amd64.zip
-          link_type: package
+    - |
+      cat > /tmp/release.json <<EOF
+      {
+        "name": "s3mail ${CI_COMMIT_TAG}",
+        "tag_name": "${CI_COMMIT_TAG}",
+        "description": "Gebaut aus ${CI_COMMIT_SHA}.\n\n**Starten:** ZIP entpacken und \`s3mail\` ausführen. Auf macOS blockt Gatekeeper das unsignierte Programm beim ersten Mal – einmal \`xattr -dr com.apple.quarantine s3mail\` genügt; unter Windows meldet sich SmartScreen mit *Weitere Informationen → Trotzdem ausführen*.\n\nDanach steht im Terminal eine Adresse mit Token; **ohne die antwortet der Server nicht.** Sie steht außerdem in \`adresse.txt\` im Konfigurationsverzeichnis, falls das Fenster zugeht.\n\nZu jedem Paket liegt eine \`.sha256\`-Datei daneben.",
+        "assets": {
+          "links": [
+            {"name": "s3mail-windows-amd64.zip", "url": "${PAKET_URL}/${CI_COMMIT_TAG}/s3mail-windows-amd64.zip", "link_type": "package"},
+            {"name": "s3mail-macos-arm64.zip (Apple Silicon)", "url": "${PAKET_URL}/${CI_COMMIT_TAG}/s3mail-macos-arm64.zip", "link_type": "package"},
+            {"name": "s3mail-macos-amd64.zip (Intel)", "url": "${PAKET_URL}/${CI_COMMIT_TAG}/s3mail-macos-amd64.zip", "link_type": "package"},
+            {"name": "s3mail-linux-amd64.zip", "url": "${PAKET_URL}/${CI_COMMIT_TAG}/s3mail-linux-amd64.zip", "link_type": "package"}
+          ]
+        }
+      }
+      EOF
+    - |
+      curl --fail-with-body --silent --show-error \
+        --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
+        --header "Content-Type: application/json" \
+        --data @/tmp/release.json \
+        "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases"
+      echo
