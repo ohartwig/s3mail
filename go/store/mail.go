@@ -46,7 +46,8 @@ type Mailbox struct {
 	// laesst sich nicht entschluesseln.
 	verschluesselt bool
 
-	State *State
+	State  *State
+	inhalt *bodyCache
 }
 
 func NewMailbox(ctx context.Context, s3 S3, kms KMS, bucket, root, cacheDir string,
@@ -65,6 +66,7 @@ func NewMailbox(ctx context.Context, s3 S3, kms KMS, bucket, root, cacheDir stri
 		_ = os.MkdirAll(cacheDir, 0o700)
 		m.CacheFile = filepath.Join(cacheDir, slug+".json")
 		m.cacheLesen()
+		m.inhalt = neuerBodyCache(filepath.Join(cacheDir, slug+".bodies"))
 	}
 	lokal := ""
 	if cacheDir != "" {
@@ -98,10 +100,21 @@ func (m *Mailbox) Ordner() []core.FolderInfo {
 
 // Fetch holt ein Objekt und macht es bei Bedarf auf. headBytes > 0 holt nur den
 // Anfang - ausser das Postfach ist client-seitig verschluesselt, dann immer ganz.
+//
+// Ganze Mails kommen aus dem Zwischenspeicher, wenn sie dort liegen. Nur ganze:
+// ein Teilstueck zu speichern hiesse, beim naechsten Oeffnen den Rest zu
+// vermissen, ohne es zu merken.
 func (m *Mailbox) Fetch(ctx context.Context, key string, headBytes int) ([]byte, error) {
 	m.mu.RLock()
 	teilweise := headBytes > 0 && !m.verschluesselt
+	etag := m.index[key].ETag
 	m.mu.RUnlock()
+
+	if !teilweise && headBytes == 0 {
+		if b, da := m.inhalt.lesen(etag); da {
+			return b, nil
+		}
+	}
 
 	byteRange := ""
 	if teilweise {
@@ -112,6 +125,9 @@ func (m *Mailbox) Fetch(ctx context.Context, key string, headBytes int) ([]byte,
 		return nil, err
 	}
 	if !IstUmschlag(obj.Meta) {
+		if headBytes == 0 {
+			m.inhalt.schreiben(etag, obj.Body)
+		}
 		return obj.Body, nil
 	}
 	// Erste verschluesselte Mail: ab jetzt keine Teilstuecke mehr, und dieses
@@ -125,8 +141,19 @@ func (m *Mailbox) Fetch(ctx context.Context, key string, headBytes int) ([]byte,
 			return nil, err
 		}
 	}
-	return Entschluesseln(obj.Body, obj.Meta, m.kms)
+	klar, err := Entschluesseln(obj.Body, obj.Meta, m.kms)
+	if err == nil && headBytes == 0 {
+		// Entschluesselt zwischenspeichern: das spart beim naechsten Oeffnen den
+		// KMS-Aufruf mit, nicht nur den S3-GET. Der Zwischenspeicher liegt dafuer
+		// im Klartext auf der Platte - genau wie der Index, der Absender und
+		// Vorschautext ohnehin schon dort haelt.
+		m.inhalt.schreiben(etag, klar)
+	}
+	return klar, err
 }
+
+// CacheLeeren wirft die zwischengespeicherten Inhalte weg.
+func (m *Mailbox) CacheLeeren() { m.inhalt.Leeren() }
 
 // Verschluesselt sagt, ob im Postfach client-seitig verschluesselte Objekte liegen.
 func (m *Mailbox) Verschluesselt() bool {

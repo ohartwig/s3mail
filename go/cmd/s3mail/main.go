@@ -43,6 +43,7 @@ func main() {
 		noDelete    = flag.Bool("no-delete", false, "Endgueltiges Loeschen sperren")
 		noBrowser   = flag.Bool("no-browser", false, "Browser nicht automatisch oeffnen")
 		zeigVersion = flag.Bool("version", false, "Version ausgeben und beenden")
+		refreshSek  = flag.Int("refresh", 60, "Sekunden zwischen automatischen Abgleichen; 0 schaltet ab")
 	)
 	flag.Parse()
 
@@ -80,12 +81,12 @@ func main() {
 	// "Speichern und starten" soll niemand das Programm neu starten muessen.
 	ass := &assistent.Assistent{}
 	ass.Aktivieren = func(neu konfig.Konfig) error {
-		return scharfschalten(ctx, srv, neu, *noSend)
+		return scharfschalten(ctx, srv, neu, *noSend, *refreshSek)
 	}
 	srv.MitAssistent(ass)
 
 	if k.Bucket != "" && !*setup {
-		if err := scharfschalten(ctx, srv, k, *noSend); err != nil {
+		if err := scharfschalten(ctx, srv, k, *noSend, *refreshSek); err != nil {
 			startfehler = awsx.Klartext(err, k.Profil)
 		}
 	}
@@ -141,7 +142,7 @@ func main() {
 }
 
 // scharfschalten baut Postfach und Versand aus einer Konfiguration.
-func scharfschalten(ctx context.Context, srv *web.Server, k konfig.Konfig, noSend bool) error {
+func scharfschalten(ctx context.Context, srv *web.Server, k konfig.Konfig, noSend bool, refreshSekunden int) error {
 	cfg, err := awsx.Sitzung(ctx, k.Profil, k.Region)
 	if err != nil {
 		return err
@@ -156,6 +157,7 @@ func scharfschalten(ctx context.Context, srv *web.Server, k konfig.Konfig, noSen
 	srv.Config = map[string]any{
 		"bucket": k.Bucket, "root": mb.Root, "default_from": k.Absender,
 		"can_send": !noSend, "config_file": konfig.Datei(),
+		"refresh_seconds": refreshSekunden,
 	}
 	if !noSend {
 		srv.MitVersand(awsx.NeuSES(cfg, ""), k.Absender)

@@ -633,6 +633,45 @@ $("#ruleApply").onclick = guard(async () => {
 });
 
 /* ---------------- Start / Tastatur ---------------- */
+/* ---------------- Automatischer Abgleich ----------------
+   Damit neue Mail von selbst auftaucht, statt auf "Neu laden" zu warten.
+   Kostet fast nichts: der Abgleich listet den Bucket und holt nur Objekte,
+   deren ETag sich geaendert hat.
+
+   Zwei Zurueckhaltungen: nicht laufen, solange das Fenster im Hintergrund ist
+   (dort schaut niemand hin, und der Browser drosselt Timer ohnehin), und nicht
+   waehrend gerade geschrieben wird - ein Neuaufbau der Liste unter einem
+   offenen Entwurf ist schlimmer als eine Mail, die eine Minute spaeter kommt. */
+let autoTimer = null;
+
+function autoAbgleichPlanen() {
+  const sek = CFG.refresh_seconds | 0;
+  if (autoTimer) clearInterval(autoTimer);
+  if (sek <= 0) return;
+  autoTimer = setInterval(async () => {
+    if (document.visibilityState !== "visible") return;
+    if (document.querySelector("#compose")) return;   // Entwurf offen
+    if ($("#refresh").disabled) return;               // laeuft schon
+    try {
+      const vorher = messages.length;
+      const s = await api("/api/refresh", {});
+      await load();
+      if (messages.length > vorher) {
+        toast((messages.length - vorher) + " neue Mail");
+      }
+    } catch (e) { /* stiller Abgleich meldet keine Fehler weiter */ }
+  }, sek * 1000);
+}
+
+document.addEventListener("visibilitychange", () => {
+  // Beim Zurueckkommen sofort nachsehen, statt bis zum naechsten Takt zu warten.
+  if (document.visibilityState === "visible" && (CFG.refresh_seconds | 0) > 0) {
+    if (!document.querySelector("#compose") && !$("#refresh").disabled) {
+      api("/api/refresh", {}).then(() => load()).catch(() => {});
+    }
+  }
+});
+
 $("#quit").onclick = guard(async () => {
   if (!confirm("s3mail beenden?")) return;
   await api("/api/quit", {});
@@ -672,8 +711,10 @@ document.addEventListener("keydown", e => {
   else if ((e.key === "Delete" || e.key === "#") && i >= 0 && folder !== "trash") move([current], "trash");
 });
 
-load().then(() => { if (!messages.length && !over.folders.some(f => f.count)) $("#refresh").click(); })
-      .catch(e => toast(e.message, true));
+load().then(() => {
+        if (!messages.length && !over.folders.some(f => f.count)) $("#refresh").click();
+        autoAbgleichPlanen();
+      }).catch(e => toast(e.message, true));
 </script>
 </body>
 </html>

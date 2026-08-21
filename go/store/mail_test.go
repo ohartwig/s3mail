@@ -321,3 +321,80 @@ func TestZwischenspeicherSpartRequests(t *testing.T) {
 		}
 	}
 }
+
+// TestInhaltAusDemZwischenspeicher - eine Mail zum zweiten Mal zu oeffnen darf
+// keinen S3-Zugriff mehr kosten. Der Index lag schon immer lokal, der Inhalt
+// nicht: bisher wurde jede geoeffnete Mail samt Anhaengen erneut geholt.
+func TestInhaltAusDemZwischenspeicher(t *testing.T) {
+	ctx := context.Background()
+	f, m := postfachBauen(t)
+	if _, err := m.Refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	roh1, err := m.Fetch(ctx, "mail/m1", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.AufrufeLeeren()
+
+	roh2, err := m.Fetch(ctx, "mail/m1", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(roh1) != string(roh2) {
+		t.Error("zwischengespeicherter Inhalt weicht ab")
+	}
+	for _, a := range f.Mitschnitt() {
+		if strings.HasPrefix(a, "get mail/m1") {
+			t.Errorf("trotz Zwischenspeicher erneut geholt: %s", a)
+		}
+	}
+}
+
+// TestZwischenspeicherHaengtAmETag - aendert sich das Objekt, muss der Eintrag
+// verfallen. Sonst zeigt s3mail nach einem Wechsel des Inhalts die alte Fassung.
+func TestZwischenspeicherHaengtAmETag(t *testing.T) {
+	ctx := context.Background()
+	f, m := postfachBauen(t)
+	if _, err := m.Refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Fetch(ctx, "mail/m1", 0); err != nil {
+		t.Fatal(err)
+	}
+	f.Setzen("mail/m1", mailBauen("Neu <neu@x.de>", "post@firma.de", "Anderer Inhalt",
+		"Voellig andere Mail.", "Fri, 07 Aug 2026 09:00:00 +0000", "<neu@x>"))
+	if _, err := m.Refresh(ctx); err != nil { // neues ETag landet im Index
+		t.Fatal(err)
+	}
+	roh, err := m.Fetch(ctx, "mail/m1", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(roh), "Anderer Inhalt") {
+		t.Error("alte Fassung aus dem Zwischenspeicher geliefert")
+	}
+}
+
+// TestTeilstueckeWerdenNichtZwischengespeichert - ein gespeichertes Teilstueck
+// waere beim naechsten Oeffnen eine abgeschnittene Mail, ohne dass es auffaellt.
+func TestTeilstueckeWerdenNichtZwischengespeichert(t *testing.T) {
+	ctx := context.Background()
+	f, m := postfachBauen(t)
+	if _, err := m.Refresh(ctx); err != nil { // holt nur HeaderChunk
+		t.Fatal(err)
+	}
+	f.AufrufeLeeren()
+	if _, err := m.Fetch(ctx, "mail/m1", 0); err != nil {
+		t.Fatal(err)
+	}
+	geholt := false
+	for _, a := range f.Mitschnitt() {
+		if strings.HasPrefix(a, "get mail/m1") {
+			geholt = true
+		}
+	}
+	if !geholt {
+		t.Error("ganze Mail kam aus einem Teilstueck im Zwischenspeicher")
+	}
+}

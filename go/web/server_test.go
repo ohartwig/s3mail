@@ -319,3 +319,34 @@ func TestOhnePostfach(t *testing.T) {
 		t.Errorf("Startseite ohne Postfach: HTTP %d", r.Code)
 	}
 }
+
+// TestAutoAbgleichWirdAusgeliefert - der Takt kommt aus der Konfiguration; ohne
+// ihn stünde die Seite still und niemand saehe, dass es den Abgleich gibt.
+func TestAutoAbgleichWirdAusgeliefert(t *testing.T) {
+	ctx := context.Background()
+	f := s3fake.Neu()
+	f.Setzen("mail/m1", mailRoh("a@b.de", "x", "y", "Mon, 03 Aug 2026 09:00:00 +0000"))
+	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), true)
+	if _, err := mb.Refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	srv := NewServer(mb, testToken, "127.0.0.1", 0, map[string]any{
+		"bucket": "test-bucket", "refresh_seconds": 45})
+	ts := httptest.NewServer(srv)
+	defer ts.Close()
+	srv.Port = portVon(ts.URL)
+
+	seite := string(rufen(t, ts, "GET", "/?t="+testToken, "", nil).Body)
+	if !strings.Contains(seite, "autoAbgleichPlanen") {
+		t.Error("der automatische Abgleich fehlt in der ausgelieferten Seite")
+	}
+	if !strings.Contains(seite, `"refresh_seconds":45`) {
+		t.Error("das Intervall kommt nicht in der Seite an")
+	}
+	// Ohne Intervall muss der Takt ausbleiben, nicht auf einen Standardwert fallen
+	srv.Config = map[string]any{"bucket": "test-bucket", "refresh_seconds": 0}
+	seite = string(rufen(t, ts, "GET", "/?t="+testToken, "", nil).Body)
+	if !strings.Contains(seite, `"refresh_seconds":0`) {
+		t.Error("abgeschalteter Abgleich wird nicht als 0 ausgeliefert")
+	}
+}

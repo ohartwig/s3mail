@@ -367,3 +367,49 @@ aussieht — nicht in einem eigenen WebView. Der Unterschied ist keine Bequemlic
 macOS cross-kompilieren. Ein natives Fenster kostet also genau die Eigenschaft,
 wegen der dieses Projekt überhaupt in Go geschrieben ist — vier Plattformen aus
 einem Lauf. Siehe `okf://core/engineering/decisions/go-for-desktop-and-cluster-tools.md`.
+
+
+---
+
+# Neue Mail taucht von selbst auf, Inhalte kommen von der Platte
+
+Zwei Ergänzungen, die zusammengehören.
+
+## Automatischer Abgleich
+
+`--refresh 60` (Standard) gleicht im Hintergrund ab, `--refresh 0` schaltet es
+ab. Das kostet fast nichts: der Abgleich listet den Bucket und holt nur Objekte,
+deren **ETag** sich geändert hat — dieselbe Mechanik, die „Neu laden" schon immer
+benutzt hat.
+
+Zwei Zurückhaltungen sind eingebaut, weil ein Timer, der immer läuft, schnell
+lästig wird:
+
+- **Nicht im Hintergrund.** Steht das Fenster hinten, schaut niemand hin, und der
+  Browser drosselt Timer ohnehin. Beim Zurückkommen wird sofort nachgesehen statt
+  bis zum nächsten Takt gewartet.
+- **Nicht während geschrieben wird.** Ein Neuaufbau der Liste unter einem offenen
+  Entwurf ist schlimmer als eine Mail, die eine Minute später kommt.
+
+## Inhalts-Zwischenspeicher
+
+Der **Index** lag schon immer lokal — deshalb ist der zweite Abgleich fast
+umsonst. Der **Inhalt** nicht: eine Mail zum dritten Mal zu öffnen hieß, sie zum
+dritten Mal aus S3 zu holen, samt Anhängen.
+
+`store/bodycache.go` legt ganze Mails unter `<cache>/<slug>.bodies/` ab,
+**geschlüsselt über das ETag**. Das ist die richtige Wahl, nicht der Key:
+
+- Eine zugestellte Mail ändert sich nicht mehr — das ETag ist ein guter Fingerabdruck.
+- Beim Verschieben zwischen Ordnern wechselt der Key, der Inhalt nicht. Der
+  Eintrag überlebt das Verschieben.
+- Ändert sich das Objekt doch, fällt der Eintrag automatisch heraus.
+
+Gespeichert wird **nur die ganze Mail**, nie ein Teilstück — ein gespeichertes
+64-KB-Stück wäre beim nächsten Öffnen eine abgeschnittene Mail, ohne dass es
+auffällt. Bei client-seitig verschlüsselten Postfächern landet der **entschlüsselte**
+Stand im Zwischenspeicher; das spart den KMS-Aufruf mit, legt den Klartext aber
+auf die Platte — genau wie der Index, der Absender und Vorschautext ohnehin schon
+dort hält.
+
+Obergrenze 256 MB, verdrängt wird das am längsten Ungenutzte.
