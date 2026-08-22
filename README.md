@@ -1,29 +1,29 @@
 # s3mail
 
 Mail-Client für E-Mails, die Amazon SES als Rohdaten (MIME) in einen S3-Bucket schreibt.
-Eine einzige Python-Datei, startet einen lokalen Webserver, Postfach im Browser.
+Ein einzelnes Programm ohne Laufzeitumgebung, startet einen lokalen Webserver,
+Postfach im Browser.
 
 ## Voraussetzungen
 
 ### Auf dem Rechner, der s3mail startet
 
-Zwei Wege, und beide brauchen sonst nichts – keinen Webserver, keine Datenbank,
-kein Docker. s3mail bringt seinen eigenen Server mit und bindet ihn an 127.0.0.1.
+Nichts. Kein Webserver, keine Datenbank, kein Docker, keine Laufzeitumgebung –
+s3mail ist ein einzelnes Programm, bringt seinen eigenen Server mit und bindet
+ihn an 127.0.0.1.
 
-- **Fertiges Paket** aus den
-  [Releases](https://git.ole-hartwig.eu/development/s3mail/-/releases) – da ist
-  alles drin, Python muss nicht installiert sein. Derzeit nur macOS auf Apple
-  Silicon; für andere Plattformen siehe
-  [Ohne Python: fertiges Paket](#ohne-python-fertiges-paket).
+Das passende Paket aus den
+[Releases](https://git.ole-hartwig.eu/development/s3mail/-/releases) laden –
+macOS (Apple Silicon und Intel), Linux und Windows, jeweils amd64/arm64:
 
-  ```bash
-  unzip s3mail-macos-arm64.zip
-  xattr -dr com.apple.quarantine s3mail   # einmalig, das Programm ist unsigniert
-  ./s3mail/s3mail
-  ```
-- **Aus dem Quellcode:** Python 3.10 oder neuer und `pip install boto3`. Die
-  Untergrenze kommt von boto3, s3mail selbst läuft auch auf älteren. Sind die
-  Mails client-seitig mit KMS verschlüsselt, kommt `cryptography` dazu.
+```bash
+unzip s3mail-macos-arm64.zip
+xattr -dr com.apple.quarantine s3mail   # einmalig, das Programm ist unsigniert
+./s3mail
+```
+
+Wer selbst bauen will, braucht Go 1.25 oder neuer – siehe
+[Selbst bauen](#selbst-bauen).
 
 Dazu ein Browser. Nach außen gehen nur HTTPS-Verbindungen zu
 `s3.<region>.amazonaws.com`, `email.<region>.amazonaws.com` und – falls
@@ -126,12 +126,8 @@ die IAM-Aktion dazu, die dafür nötig wäre.
 ## Erster Start
 
 ```bash
-pip install boto3
-python3 s3mail.py
+./s3mail
 ```
-
-Wenn deine SES-Regel die Mails client-seitig mit KMS verschlüsselt, kommt noch
-`pip install cryptography` dazu – siehe [Verschlüsselte Buckets](#verschlüsselte-buckets).
 
 Beim Start schreibt s3mail eine Adresse ins Terminal, die ein **Token** enthält:
 
@@ -159,14 +155,14 @@ Postfachs. Dort in drei Schritten:
    7/30/90 Tagen automatisch leert.
 
 „Speichern und starten“ schreibt `~/.config/s3mail/config.json` (chmod 600) und lädt
-direkt das Postfach. Ab dann genügt `python3 s3mail.py`. Über den Knopf
+direkt das Postfach. Ab dann genügt `./s3mail`. Über den Knopf
 **Einstellungen** oben rechts kommt man jederzeit zurück in den Assistenten.
 
 Wer lieber Argumente tippt, kann alles weiterhin per CLI setzen – die überschreiben die
 Konfigurationsdatei für den jeweiligen Start:
 
 ```bash
-python3 s3mail.py --bucket mein-mail-bucket --prefix mail/ \
+./s3mail --bucket mein-mail-bucket --prefix mail/ \
     --region eu-central-1 --from support@example.com
 ```
 
@@ -181,6 +177,8 @@ python3 s3mail.py --bucket mein-mail-bucket --prefix mail/ \
 | `--no-delete` | Endgültiges Löschen sperren – dann geht nur Papierkorb |
 | `--port` / `--host` | Standard `127.0.0.1:8765` |
 | `--no-browser` | Browser nicht automatisch öffnen |
+| `--refresh` | Sekunden zwischen automatischen Abgleichen, `0` schaltet ab (Standard 60) |
+| `--version` | Version ausgeben und beenden |
 
 ## Ordner sind echte S3-Prefixe
 
@@ -249,55 +247,37 @@ has:anhang has:spam is:ungelesen is:stern tag:wichtig in:archiv
 **Tastatur:** `n` neue Nachricht · `j`/`k` blättern · `x` auswählen · `s` Stern ·
 `e` archivieren · `Entf` Papierkorb · `/` Suche.
 
-## Ohne Python: fertiges Paket
+## Selbst bauen
 
-Fertig gebaut liegt das jeweils aktuelle Paket unter
-[Releases](https://git.ole-hartwig.eu/development/s3mail/-/releases) – bisher nur
-für **macOS auf Apple Silicon**. Zwei Assets:
+Fertige Pakete für macOS (Apple Silicon und Intel), Linux und Windows liegen
+unter [Releases](https://git.ole-hartwig.eu/development/s3mail/-/releases). Wer
+selbst bauen will, braucht nur Go – s3mail kommt ohne C-Bibliotheken aus, also
+baut ein Rechner für alle:
 
-- `s3mail-macos-arm64.zip` – der entpackte Ordner, **empfohlen**, startet in einer
-  halben Sekunde.
-- `s3mail-macos-arm64-onefile.zip` – eine einzelne Datei, bequemer zum Weitergeben,
-  aber rund 7 Sekunden pro Start.
+```bash
+cd go
+go build ./cmd/s3mail                                  # für dieses System
+GOOS=windows GOARCH=amd64 go build ./cmd/s3mail        # für ein anderes
+```
 
-Beide sind ZIPs, und zwar mit Absicht: eine roh heruntergeladene Datei verliert ihr
-Ausführungs-Bit und lässt sich dann gar nicht erst starten. Dazu hängt macOS jedem
-Download ein Quarantäne-Attribut an, und weil das Programm nicht signiert ist,
-blockt Gatekeeper. Beides ist einmalig erledigt:
+Heraus kommt eine einzelne Datei von rund 15 MB, Start in Millisekunden. Die
+Oberfläche steckt per `go:embed` mit drin, es gibt keinen Build-Schritt fürs
+Frontend und nichts nachzuinstallieren.
+
+Ausgeliefert wird als ZIP, und das mit Absicht: eine roh heruntergeladene Datei
+verliert ihr Ausführungs-Bit und lässt sich dann gar nicht erst starten. Dazu
+hängt macOS jedem Download ein Quarantäne-Attribut an, und weil das Programm
+nicht signiert ist, blockt Gatekeeper:
 
 ```bash
 unzip s3mail-macos-arm64.zip
 xattr -dr com.apple.quarantine s3mail
-./s3mail/s3mail
+./s3mail
 ```
 
 Wer lieber klickt: Finder → Rechtsklick auf `s3mail` → Öffnen, dann bestätigen.
-
-Für jede andere Plattform einmal selbst bauen – PyInstaller baut immer für das
-System, auf dem es läuft:
-
-```bash
-pip install pyinstaller boto3 cryptography
-python3 build.py                    # s3mail.py aktualisieren
-pyinstaller --clean s3mail.spec     # -> dist/s3mail/
-```
-
-Heraus kommt `dist/s3mail/` – ein Ordner mit dem Startprogramm `s3mail` darin,
-zum Weitergeben einfach zippen. Rund 37 MB, Start in einer halben Sekunde.
-
-`S3MAIL_ONEFILE=1 pyinstaller --clean s3mail.spec` macht daraus stattdessen eine
-einzelne 15-MB-Datei. Bequemer zum Verschicken, aber auf macOS spürbar zäh: die
-Datei packt sich bei *jedem* Start neu aus, und XProtect sieht sich das
-Ausgepackte jedes Mal an – gemessen rund 7 Sekunden pro Start gegenüber einer
-halben Sekunde beim Ordner. Unter Linux und Windows fällt das weg.
-
-Wer den Empfängern die Gatekeeper-Warnung ersparen will, braucht ein
-Apple-Developer-Zertifikat und muss signieren und notarisieren
-(`codesign_identity` in `s3mail.spec`).
-
-Die Spec-Datei wirft die Dienstbeschreibungen aus botocore weg, die s3mail nie
-anfasst – von rund 400 AWS-Diensten bleiben S3, SES, KMS und STS übrig, was etwa
-20 MB spart.
+Und wer den Empfängern das ersparen will, braucht ein Apple-Developer-Zertifikat
+und muss signieren und notarisieren.
 
 ## Verschlüsselte Buckets
 
@@ -319,8 +299,8 @@ AES-256 verschlüsselt. Ein normales `GetObject` liefert Kauderwelsch.
 
 s3mail erkennt das an den Metadaten und macht es auf: `kms:Decrypt` auf dem verpackten
 Schlüssel – mit dem Encryption Context aus `x-amz-matdesc`, sonst lehnt KMS ab – und
-dann AES-GCM (aktuelles Format) bzw. AES-CBC (älteres). Dazu braucht es das Paket
-`cryptography`. Zwei Folgen im Betrieb:
+dann AES-GCM (aktuelles Format) bzw. AES-CBC (älteres). Das steckt im Programm
+drin, nachzuinstallieren ist nichts. Zwei Folgen im Betrieb:
 
 - Der Index kann keine Teilstücke mehr per Range-GET holen (ein halbes Chiffrat lässt
   sich nicht entschlüsseln). Sobald s3mail die erste verschlüsselte Mail sieht, lädt es
@@ -458,20 +438,25 @@ wird eingetippt oder kommt aus der Selbsteinrichtung.
   Key beginnt mit einer neuen Version.
 - Bei sehr großen Postfächern (> ~50k Objekte) dauert das erste Indexieren; dann mit
   engerem Prefix arbeiten.
+- Die Pakete sind **nicht signiert**. Auf macOS ist deshalb einmal
+  `xattr -dr com.apple.quarantine` nötig, unter Windows meldet sich SmartScreen.
 
 ## Tests
 
-`test_s3mail.py` fährt die ganze Logik gegen einen Fake-S3 mit ETags, Präfix-Listing
-und echt verschlüsselten Testmails – 38 Testgruppen: Index, Ordner, Verschieben mit
-Zustandsübernahme, Papierkorb-Regeln, Tags, Regel-Engine, Suche, Versand-Header,
-Zustand von mehreren Rechnern (Ops, Zusammenfassen, Wasserstand), KMS-Entschlüsselung
-(GCM und CBC), Konfiguration, Credentials-Datei, Verbindungstest, Lifecycle,
-HTTP-Schicht, Zugangskontrolle, Fehlerübersetzung. Kein AWS-Zugriff, aber `boto3`
-und `cryptography` müssen installiert sein.
+```bash
+cd go && go test ./...
+```
 
-`ui_check.py` und `ui_setup_check.py` klicken zusätzlich mit Playwright durch die
-laufende Oberfläche (Postfach bzw. Assistent).
+Zehn Pakete, gut hundert Testfunktionen, kein AWS-Zugriff: `s3fake` bildet S3 mit
+ETags, Präfix-Listing, Objekt-Metadaten und serverseitiger Verschlüsselung nach.
+Abgedeckt sind Index, Ordner, Verschieben samt Zustandsübernahme,
+Papierkorb-Regeln, Tags, Regel-Engine, Suche, Versand-Header, Zustand von
+mehreren Rechnern (Ops, Zusammenfassen, Wasserstand), KMS-Entschlüsselung (GCM
+und CBC), MIME-Zerlegung, Konfiguration, Verbindungstest, Lifecycle,
+HTTP-Schicht, Zugangskontrolle und Fehlerübersetzung.
+
+Eine einzelne Gruppe:
 
 ```bash
-python3 test_s3mail.py
+go test ./store/ -run TestVerschiebenNimmtDenZustandMit -v
 ```
