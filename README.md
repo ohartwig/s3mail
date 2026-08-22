@@ -425,6 +425,29 @@ jeden Bucket des Kontos, auch die, die mit Mail nichts zu tun haben. Bei einem
 Postfach-Zugang ist die leere Auswahlliste deshalb der Normalfall – der Name
 wird eingetippt oder kommt aus der Selbsteinrichtung.
 
+## Nicht mehr schreiben (SES-Sperrliste)
+
+Bittet jemand darum, nicht mehr angeschrieben zu werden, erledigt das der Knopf
+**Nicht mehr schreiben** in der Mailansicht: die Adresse kommt auf die
+Unterdrückungsliste des SES-Kontos, und SES nimmt keine Mail mehr an sie an.
+Oben in der Kopfleiste zeigt **Gesperrt** die Liste und nimmt Adressen wieder
+herunter.
+
+Zwei Dinge dazu, die man wissen sollte:
+
+- **Die Liste gehört dem AWS-Konto, nicht dem Postfach.** SES kennt keine
+  Sperrliste pro Identität. Eine Adresse dort sperrt sie für alle Postfächer
+  desselben Kontos. Bei „nicht mehr schreiben" ist das genau richtig – bei einem
+  Tippfehler wäre es ärgerlich, deshalb gibt es den Weg zurück gleich daneben.
+- **SES trägt auch selbst ein**, nämlich alles, was hart zurückkommt oder als
+  Beschwerde gemeldet wird. In der Liste steht deshalb bei jedem Eintrag, woher
+  er kommt.
+
+Nötig sind dafür `ses:PutSuppressedDestination`,
+`ses:DeleteSuppressedDestination`, `ses:ListSuppressedDestinations` und
+`ses:GetSuppressedDestination`. Fehlen sie, fehlen auch die beiden Knöpfe nicht –
+sie melden dann einen Rechtefehler im Klartext.
+
 ## Grenzen
 
 - Kein IMAP, kein Push – neue Mails kommen erst mit „Neu laden“.

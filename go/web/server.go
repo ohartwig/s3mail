@@ -28,6 +28,7 @@ type Server struct {
 	Config  map[string]any
 
 	versender        Versender
+	sperrliste       Sperrliste
 	standardAbsender string
 	assistent        *assistent.Assistent
 
@@ -43,6 +44,7 @@ func NewServer(mb *store.Mailbox, token, bind string, port int, config map[strin
 	s.mux = http.NewServeMux()
 	s.routen()
 	s.sendenRoute()
+	s.sperrlistenRouten()
 	s.assistentRouten()
 	return s
 }
@@ -207,18 +209,19 @@ func mit(basis map[string]any, extra map[string]any) map[string]any {
 // -- Routen ----------------------------------------------------------------- //
 
 type anfrage struct {
-	Keys   []string    `json:"keys"`
-	Key    string      `json:"key"`
-	Folder string      `json:"folder"`
-	Read   *bool       `json:"read"`
-	Star   *bool       `json:"star"`
-	Add    []string    `json:"add"`
-	Remove []string    `json:"remove"`
-	Action string      `json:"action"`
-	Name   string      `json:"name"`
-	Old    string      `json:"old"`
-	Color  string      `json:"color"`
-	Rules  []core.Rule `json:"rules"`
+	Keys    []string    `json:"keys"`
+	Key     string      `json:"key"`
+	Folder  string      `json:"folder"`
+	Read    *bool       `json:"read"`
+	Star    *bool       `json:"star"`
+	Add     []string    `json:"add"`
+	Remove  []string    `json:"remove"`
+	Action  string      `json:"action"`
+	Name    string      `json:"name"`
+	Old     string      `json:"old"`
+	Color   string      `json:"color"`
+	Rules   []core.Rule `json:"rules"`
+	Address string      `json:"address"`
 }
 
 func (a anfrage) alleKeys() []string {

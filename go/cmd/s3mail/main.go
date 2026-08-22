@@ -172,6 +172,9 @@ func scharfschalten(ctx context.Context, srv *web.Server, k konfig.Konfig, noSen
 	}
 	if !noSend {
 		srv.MitVersand(awsx.NeuSES(cfg, ""), k.Absender)
+		// Die Sperrliste haengt am Versand: wer nicht senden darf, muss auch
+		// niemanden vom Senden ausschliessen koennen.
+		srv.MitSperrliste(sperrliste{awsx.NeueSperrliste(cfg, "")})
 	}
 	return nil
 }

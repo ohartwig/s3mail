@@ -132,6 +132,7 @@
   <button class="primary" id="new" title="Neue Nachricht schreiben (n)">Neu</button>
   <input id="q" placeholder='Suche:  rechnung · from:kunde@x.de · subject:"Angebot" · after:2026-01-01 · has:anhang · is:ungelesen · tag:wichtig'>
   <button id="rulesBtn" title="Automatische Regeln">Regeln</button>
+  <button id="blockedBtn" title="Adressen, an die SES nichts mehr zustellt">Gesperrt</button>
   <button onclick="location.href='/setup'" title="Verbindung, Bucket, Papierkorb">Einstellungen</button>
   <button id="refresh">Neu laden</button>
   <button id="quit" title="s3mail beenden">Beenden</button>
@@ -173,6 +174,17 @@
     <button type="button" class="primary" id="ruleSave">Speichern</button>
   </div>
   <div id="r_err" class="err"></div>
+</form></dialog>
+
+<dialog id="dlgBlocked"><form class="pad" method="dialog">
+  <b>Gesperrte Adressen</b>
+  <div class="hint" style="margin:6px 0 10px">Die Sperrliste gehört dem AWS-Konto, nicht
+    diesem Postfach: eine Adresse hier sperrt sie auch für alle Kolleginnen und Kollegen.
+    SES trägt hier außerdem selbst ein, was hart zurückkommt.</div>
+  <div id="bl_list" class="box" style="max-height:320px;overflow:auto">…</div>
+  <div class="bar" style="justify-content:flex-end;margin:10px 0 0">
+    <button value="cancel">Schließen</button>
+  </div>
 </form></dialog>
 
 <dialog id="dlgConfirm"><form class="pad" method="dialog">
@@ -526,6 +538,7 @@ const open = guard(async key => {
       ${m.folder === "trash"
         ? (over.allow_delete ? '<button class="danger" id="vPurge">Endgültig löschen</button>' : "")
         : '<button id="vTrash">🗑 Papierkorb</button>'}
+      ${CFG.can_send ? '<button id="vBlock" title="Diese Adresse auf die SES-Sperrliste setzen">Nicht mehr schreiben</button>' : ""}
       <a class="att" href="/api/raw?key=${encodeURIComponent(key)}">⬇︎ .eml</a>
       ${m.html ? `<button id="imgs">${showImages ? "Bilder blockieren" : "Externe Bilder laden"}</button>` : ""}
     </div>
@@ -543,6 +556,7 @@ const open = guard(async key => {
   on("#vPurge", () => confirmDelete([key]));
   on("#vMove", e => folderMenu(e.target, guard(async f => { await move([key], f); })));
   on("#vTag", e => tagMenu(e.target, [key]));
+  on("#vBlock", () => blockFragen(m.reply_to || m.from));
   on("#vStar", guard(async () => {
     await api("/api/flag", {keys:[key], star: !m.star});
     m.star = !m.star; open(key);
@@ -594,6 +608,54 @@ $("#c_send").onclick = async () => {
   } catch (e) { $("#c_err").textContent = e.message; }
   finally { b.disabled = false; b.textContent = "Senden"; }
 };
+
+/* ---------------- Sperrliste ---------------- */
+// Die Liste gehoert dem Konto, nicht dem Postfach - deshalb fragt der Knopf
+// nach, und deshalb gibt es den Weg zurueck gleich daneben. Ein Tippfehler
+// sperrt sonst einen Geschaeftspartner fuer das ganze Team, ohne dass jemand
+// sieht, wo es klemmt.
+function blockFragen(adresse) {
+  $("#cf_title").textContent = "Nicht mehr schreiben?";
+  $("#cf_text").textContent = adresse + " kommt auf die Sperrliste des AWS-Kontos. "
+    + "SES nimmt dann keine Mail mehr an diese Adresse an – auch nicht von Kolleginnen "
+    + "und Kollegen. Rückgängig machen geht über „Gesperrte Adressen“.";
+  const ok = $("#cf_ok"), text = ok.textContent;
+  ok.textContent = "Sperren";
+  $("#dlgConfirm").showModal();
+  ok.onclick = guard(async () => {
+    $("#dlgConfirm").close();
+    ok.textContent = text;
+    await api("/api/block", {address: adresse});
+    toast(adresse + " gesperrt");
+  });
+  $("#dlgConfirm").addEventListener("close", () => { ok.textContent = text; }, {once: true});
+}
+
+async function zeigeGesperrte() {
+  $("#dlgBlocked").showModal();
+  $("#bl_list").textContent = "lädt…";
+  try {
+    const d = await api("/api/blocked");
+    renderGesperrte(d.blocked || []);
+  } catch (e) { $("#bl_list").textContent = e.message; }
+}
+function renderGesperrte(liste) {
+  if (!liste.length) { $("#bl_list").textContent = "Keine gesperrten Adressen."; return; }
+  $("#bl_list").innerHTML = liste.map(e => `
+    <div class="check" style="justify-content:space-between">
+      <div><b>${esc(e.address)}</b>
+        <div class="d">${e.reason === "BOUNCE" ? "unzustellbar" : "Beschwerde/Wunsch"}${
+          e.since ? " · seit " + new Date(e.since).toLocaleDateString() : ""}</div></div>
+      <button type="button" data-a="${esc(e.address)}">Freigeben</button>
+    </div>`).join("");
+  for (const b of $("#bl_list").querySelectorAll("button")) {
+    b.onclick = guard(async () => {
+      const d = await api("/api/unblock", {address: b.dataset.a});
+      toast(b.dataset.a + " freigegeben");
+      renderGesperrte(d.blocked || []);
+    });
+  }
+}
 
 /* ---------------- Regeln ---------------- */
 function ruleRow(r) {
@@ -707,8 +769,13 @@ $("#refresh").onclick = guard(async () => {
   } finally { b.disabled = false; b.textContent = "Neu laden"; }
 });
 
-if (CFG.can_send) $("#new").onclick = () => compose("new");
-else $("#new").style.display = "none";
+if (CFG.can_send) {
+  $("#new").onclick = () => compose("new");
+  $("#blockedBtn").onclick = zeigeGesperrte;
+} else {
+  $("#new").style.display = "none";
+  $("#blockedBtn").style.display = "none";
+}
 
 let timer;
 $("#q").oninput = () => { clearTimeout(timer); timer = setTimeout(load, 200); };
