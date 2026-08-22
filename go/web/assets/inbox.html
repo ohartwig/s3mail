@@ -129,6 +129,7 @@
 <body>
 <header>
   <b>s3mail</b><span class="box" id="box"></span>
+  <button class="primary" id="new" title="Neue Nachricht schreiben (n)">Neu</button>
   <input id="q" placeholder='Suche:  rechnung · from:kunde@x.de · subject:"Angebot" · after:2026-01-01 · has:anhang · is:ungelesen · tag:wichtig'>
   <button id="rulesBtn" title="Automatische Regeln">Regeln</button>
   <button onclick="location.href='/setup'" title="Verbindung, Bucket, Papierkorb">Einstellungen</button>
@@ -145,6 +146,7 @@
 </main>
 
 <dialog id="dlgCompose"><form class="pad" method="dialog">
+  <b id="c_title">Antworten</b>
   <div><label>Von</label><input id="c_from"></div>
   <div><label>An</label><input id="c_to"></div>
   <div><label>Cc</label><input id="c_cc"></div>
@@ -555,8 +557,20 @@ function quote(m) {
 }
 function compose(kind, all) {
   const m = msg; mode = kind;
-  const sub = m.subject || "";
+  $("#c_err").textContent = "";
   $("#c_from").value = CFG.default_from || "";
+  // Eine neue Nachricht hat keine Vorlage - alles andere unten liest aus m,
+  // das dann gar nicht da ist (nichts ausgewaehlt, leeres Postfach).
+  if (kind === "new" || !m) {
+    mode = "new";
+    $("#c_title").textContent = "Neue Nachricht";
+    for (const f of ["#c_to", "#c_cc", "#c_subject", "#c_body"]) $(f).value = "";
+    $("#dlgCompose").showModal();
+    $("#c_to").focus();
+    return;
+  }
+  $("#c_title").textContent = kind === "forward" ? "Weiterleiten" : "Antworten";
+  const sub = m.subject || "";
   $("#c_to").value = kind === "forward" ? "" : (m.reply_to || m.from);
   $("#c_cc").value = (kind !== "forward" && all) ? [m.to, m.cc].filter(Boolean).join(", ") : "";
   $("#c_subject").value = kind === "forward"
@@ -565,7 +579,6 @@ function compose(kind, all) {
   $("#c_body").value = kind === "forward"
     ? `\n\n--- Weitergeleitete Nachricht ---\nVon: ${m.from}\nAn: ${m.to}\nDatum: ${new Date(m.date).toLocaleString()}\nBetreff: ${sub}\n\n${m.text || ""}`
     : quote(m);
-  $("#c_err").textContent = "";
   $("#dlgCompose").showModal();
   $("#c_body").setSelectionRange(0, 0);
   $("#c_body").focus();
@@ -573,7 +586,7 @@ function compose(kind, all) {
 $("#c_send").onclick = async () => {
   const b = $("#c_send"); b.disabled = true; b.textContent = "sendet…";
   try {
-    const r = await api("/api/send", {mode, key: current, from: $("#c_from").value,
+    const r = await api("/api/send", {mode, key: mode === "new" ? "" : current, from: $("#c_from").value,
       to: $("#c_to").value, cc: $("#c_cc").value,
       subject: $("#c_subject").value, body: $("#c_body").value});
     $("#dlgCompose").close();
@@ -694,12 +707,17 @@ $("#refresh").onclick = guard(async () => {
   } finally { b.disabled = false; b.textContent = "Neu laden"; }
 });
 
+if (CFG.can_send) $("#new").onclick = () => compose("new");
+else $("#new").style.display = "none";
+
 let timer;
 $("#q").oninput = () => { clearTimeout(timer); timer = setTimeout(load, 200); };
 document.addEventListener("keydown", e => {
   if (document.querySelector("dialog[open]")) return;
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
   if (e.key === "/" && !typing) { e.preventDefault(); $("#q").focus(); return; }
+  // Vor der Abkuerzung unten: Schreiben geht auch im leeren Postfach, gerade da.
+  if (e.key === "n" && !typing && CFG.can_send) { e.preventDefault(); compose("new"); return; }
   if (typing || !messages.length) return;
   const i = messages.findIndex(m => m.key === current);
   const go = j => { const m = messages[Math.max(0, Math.min(j, messages.length - 1))]; if (m) open(m.key); };

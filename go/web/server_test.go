@@ -350,3 +350,19 @@ func TestAutoAbgleichWirdAusgeliefert(t *testing.T) {
 		t.Error("abgeschalteter Abgleich wird nicht als 0 ausgeliefert")
 	}
 }
+
+// TestSchreibenOhneVorlage - Antworten und Weiterleiten gab es von Anfang an,
+// eine Mail ohne Vorlage nicht: der Server konnte es (mode "new"), nur fuehrte
+// kein Weg dorthin. Das faellt niemandem auf, der ein volles Postfach testet.
+func TestSchreibenOhneVorlage(t *testing.T) {
+	for _, teil := range []string{`id="new"`, `compose("new")`, `mode === "new" ? ""`} {
+		if !strings.Contains(SeitePostfach, teil) {
+			t.Errorf("Postfachseite ohne %s - neue Nachricht nicht erreichbar", teil)
+		}
+	}
+	// Der Schluessel der offenen Mail darf nicht mitgehen, sonst haengt die neue
+	// Nachricht am Faden einer fremden.
+	if strings.Contains(SeitePostfach, `{mode, key: current`) {
+		t.Error("neue Nachricht schickt den Schluessel der offenen Mail mit")
+	}
+}

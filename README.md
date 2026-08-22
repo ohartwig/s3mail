@@ -39,7 +39,7 @@ verschlüsselt – `kms.<region>.amazonaws.com`.
 | **Bucket-Policy** für SES | SES darf hineinschreiben | Mails werden verworfen |
 | Aktives **Receipt-Rule-Set** mit S3-Aktion | schreibt die Mail in den Bucket | Mail wird angenommen und weggeworfen |
 | **IAM-Identität** mit der [Policy unten](#iam-policy) | s3mail liest und sortiert | s3mail kommt nicht an den Bucket |
-| Verifizierte **Absenderadresse** | Antworten und Weiterleiten | Lesen geht, Senden nicht (`--no-send`) |
+| Verifizierte **Absenderadresse** | Schreiben, Antworten, Weiterleiten | Lesen geht, Senden nicht (`--no-send`) |
 | **KMS-Schlüssel** (optional) | nur bei Verschlüsselung | siehe [Verschlüsselte Buckets](#verschlüsselte-buckets) |
 
 Nicht gebraucht werden Lambda, EC2, VPC oder eine WorkMail-Organisation.
@@ -109,7 +109,9 @@ Nicht gebraucht werden Lambda, EC2, VPC oder eine WorkMail-Organisation.
    anmeldet (Eintrag `login_session` in `~/.aws/config`). Das bräuchte
    `botocore[crt]`, das im fertigen Paket nicht enthalten ist. Der Assistent sagt
    es dir in dem Fall im Klartext und zeigt die Alternativen.
-8. **Absenderadresse verifizieren**, wenn geantwortet werden soll. Solange das
+8. **Absenderadresse verifizieren**, wenn gesendet werden soll. Eine verifizierte
+   *Domain* genügt – dann darf jede Adresse darunter senden, ohne einzeln
+   freigeschaltet zu werden. Solange das
    SES-Konto in der **Sandbox** steckt, kann es außerdem nur an verifizierte
    Adressen senden – Empfang funktioniert in der Sandbox uneingeschränkt, das
    Antworten nach draußen nicht. Für den Produktionszugang bei AWS einen Antrag
@@ -244,8 +246,8 @@ rechnung from:kunde@x.de subject:"Angebot" after:2026-01-01 before:2026-08-01
 has:anhang has:spam is:ungelesen is:stern tag:wichtig in:archiv
 ```
 
-**Tastatur:** `j`/`k` blättern · `x` auswählen · `s` Stern · `e` archivieren ·
-`Entf` Papierkorb · `/` Suche.
+**Tastatur:** `n` neue Nachricht · `j`/`k` blättern · `x` auswählen · `s` Stern ·
+`e` archivieren · `Entf` Papierkorb · `/` Suche.
 
 ## Ohne Python: fertiges Paket
 
@@ -399,11 +401,49 @@ und zeigt das in der Seitenleiste an.
 
 Der KMS-Teil entfällt, wenn weder der Bucket noch die SES-Regel verschlüsselt.
 
-Optional, macht den Assistenten bequemer: `s3:ListAllMyBuckets` (Bucket-Dropdown),
-`ses:ListIdentities` + `ses:GetIdentityVerificationAttributes` (Absender-Dropdown),
-`s3:GetLifecycleConfiguration` + `s3:PutLifecycleConfiguration` (Papierkorb-Automatik).
-Fehlt eins davon, funktioniert der Assistent trotzdem – die Felder werden dann
-eingetippt statt ausgewählt.
+### Selbsteinrichtung: der Zugang beantwortet die Fragen des Assistenten
+
+Bucket, Ordner und Absenderadresse stehen bereits in der Policy oben – als
+genau die Angabe, an der AWS den Zugriff später misst. Darf der Zugang seine
+eigene Policy lesen, holt s3mail sie sich von dort, statt danach zu fragen:
+eintragen muss man dann nur noch Access Key und Secret.
+
+```json
+{ "Effect": "Allow", "Action": ["iam:ListUserPolicies", "iam:GetUserPolicy"],
+  "Resource": "arn:aws:iam::KONTO:user/${aws:username}" }
+```
+
+`${aws:username}` hält das eng: sichtbar wird nichts als die Regeln, die für
+den Aufrufer ohnehin gelten – kein fremdes Postfach, keine Kontoübersicht. Und
+ein Weg um die eigene Beschränkung ist es nicht: eine Regel zu lesen ist nicht,
+ein Objekt zu lesen.
+
+Gelesen werden nur **eingebettete** Policies (`inline`). Angehängte
+(`managed`) lassen sich nicht auf „meine eigene" einschränken – dafür Rechte zu
+vergeben hieße, Einsicht in die Policies anderer Identitäten zu geben. s3mail
+versucht sie, kommt ohne sie aus und sagt dazu nichts.
+
+Die Region muss auch niemand heraussuchen: S3 nennt sie im Kopf seiner Antwort
+(`x-amz-bucket-region`), und zwar selbst dann, wenn es die Anfrage ablehnt.
+
+Fehlt das Recht, fragt der Assistent wie zuvor. Ein Fehler ist das nicht und es
+wird auch keiner angezeigt.
+
+### Optionale Rechte
+
+Machen den Assistenten bequemer, mehr nicht – fehlt eins, werden die Felder
+eingetippt statt ausgewählt:
+
+| Recht | wofür |
+|---|---|
+| `s3:ListAllMyBuckets` | Bucket-Auswahlliste |
+| `ses:ListIdentities`, `ses:GetIdentityVerificationAttributes` | Absender-Auswahlliste |
+| `s3:GetLifecycleConfiguration`, `s3:PutLifecycleConfiguration` | Papierkorb-Automatik |
+
+`s3:ListAllMyBuckets` ist mit Bedacht **nicht** in der Policy oben: es zeigt
+jeden Bucket des Kontos, auch die, die mit Mail nichts zu tun haben. Bei einem
+Postfach-Zugang ist die leere Auswahlliste deshalb der Normalfall – der Name
+wird eingetippt oder kommt aus der Selbsteinrichtung.
 
 ## Grenzen
 
