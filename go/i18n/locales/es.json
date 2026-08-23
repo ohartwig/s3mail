@@ -74,6 +74,7 @@
   "cli.from": "Remitente para las respuestas (verificado en SES)",
   "cli.host": "por defecto 127.0.0.1",
   "cli.mailboxLine": "Buzón: %s",
+  "cli.mcp": "Ejecutar como servidor MCP por stdin/stdout (sin ventana ni servidor web)",
   "cli.noBrowser": "No abrir el navegador automáticamente",
   "cli.noDelete": "Bloquear el borrado definitivo",
   "cli.noSend": "Desactivar el envío por SES (solo lectura)",

@@ -49,6 +49,7 @@ func main() {
 		noBrowser   = flag.Bool("no-browser", false, cat.T("cli.noBrowser"))
 		showVersion = flag.Bool("version", false, cat.T("cli.version"))
 		refreshSecs = flag.Int("refresh", 60, cat.T("cli.refresh"))
+		mcpMode     = flag.Bool("mcp", false, cat.T("cli.mcp"))
 	)
 	flag.Parse()
 
@@ -59,6 +60,17 @@ func main() {
 
 	// The SDK has to look for the credentials where the wizard writes them.
 	awsx.SharedDir = config.AWSDir()
+
+	// As an MCP server there is no window and no web server: the program is a
+	// tool in somebody else's hands, and stdin and stdout are the whole
+	// interface. Everything below - port, browser, token - is beside the point.
+	if *mcpMode {
+		if err := serveMCP(context.Background(), k); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	// The switches address the first mailbox - that is where the single one used
 	// to be, and a flag cannot say which of several it means.

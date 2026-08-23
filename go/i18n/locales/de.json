@@ -74,6 +74,7 @@
   "cli.from": "Absender für Antworten (in SES verifiziert)",
   "cli.host": "Standard 127.0.0.1",
   "cli.mailboxLine": "Postfach: %s",
+  "cli.mcp": "Als MCP-Server über stdin/stdout laufen (kein Fenster, kein Webserver)",
   "cli.noBrowser": "Browser nicht automatisch öffnen",
   "cli.noDelete": "Endgültiges Löschen sperren",
   "cli.noSend": "SES-Versand abschalten (reiner Lesemodus)",

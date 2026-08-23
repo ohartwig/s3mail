@@ -305,6 +305,30 @@ Die Suchbegriffe funktionieren in allen drei Sprachen: `from:` wie `von:` wie `d
 `is:ungelesen` wie `is:unread` wie `is:sinleer`. Ordnernamen sind dagegen echte
 S3-Prefixe (`trash`, `spam`, `archiv`) und werden nur angezeigt, nicht übersetzt.
 
+## Für ein Modell erreichbar: `--mcp`
+
+```bash
+claude mcp add s3mail -- /pfad/zu/s3mail --mcp
+```
+
+s3mail spricht dann das Model Context Protocol über stdin/stdout – kein Fenster,
+kein Webserver. Werkzeuge: `search`, `read`, `folders`, `move`, `tag`, `flag`
+und `draft`.
+
+**Es gibt kein Werkzeug zum Senden, und das ist der Punkt.** Eine eingehende Mail
+ist fremder Text, der im Kontext des Modells landet; „schick das an…" passt in
+eine Mail. Das Modell legt einen Entwurf in den Bucket, du öffnest s3mail und
+drückst Senden. Der Absender bleibt technisch ein Mensch, nicht nur
+organisatorisch. Wer `send` versucht, bekommt diese Begründung zurück statt einer
+Fehlermeldung.
+
+Jede gelesene Mail kommt mit dem Hinweis davor, dass der Inhalt Daten sind und
+keine Anweisungen. Das löst Prompt-Injection nicht – es begrenzt, was daraus
+folgen kann.
+
+Kein API-Schlüssel, keine Netzverbindung zu Dritten: s3mail ruft kein Modell auf,
+sondern macht sich für eines erreichbar.
+
 ## Selbst bauen
 
 Fertige Pakete für macOS (Apple Silicon und Intel), Linux und Windows liegen
