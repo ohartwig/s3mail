@@ -1,11 +1,8 @@
 <!doctype html>
-<html lang="de"><head><meta charset="utf-8"><title>s3mail</title></head>
+<html lang="{{.Lang}}"><head><meta charset="utf-8"><title>s3mail</title></head>
 <body style="font:15px/1.65 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
              max-width:34em; margin:14vh auto; padding:0 6vw; color:#16202b">
-<h1 style="font-size:20px">Token fehlt</h1>
-<p>s3mail ist nur über die Adresse erreichbar, die beim Start im Terminal steht –
-sie enthält ein Token. Sonst käme jeder andere Benutzer dieses Rechners über
-127.0.0.1 ins Postfach.</p>
-<p>Falls das Postfach in einem anderen Tab offen ist: dort neu laden. Sonst die
-Adresse aus dem Terminal kopieren.</p>
+<h1 style="font-size:20px">{{t "token.title"}}</h1>
+<p>{{t "token.why"}}</p>
+<p>{{t "token.what"}}</p>
 </body></html>

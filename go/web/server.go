@@ -14,6 +14,7 @@ import (
 
 	"s3mail/assistent"
 	"s3mail/core"
+	"s3mail/i18n"
 	"s3mail/mimeparse"
 	"s3mail/store"
 )
@@ -129,7 +130,7 @@ func (s *Server) zugangPruefen(w http.ResponseWriter, r *http.Request) bool {
 		} else {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.WriteHeader(http.StatusForbidden)
-			_, _ = w.Write([]byte(SeiteToken))
+			_, _ = w.Write([]byte(page("token", SeiteToken, s.language(r), nil)))
 		}
 		return false
 	}
@@ -184,10 +185,13 @@ func (s *Server) seite(w http.ResponseWriter, inhalt string) {
 
 // uebersicht haengt an den meisten Antworten mit dran, damit die Seitenleiste
 // ohne zweiten Request aktuell ist.
-func (s *Server) uebersicht() map[string]any {
+//
+// Die Ordner kommen mit ihrem Uebersetzungsschluessel aus core und werden hier
+// zu Text - erst hier ist bekannt, welche Sprache der Fragende liest.
+func (s *Server) uebersicht(r *http.Request) map[string]any {
 	d := s.Mailbox.State.Data()
 	return map[string]any{
-		"folders":      s.Mailbox.Ordner(),
+		"folders":      s.ordnerMitBeschriftung(r),
 		"tags":         d.Tags,
 		"rules":        d.Rules,
 		"state_remote": s.Mailbox.State.RemoteOK(),
@@ -237,18 +241,31 @@ func (a anfrage) alleKeys() []string {
 func (s *Server) routen() {
 	s.mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		if s.Mailbox == nil {
-			s.seite(w, SeiteAssistent) // noch nicht eingerichtet
+			s.seite(w, page("setup", SeiteAssistent, s.language(r), nil)) // noch nicht eingerichtet
 			return
 		}
-		blob, _ := json.Marshal(s.Config)
-		s.seite(w, strings.Replace(SeitePostfach, "__CONFIG__", string(blob), 1))
+		s.seite(w, page("inbox", SeitePostfach, s.language(r), s.Config))
 	})
 	s.mux.HandleFunc("GET /setup", func(w http.ResponseWriter, r *http.Request) {
-		s.seite(w, SeiteAssistent)
+		s.seite(w, page("setup", SeiteAssistent, s.language(r), nil))
+	})
+
+	// Picking a language is a GET that changes something, which is normally the
+	// wrong shape - but the thing it changes is a cookie in this browser, not
+	// data. A form post would need the token in a hidden field on every page.
+	s.mux.HandleFunc("GET /language/{code}", func(w http.ResponseWriter, r *http.Request) {
+		code := i18n.Get(r.PathValue("code")).Code
+		http.SetCookie(w, &http.Cookie{Name: "s3mail_lang", Value: code, Path: "/",
+			HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: 60 * 60 * 24 * 365})
+		ziel := r.Header.Get("Referer")
+		if ziel == "" || !strings.HasPrefix(ziel, "http") {
+			ziel = "/"
+		}
+		http.Redirect(w, r, ziel, http.StatusSeeOther)
 	})
 
 	s.mux.HandleFunc("GET /api/overview", func(w http.ResponseWriter, r *http.Request) {
-		s.json(w, http.StatusOK, s.uebersicht())
+		s.json(w, http.StatusOK, s.uebersicht(r))
 	})
 
 	s.mux.HandleFunc("GET /api/messages", func(w http.ResponseWriter, r *http.Request) {
@@ -266,7 +283,7 @@ func (s *Server) routen() {
 			}
 			o.Folder = &ordner
 		}
-		s.json(w, http.StatusOK, mit(s.uebersicht(), map[string]any{
+		s.json(w, http.StatusOK, mit(s.uebersicht(r), map[string]any{
 			"messages": s.Mailbox.Suche(q.Get("q"), o),
 		}))
 	})
@@ -341,7 +358,7 @@ func (s *Server) routen() {
 			s.uebersetzen(w, err)
 			return
 		}
-		s.json(w, http.StatusOK, mit(s.uebersicht(), map[string]any{
+		s.json(w, http.StatusOK, mit(s.uebersicht(r), map[string]any{
 			"geprueft": erg.Geprueft, "neu": erg.Neu, "entfernt": erg.Entfernt}))
 	})
 
@@ -351,7 +368,7 @@ func (s *Server) routen() {
 			s.uebersetzen(w, err)
 			return
 		}
-		s.json(w, http.StatusOK, mit(s.uebersicht(), map[string]any{"moved": erg}))
+		s.json(w, http.StatusOK, mit(s.uebersicht(r), map[string]any{"moved": erg}))
 	})
 
 	s.post("/api/delete", func(w http.ResponseWriter, r *http.Request, a anfrage) {
@@ -360,7 +377,7 @@ func (s *Server) routen() {
 			s.uebersetzen(w, err)
 			return
 		}
-		s.json(w, http.StatusOK, mit(s.uebersicht(), map[string]any{"deleted": n}))
+		s.json(w, http.StatusOK, mit(s.uebersicht(r), map[string]any{"deleted": n}))
 	})
 
 	s.post("/api/empty-trash", func(w http.ResponseWriter, r *http.Request, a anfrage) {
@@ -369,7 +386,7 @@ func (s *Server) routen() {
 			s.uebersetzen(w, err)
 			return
 		}
-		s.json(w, http.StatusOK, mit(s.uebersicht(), map[string]any{"deleted": n}))
+		s.json(w, http.StatusOK, mit(s.uebersicht(r), map[string]any{"deleted": n}))
 	})
 
 	s.post("/api/flag", func(w http.ResponseWriter, r *http.Request, a anfrage) {
@@ -405,7 +422,7 @@ func (s *Server) routen() {
 			s.uebersetzen(w, err)
 			return
 		}
-		s.json(w, http.StatusOK, mit(s.uebersicht(), map[string]any{"rules": sauber}))
+		s.json(w, http.StatusOK, mit(s.uebersicht(r), map[string]any{"rules": sauber}))
 	})
 
 	s.post("/api/quit", func(w http.ResponseWriter, r *http.Request, a anfrage) {
@@ -426,7 +443,7 @@ func (s *Server) routen() {
 			s.uebersetzen(w, err)
 			return
 		}
-		s.json(w, http.StatusOK, mit(s.uebersicht(), map[string]any{"moved": n}))
+		s.json(w, http.StatusOK, mit(s.uebersicht(r), map[string]any{"moved": n}))
 	})
 }
 
@@ -457,7 +474,7 @@ func (s *Server) mutieren(w http.ResponseWriter, r *http.Request, op core.Op) {
 		s.uebersetzen(w, err)
 		return
 	}
-	s.json(w, http.StatusOK, mit(s.uebersicht(), map[string]any{"ok": true}))
+	s.json(w, http.StatusOK, mit(s.uebersicht(r), map[string]any{"ok": true}))
 }
 
 // mailLesen holt eine Mail und markiert sie auf Wunsch als gelesen.
@@ -487,3 +504,17 @@ func alsMap(v mimeparse.Voll) map[string]any {
 var unsauber = regexp.MustCompile(`[^\w.\- ]`)
 
 func sauberName(s string) string { return unsauber.ReplaceAllString(s, "_") }
+
+// ordnerMitBeschriftung ersetzt den Uebersetzungsschluessel der Systemordner
+// durch Text. Selbst angelegte Ordner tragen ihren Namen und bleiben, wie sie
+// sind - sie hat jemand so genannt.
+func (s *Server) ordnerMitBeschriftung(r *http.Request) []core.FolderInfo {
+	cat := i18n.Get(s.language(r))
+	ordner := s.Mailbox.Ordner()
+	for i, f := range ordner {
+		if f.System {
+			ordner[i].Label = cat.T(f.Label)
+		}
+	}
+	return ordner
+}

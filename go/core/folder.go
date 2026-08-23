@@ -16,15 +16,22 @@ const (
 	Archive = "archiv"
 )
 
+// SystemFolder carries a translation key, not a label. The Name is an S3
+// prefix and must never be translated: rename it and a client in another
+// language stops finding the mail a colleague filed. What the reader sees is
+// the label, and that is looked up per request.
+//
+// Archive is spelled "archiv" for the same reason - it is a prefix that exists
+// in live mailboxes, not a word on a screen.
 type SystemFolder struct {
-	Name, Label, Icon string
+	Name, LabelKey, Icon string
 }
 
 var SystemFolders = []SystemFolder{
-	{Inbox, "Posteingang", "\U0001F4E5"},
-	{Archive, "Archiv", "\U0001F4E6"},
-	{Spam, "Spam", "⚠️"},
-	{Trash, "Papierkorb", "\U0001F5D1️"},
+	{Inbox, "folder.inbox", "\U0001F4E5"},
+	{Archive, "folder.archive", "\U0001F4E6"},
+	{Spam, "folder.spam", "⚠️"},
+	{Trash, "folder.trash", "\U0001F5D1️"},
 }
 
 var folderRe = regexp.MustCompile(`^[\p{L}][\p{L}\p{N}_ .-]{0,39}$`)
@@ -108,7 +115,9 @@ func (s *Store) Own(key string) error {
 }
 
 type FolderInfo struct {
-	Name   string `json:"name"`
+	Name string `json:"name"`
+	// Label holds the translation key for a system folder and the plain name
+	// for one somebody created. The web layer turns the first into text.
 	Label  string `json:"label"`
 	Icon   string `json:"icon"`
 	System bool   `json:"system"`
@@ -140,7 +149,7 @@ func Folders(index []Message, d *Data) []FolderInfo {
 		if c == nil {
 			c = &zaehler{}
 		}
-		out = append(out, FolderInfo{sf.Name, sf.Label, sf.Icon, true, c.count, c.unread})
+		out = append(out, FolderInfo{sf.Name, sf.LabelKey, sf.Icon, true, c.count, c.unread})
 	}
 	eigene := make([]string, 0, len(counts))
 	for name := range counts {

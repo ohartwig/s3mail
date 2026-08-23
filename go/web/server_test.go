@@ -260,12 +260,19 @@ func TestSeiteSetztCookie(t *testing.T) {
 }
 
 func TestOberflaecheIstVollstaendig(t *testing.T) {
+	// Die Tokenseite ist seit der Uebersetzung ein Geruest: ihre Saetze stehen
+	// in den Katalogen, nicht in der Datei. Fuer sie zaehlt, dass die Vorlage
+	// da ist, nicht wie lang sie ist.
 	for name, seite := range map[string]string{
 		"Postfach":  SeitePostfach,
 		"Assistent": SeiteAssistent,
 		"Token":     SeiteToken,
 	} {
-		if len(seite) < 500 {
+		mindestens := 500
+		if name == "Token" {
+			mindestens = 200
+		}
+		if len(seite) < mindestens {
 			t.Errorf("%s: nur %d Zeichen - eingebettet?", name, len(seite))
 		}
 		if !strings.Contains(seite, "<!doctype html>") && !strings.Contains(seite, "<!DOCTYPE html>") {
