@@ -97,8 +97,6 @@ func (m *Mailbox) Folders() []core.FolderInfo {
 	return core.Folders(m.Index(), m.State.Data())
 }
 
-// -- Holen ------------------------------------------------------------------ //
-
 // Fetch gets an object and opens it if needed. headBytes > 0 fetches only the
 // beginning - unless the mailbox is client-side encrypted, then always the whole
 // thing.
@@ -162,8 +160,6 @@ func (m *Mailbox) Encrypted() bool {
 	defer m.mu.RUnlock()
 	return m.encrypted
 }
-
-// -- Indexieren ------------------------------------------------------------- //
 
 type RefreshResult struct {
 	Checked int `json:"checked"`
@@ -523,8 +519,6 @@ func (m *Mailbox) ApplyRules(ctx context.Context, pool []core.Message, force boo
 	})
 	return moved, err
 }
-
-// -- Zwischenspeicher ------------------------------------------------------- //
 
 func (m *Mailbox) readCache() {
 	blob, err := os.ReadFile(m.CacheFile)

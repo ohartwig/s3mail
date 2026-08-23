@@ -133,7 +133,7 @@
 </head>
 <body>
 <header>
-  <b>s3mail</b><span class="box" id="box"></span>
+  <b>s3mail</b><select id="account" title="{{t "nav.account"}}" aria-label="{{t "nav.account"}}"></select>
   <button class="primary" id="new" title="{{t "nav.new.title"}}">{{t "nav.new"}}</button>
   <input id="q" placeholder="{{t "search.placeholder"}}">
   <button id="rulesBtn" title="{{t "nav.rules.title"}}">{{t "nav.rules"}}</button>
@@ -215,7 +215,9 @@ let messages = [], over = {folders:[], tags:{}, rules:[]}, current = null;
 let folder = "", tagFilter = null, onlyUnread = false, onlyStar = false;
 let checked = new Set(), lastIdx = null, mode = "reply", showImages = false, msg = null;
 
-$("#box").textContent = CFG.bucket + "/" + (CFG.root || "");
+// What used to sit in CFG at load time now rides with every answer: it belongs
+// to the mailbox, and the reader can switch mailbox without reloading the page.
+const canSend = () => over.can_send === true;
 
 const esc = s => (s ?? "").toString().replace(/[&<>"']/g, c =>
   ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -243,14 +245,41 @@ async function api(path, body) {
   const r = await fetch(path, opts);
   const d = await r.json().catch(() => ({error:T["error.unreadable"]}));
   if (!r.ok || d.error) throw new Error(d.error || ("HTTP " + r.status));
-  if (d.folders) { over = {folders:d.folders, tags:d.tags, rules:d.rules,
-                           state_remote:d.state_remote, allow_delete:d.allow_delete}; }
+  // Every answer that carries folders carries the whole overview with it. Taken
+  // wholesale on purpose: a hand-picked list of fields silently drops whatever
+  // gets added to the overview later, and the page then reads undefined without
+  // anything looking broken.
+  if (d.folders) {
+    over = {...d};
+    delete over.messages;
+  }
   return d;
 }
 const guard = fn => (...a) => fn(...a).catch(e => toast(e.message, true));
 
 /* ---------------- Sidebar ---------------- */
+// renderAccounts fills the switcher. "Add mailbox" leads into the wizard with
+// account=new - without it a second mailbox could only be added by editing the
+// configuration file by hand.
+function renderAccounts() {
+  const sel = $("#account");
+  const boxes = over.accounts || [];
+  sel.innerHTML = boxes.map(a =>
+    `<option value="${esc(a.id)}"${a.id === over.account ? " selected" : ""}>${esc(a.name)}</option>`).join("")
+    + `<option value="__new__">${T["nav.addMailbox"]}</option>`;
+  sel.style.display = boxes.length ? "" : "none";
+  sel.onchange = () => {
+    if (sel.value === "__new__") { location.href = "/setup?account=new"; return; }
+    // The choice goes into a cookie, so a download link stays a plain link.
+    document.cookie = "s3mail_account=" + encodeURIComponent(sel.value) + ";path=/;samesite=strict";
+    location.reload();
+  };
+}
+
 function renderSide() {
+  renderAccounts();
+  $("#new").style.display = canSend() ? "" : "none";
+  $("#blockedBtn").style.display = over.can_block ? "" : "none";
   const tags = Object.entries(over.tags);
   const tagCounts = {};
   messages.forEach(m => (m.tags || []).forEach(t => tagCounts[t] = (tagCounts[t]||0)+1));
@@ -540,7 +569,7 @@ const open = guard(async key => {
     <div class="tag-line" style="margin-top:8px">${(m.tags||[]).map(t =>
       `<span class="chip" style="background:${esc(over.tags[t]||"#888")}">${esc(t)}</span>`).join("")}</div>
     <div class="bar">
-      ${!CFG.can_send ? ""
+      ${!canSend() ? ""
         : m.folder === "drafts"
           ? `<button class="primary" id="editDraft">${T["compose.editDraft"]}</button>`
           : `<button class="primary" id="reply">${T["compose.reply"]}</button>` +
@@ -554,7 +583,7 @@ const open = guard(async key => {
       ${m.folder === "trash"
         ? (over.allow_delete ? `<button class="danger" id="vPurge">${T["action.deleteForever"]}</button>` : "")
         : `<button id="vTrash">🗑 ${T["folder.trash"]}</button>`}
-      ${CFG.can_send ? `<button id="vBlock" title="${T["blocked.buttonTitle"]}">${T["blocked.button"]}</button>` : ""}
+      ${over.can_block ? `<button id="vBlock" title="${T["blocked.buttonTitle"]}">${T["blocked.button"]}</button>` : ""}
       <a class="att" href="/api/raw?key=${encodeURIComponent(key)}">⬇︎ .eml</a>
       ${m.html ? `<button id="imgs">${showImages ? T["view.blockImages"] : T["view.loadImages"]}</button>` : ""}
     </div>
@@ -592,7 +621,7 @@ function compose(kind, all) {
   attachments = []; draftKey = "";
   renderAtts();
   $("#c_bcc").value = "";
-  $("#c_from").value = CFG.default_from || "";
+  $("#c_from").value = over.default_from || "";
   // A new message has no template - everything below reads from m, which is
   // then not there at all (nothing selected, empty mailbox).
   if (kind === "new" || !m) {
@@ -686,7 +715,7 @@ function draftBody() {
 // changed or deleted before the message leaves - a signature nobody can touch
 // is one people work around.
 function signature() {
-  const sig = (CFG.signature || "").replace(/\s+$/, "");
+  const sig = (over.signature || "").replace(/\s+$/, "");
   return sig ? "\n\n-- \n" + sig : "";
 }
 
@@ -723,7 +752,7 @@ async function editDraft(key, m) {
   mode = "new";
   draftKey = key;
   $("#c_title").textContent = T["compose.editDraft"];
-  $("#c_from").value = m.from || CFG.default_from || "";
+  $("#c_from").value = m.from || over.default_from || "";
   $("#c_to").value = m.to || "";
   $("#c_cc").value = m.cc || "";
   $("#c_bcc").value = m.bcc || "";
@@ -915,13 +944,11 @@ $("#refresh").onclick = guard(async () => {
   } finally { b.disabled = false; b.textContent = T["nav.refresh"]; }
 });
 
-if (CFG.can_send) {
-  $("#new").onclick = () => compose("new");
-  $("#blockedBtn").onclick = showBlocked;
-} else {
-  $("#new").style.display = "none";
-  $("#blockedBtn").style.display = "none";
-}
+// The handlers are wired unconditionally; what is allowed only becomes known
+// with the first overview, and it changes again when the reader switches
+// mailbox. Deciding it once at load time would hide the button for good.
+$("#new").onclick = () => compose("new");
+$("#blockedBtn").onclick = showBlocked;
 
 // The language switch. The list comes from the server (LANGS), the current
 // language sits in the lang attribute - that way both stay right in one place.
@@ -941,7 +968,7 @@ document.addEventListener("keydown", e => {
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
   if (e.key === "/" && !typing) { e.preventDefault(); $("#q").focus(); return; }
   // Before the shortcut below: writing works in an empty mailbox too, especially there.
-  if (e.key === "n" && !typing && CFG.can_send) { e.preventDefault(); compose("new"); return; }
+  if (e.key === "n" && !typing && canSend()) { e.preventDefault(); compose("new"); return; }
   if (typing || !messages.length) return;
   const i = messages.findIndex(m => m.key === current);
   const go = j => { const m = messages[Math.max(0, Math.min(j, messages.length - 1))]; if (m) open(m.key); };
@@ -953,10 +980,21 @@ document.addEventListener("keydown", e => {
   else if ((e.key === "Delete" || e.key === "#") && i >= 0 && folder !== "trash") move([current], "trash");
 });
 
-load().then(() => {
-        if (!messages.length && !over.folders.some(f => f.count)) $("#refresh").click();
-        scheduleAutoRefresh();
-      }).catch(e => toast(e.message, true));
+/* The overview is fetched on its own before the list, and it is allowed to
+   succeed while the list fails. One unreachable mailbox must not take the
+   switcher with it - otherwise the second one, which works, is out of reach
+   too, and the only way out is the configuration file. */
+(async () => {
+  try {
+    over = await api("/api/overview");
+    renderSide();
+  } catch (e) { toast(e.message, true); }
+  try {
+    await load();
+    if (!messages.length && !over.folders.some(f => f.count)) $("#refresh").click();
+  } catch (e) { toast(e.message, true); }
+  scheduleAutoRefresh();
+})();
 </script>
 </body>
 </html>

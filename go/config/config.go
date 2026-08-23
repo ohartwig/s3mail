@@ -9,16 +9,63 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
-// Config is what config.json holds.
+// Account is one mailbox: where it lies, who reads it and who it writes as.
+// Everything in here is a property of that one mailbox - what is shared across
+// all of them sits in Config.
+type Account struct {
+	Profile string `json:"profile"`
+	Region  string `json:"region"`
+	Bucket  string `json:"bucket"`
+	Prefix  string `json:"prefix"`
+	From    string `json:"from"`
+
+	// Signature goes under every message written from this mailbox. It sits in
+	// the configuration and not in the catalogues: it is the writer's text, not
+	// ours, and it does not change with the language of the interface.
+	Signature string `json:"signature"`
+
+	// Label is what the switcher shows. Empty means: build one from the address
+	// or the bucket - a mailbox nobody named still has to be distinguishable.
+	Label string `json:"label"`
+}
+
+// ID names the mailbox in a URL and in a cookie. It comes from bucket and
+// prefix, so it survives a restart and stays the same on a second machine -
+// a running number would point at a different mailbox after a reordering.
+func (a Account) ID() string { return slug(a.Bucket + "__" + NormalizePrefix(a.Prefix)) }
+
+// Name is what a reader sees. The label if there is one, otherwise the sender
+// address, otherwise bucket and prefix - in that order, because that is the
+// order in which they say something to a human.
+func (a Account) Name() string {
+	if l := strings.TrimSpace(a.Label); l != "" {
+		return l
+	}
+	if f := strings.TrimSpace(a.From); f != "" {
+		return f
+	}
+	return strings.TrimSuffix(a.Bucket+"/"+NormalizePrefix(a.Prefix), "/")
+}
+
+var unsafeInID = regexp.MustCompile(`[^A-Za-z0-9_.-]`)
+
+func slug(s string) string {
+	out := unsafeInID.ReplaceAllString(s, "_")
+	if out == "" {
+		return "default"
+	}
+	return out
+}
+
+// Config is what config.json holds: the mailboxes and what applies to all of
+// them.
 type Config struct {
-	Profile     string `json:"profile"`
-	Region      string `json:"region"`
-	Bucket      string `json:"bucket"`
-	Prefix      string `json:"prefix"`
-	From        string `json:"from"`
+	Accounts []Account `json:"accounts"`
+
 	AllowDelete bool   `json:"allow_delete"`
 	Port        int    `json:"port"`
 	Host        string `json:"host"`
@@ -27,16 +74,33 @@ type Config struct {
 	// program running next to the browser that is a better default than a
 	// guessed one.
 	Language string `json:"language"`
+}
 
-	// Signature goes under every message that is written. It sits in the
-	// configuration and not in the catalogues: it is the writer's text, not
-	// ours, and it does not change with the language of the interface.
-	Signature string `json:"signature"`
+// Account returns the mailbox with that ID, and whether it exists.
+func (k Config) Account(id string) (Account, bool) {
+	for _, a := range k.Accounts {
+		if a.ID() == id {
+			return a, true
+		}
+	}
+	return Account{}, false
+}
+
+// First is the mailbox that comes up without a choice being made.
+func (k Config) First() Account {
+	if len(k.Accounts) == 0 {
+		return Account{}
+	}
+	return k.Accounts[0]
 }
 
 func Defaults() Config {
-	return Config{Region: "eu-central-1", Prefix: "mail/", AllowDelete: true,
-		Port: 8765, Host: "127.0.0.1"}
+	return Config{AllowDelete: true, Port: 8765, Host: "127.0.0.1"}
+}
+
+// DefaultAccount is what an empty form starts from.
+func DefaultAccount() Account {
+	return Account{Region: "eu-central-1", Prefix: "mail/"}
 }
 
 // Dir is where the configuration lives: ~/.config/s3mail on Linux,
@@ -71,6 +135,22 @@ func Exists() bool {
 	return err == nil
 }
 
+// legacy is the shape the file had while there was one mailbox per instance.
+// It is still read, because the file lies on real machines - a program that
+// loses its configuration on an update teaches people not to update.
+type legacy struct {
+	Profile     string `json:"profile"`
+	Region      string `json:"region"`
+	Bucket      string `json:"bucket"`
+	Prefix      string `json:"prefix"`
+	From        string `json:"from"`
+	Signature   string `json:"signature"`
+	AllowDelete *bool  `json:"allow_delete"`
+	Port        int    `json:"port"`
+	Host        string `json:"host"`
+	Language    string `json:"language"`
+}
+
 func Load() Config {
 	k := Defaults()
 	blob, err := os.ReadFile(File())
@@ -78,14 +158,44 @@ func Load() Config {
 		return k
 	}
 	_ = json.Unmarshal(blob, &k) // a broken file: then the defaults it is
+
+	// The old shape carried the mailbox at the top level. Recognised by a
+	// bucket standing there, and only taken when no account list arrived -
+	// otherwise a file written by a newer version would grow a duplicate on
+	// every load.
+	if len(k.Accounts) == 0 {
+		var old legacy
+		if json.Unmarshal(blob, &old) == nil && strings.TrimSpace(old.Bucket) != "" {
+			k.Accounts = []Account{{
+				Profile: old.Profile, Region: old.Region, Bucket: old.Bucket,
+				Prefix: old.Prefix, From: old.From, Signature: old.Signature,
+			}}
+			if old.AllowDelete != nil {
+				k.AllowDelete = *old.AllowDelete
+			}
+			if old.Port != 0 {
+				k.Port = old.Port
+			}
+			if old.Host != "" {
+				k.Host = old.Host
+			}
+			if old.Language != "" {
+				k.Language = old.Language
+			}
+		}
+	}
+
 	if k.Port == 0 {
 		k.Port = 8765
 	}
 	if k.Host == "" {
 		k.Host = "127.0.0.1"
 	}
-	if k.Region == "" {
-		k.Region = "eu-central-1"
+	for i := range k.Accounts {
+		if k.Accounts[i].Region == "" {
+			k.Accounts[i].Region = "eu-central-1"
+		}
+		k.Accounts[i].Prefix = NormalizePrefix(k.Accounts[i].Prefix)
 	}
 	return k
 }
@@ -102,10 +212,15 @@ var (
 // Save writes the file with mode 0600 - it holds no secret, but the bucket
 // name is nobody else's business either.
 func Save(k Config) (string, error) {
-	if strings.TrimSpace(k.Bucket) == "" {
+	if len(k.Accounts) == 0 {
 		return "", ErrNoBucket
 	}
-	k.Prefix = NormalizePrefix(k.Prefix)
+	for i, a := range k.Accounts {
+		if strings.TrimSpace(a.Bucket) == "" {
+			return "", ErrNoBucket
+		}
+		k.Accounts[i].Prefix = NormalizePrefix(a.Prefix)
+	}
 	if err := os.MkdirAll(Dir(), 0o700); err != nil {
 		return "", err
 	}

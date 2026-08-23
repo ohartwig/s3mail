@@ -17,6 +17,12 @@ import (
 
 const testToken = "test-token-123"
 
+// one is the usual case in the tests: a single mailbox, as it was before there
+// could be several. The ID is fixed so a test can name it in a URL.
+func one(mb *store.Mailbox) []Account {
+	return []Account{{ID: "post", Name: "post@firma.de", Mailbox: mb, From: "post@firma.de"}}
+}
+
 func buildServer(t *testing.T) (*httptest.Server, *store.Mailbox) {
 	t.Helper()
 	ctx := context.Background()
@@ -32,7 +38,7 @@ func buildServer(t *testing.T) (*httptest.Server, *store.Mailbox) {
 	if _, err := mb.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
-	srv := NewServer(mb, testToken, "127.0.0.1", 0, map[string]any{
+	srv := NewServer(one(mb), testToken, "127.0.0.1", 0, map[string]any{
 		"bucket": "test-bucket", "root": "mail/", "can_send": false})
 	ts := httptest.NewServer(srv)
 	t.Cleanup(ts.Close)
@@ -175,7 +181,7 @@ func TestReadMailAndAttachment(t *testing.T) {
 	if _, err := mb.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
-	srv := NewServer(mb, testToken, "127.0.0.1", 0, nil)
+	srv := NewServer(one(mb), testToken, "127.0.0.1", 0, nil)
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
 	srv.Port = portOf(ts.URL)
@@ -312,7 +318,7 @@ func TestWithoutMailbox(t *testing.T) {
 	stopped := make(chan struct{}, 1)
 	srv.OnShutdown = func() { stopped <- struct{}{} }
 	if r := callServer(t, ts, "POST", "/api/quit", "{}", nil); r.Code != 200 {
-		t.Errorf("Beenden im Assistenten: HTTP %d", r.Code)
+		t.Errorf("quitting inside the wizard: HTTP %d", r.Code)
 	}
 	select {
 	case <-stopped:
@@ -340,7 +346,7 @@ func TestAutoRefreshIsShipped(t *testing.T) {
 	if _, err := mb.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
-	srv := NewServer(mb, testToken, "127.0.0.1", 0, map[string]any{
+	srv := NewServer(one(mb), testToken, "127.0.0.1", 0, map[string]any{
 		"bucket": "test-bucket", "refresh_seconds": 45})
 	ts := httptest.NewServer(srv)
 	defer ts.Close()

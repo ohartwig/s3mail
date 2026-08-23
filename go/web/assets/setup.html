@@ -53,6 +53,12 @@
   </div>
   <div class="sub">{{t "setup.sub"}}</div>
 
+  <div class="card" id="whichBox" style="display:none">
+    <label>{{t "setup.whichMailbox"}}</label>
+    <select id="account"></select>
+    <div class="hint">{{t "setup.whichMailbox.hint"}}</div>
+  </div>
+
   <div class="card">
     <h2><span class="num">1</span> {{t "setup.step1"}}</h2>
     <div class="hint">{{t "setup.step1.hint"}}</div>
@@ -99,6 +105,8 @@
       <select id="identSel"><option value="">{{t "setup.sender.placeholder"}}</option></select>
     </div>
     <input id="from" placeholder="{{t "setup.sender.hint"}}" style="margin-top:8px">
+    <label style="margin-top:14px">{{t "setup.label"}}</label>
+    <input id="label" placeholder="{{t "setup.label.hint"}}">
     <div id="fromMsg" class="msg"></div>
     <label style="margin-top:14px">{{t "setup.signature"}}</label>
     <textarea id="signature" rows="4" style="width:100%"></textarea>
@@ -157,12 +165,18 @@ const say = (el, text, bad) => {
 const collect = () => ({
   profile: $("#profile").value, region: $("#region").value,
   bucket: $("#bucket").value.trim(), prefix: $("#prefix").value.trim(),
+  account: editing, label: $("#label").value.trim(),
   from: $("#from").value.trim(), allow_delete: $("#allow_delete").checked,
   signature: $("#signature").value,
 });
 
+// editing is the mailbox the wizard is working on. It comes from the URL, so
+// "add a mailbox" from the switcher is a plain link and the form does not have
+// to guess which of several it edits.
+let editing = new URLSearchParams(location.search).get("account") || "";
+
 async function boot() {
-  info = await api("/api/setup/info");
+  info = await api("/api/setup/info", {account: editing});
   const c = info.config;
   $("#region").innerHTML = info.regions.map(r =>
     `<option value="${r.id}"${r.id === c.region ? " selected" : ""}>${r.label}</option>`).join("");
@@ -170,6 +184,18 @@ async function boot() {
   $("#bucket").value = c.bucket; $("#prefix").value = c.prefix || "mail/";
   $("#from").value = c.from; $("#allow_delete").checked = c.allow_delete !== false;
   $("#signature").value = c.signature || "";
+  $("#label").value = c.label || "";
+  editing = editing || c.account || "";
+  const boxes = info.accounts || [];
+  // The picker only appears once there is something to pick - with one mailbox
+  // it would be a control that can do nothing.
+  if (boxes.length > 1 || editing === "new") {
+    $("#whichBox").style.display = "";
+    $("#account").innerHTML = boxes.map(a =>
+      `<option value="${a.id}"${a.id === editing ? " selected" : ""}>${a.name}</option>`).join("")
+      + `<option value="new"${editing === "new" ? " selected" : ""}>${T["setup.newMailbox"]}</option>`;
+    $("#account").onchange = () => { location.href = "/setup?account=" + encodeURIComponent($("#account").value); };
+  }
   $("#foot").textContent = T["setup.savedIn"].replace("%s", info.config_file);
   if (!info.profiles.length && !info.has_env_keys) $("#tabNew").click();
 }

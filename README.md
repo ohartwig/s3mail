@@ -236,6 +236,28 @@ S3-Konsole, und der Papierkorb lässt sich per Lifecycle-Regel automatisch leere
   zweiten Rechner aus zu sehen. Wer den Dialog mit getipptem Text schließt,
   bekommt den Entwurf gesichert statt weggeworfen. Beim Senden verschwindet er.
 
+**Mehrere Postfächer**
+
+Ein s3mail bedient beliebig viele Postfächer – `info@` und `support@` im selben
+Bucket, oder Postfächer in verschiedenen AWS-Konten. Umgeschaltet wird oben links;
+jedes Postfach hat eigenen Absender, eigene Signatur und eigenen Zustand.
+
+Die Konfiguration führt sie als Liste:
+
+```json
+{"accounts": [
+   {"bucket": "post", "prefix": "mail/info/",    "from": "info@firma.de"},
+   {"bucket": "post", "prefix": "mail/support/", "from": "support@firma.de",
+    "label": "Support"}],
+ "port": 8765, "language": "de"}
+```
+
+Eine ältere Konfiguration mit einem einzelnen Postfach wird weiter gelesen und
+beim nächsten Speichern umgeschrieben – es geht nichts verloren.
+
+Scheitert ein Postfach beim Start (falsches Profil, kein Zugriff), kommen die
+übrigen trotzdem hoch, und die Meldung nennt das fehlende.
+
 **Sortieren**
 
 - Ordner anlegen und verschieben, Papierkorb, Spam, Archiv, Gesendet, Entwürfe.

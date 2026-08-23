@@ -21,16 +21,17 @@ type SuppressionEntry struct {
 	Since   string `json:"since"`
 }
 
-// WithSuppressionList enables the routes for it.
-func (s *Server) WithSuppressionList(l SuppressionList) { s.suppressions = l }
-
 func (s *Server) suppressionRoutes() {
 	s.mux.HandleFunc("GET /api/blocked", func(w http.ResponseWriter, r *http.Request) {
-		if s.suppressions == nil {
+		acc, ok := s.pick(w, r)
+		if !ok {
+			return
+		}
+		if acc.Blocked == nil {
 			s.writeError(w, http.StatusBadRequest, s.text(r, "error.noBlocklist"))
 			return
 		}
-		list, err := s.suppressions.List(r.Context())
+		list, err := acc.Blocked.List(r.Context())
 		if err != nil {
 			s.translate(w, r, err)
 			return
@@ -38,16 +39,17 @@ func (s *Server) suppressionRoutes() {
 		s.json(w, http.StatusOK, map[string]any{"blocked": list})
 	})
 
-	s.post("/api/block", func(w http.ResponseWriter, r *http.Request, a request) {
-		s.changeSuppression(w, r, a, true)
+	s.post("/api/block", func(w http.ResponseWriter, r *http.Request, a request, acc *Account) {
+		s.changeSuppression(w, r, acc, a, true)
 	})
-	s.post("/api/unblock", func(w http.ResponseWriter, r *http.Request, a request) {
-		s.changeSuppression(w, r, a, false)
+	s.post("/api/unblock", func(w http.ResponseWriter, r *http.Request, a request, acc *Account) {
+		s.changeSuppression(w, r, acc, a, false)
 	})
 }
 
-func (s *Server) changeSuppression(w http.ResponseWriter, r *http.Request, a request, block1 bool) {
-	if s.suppressions == nil {
+func (s *Server) changeSuppression(w http.ResponseWriter, r *http.Request, acc *Account,
+	a request, block bool) {
+	if acc.Blocked == nil {
 		s.writeError(w, http.StatusBadRequest, s.text(r, "error.noBlocklist"))
 		return
 	}
@@ -57,16 +59,16 @@ func (s *Server) changeSuppression(w http.ResponseWriter, r *http.Request, a req
 		return
 	}
 	var err error
-	if block1 {
-		err = s.suppressions.Block(r.Context(), address)
+	if block {
+		err = acc.Blocked.Block(r.Context(), address)
 	} else {
-		err = s.suppressions.Unblock(r.Context(), address)
+		err = acc.Blocked.Unblock(r.Context(), address)
 	}
 	if err != nil {
 		s.translate(w, r, err)
 		return
 	}
-	list, err := s.suppressions.List(r.Context())
+	list, err := acc.Blocked.List(r.Context())
 	if err != nil {
 		// Entered is entered - that the list could not be read afterwards must not
 		// make the action look like it failed.

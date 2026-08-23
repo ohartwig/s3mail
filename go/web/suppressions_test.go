@@ -19,11 +19,9 @@ func serverWithSuppressions(t *testing.T, l SuppressionList) (*httptest.Server, 
 	ctx := context.Background()
 	f := s3fake.New()
 	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), true)
-	srv := NewServer(mb, testToken, "127.0.0.1", 0,
-		map[string]any{"bucket": "test-bucket", "root": "mail/", "can_send": true})
-	if l != nil {
-		srv.WithSuppressionList(l)
-	}
+	accounts := one(mb)
+	accounts[0].Blocked = l
+	srv := NewServer(accounts, testToken, "127.0.0.1", 0, nil)
 	ts := httptest.NewServer(srv)
 	t.Cleanup(ts.Close)
 	srv.Port = portOf(ts.URL) // or the host check kicks in

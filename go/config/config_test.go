@@ -20,7 +20,7 @@ func sandbox(t *testing.T) string {
 func TestSaveAndLoad(t *testing.T) {
 	sandbox(t)
 	k := Defaults()
-	k.Bucket, k.Prefix, k.From = "mein-bucket", "mail", "support@firma.de"
+	k.Accounts = []Account{{Bucket: "mein-bucket", Prefix: "mail", From: "support@firma.de"}}
 	path, err := Save(k)
 	if err != nil {
 		t.Fatal(err)
@@ -28,10 +28,10 @@ func TestSaveAndLoad(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		info, _ := os.Stat(path)
 		if info.Mode().Perm() != 0o600 {
-			t.Errorf("Rechte: %v", info.Mode().Perm())
+			t.Errorf("permissions: %v", info.Mode().Perm())
 		}
 	}
-	back := Load()
+	back := Load().First()
 	if back.Bucket != "mein-bucket" || back.From != "support@firma.de" {
 		t.Errorf("%+v", back)
 	}
@@ -39,7 +39,7 @@ func TestSaveAndLoad(t *testing.T) {
 		t.Errorf("prefix not normalised: %q", back.Prefix)
 	}
 	if _, err := Save(Config{}); err == nil {
-		t.Error("ohne Bucket gespeichert")
+		t.Error("saved without a bucket")
 	}
 }
 
@@ -174,4 +174,110 @@ func contains(l []string, s string) bool {
 		}
 	}
 	return false
+}
+
+// TestTheOldShapeStillLoads is the one that matters on an update: the file with
+// a single mailbox at the top level lies on real machines. A program that loses
+// its configuration on an update teaches people not to update.
+func TestTheOldShapeStillLoads(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("S3MAIL_CONFIG_DIR", dir)
+	old := `{"profile":"s3mail-ole","region":"eu-north-1","bucket":"post","prefix":"mail/ole/",
+	         "from":"ole@firma.de","signature":"Ole","allow_delete":false,"port":9000,
+	         "host":"127.0.0.1","language":"es"}`
+	if err := os.WriteFile(filepath.Join(dir, "config.json"), []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	k := Load()
+	if len(k.Accounts) != 1 {
+		t.Fatalf("%d mailboxes out of the old shape, expected 1: %+v", len(k.Accounts), k)
+	}
+	a := k.Accounts[0]
+	if a.Bucket != "post" || a.Prefix != "mail/ole/" || a.From != "ole@firma.de" ||
+		a.Profile != "s3mail-ole" || a.Region != "eu-north-1" || a.Signature != "Ole" {
+		t.Errorf("mailbox not taken over: %+v", a)
+	}
+	// The shared settings have to come along, and allow_delete=false must not
+	// be swallowed by the default true.
+	if k.AllowDelete || k.Port != 9000 || k.Language != "es" {
+		t.Errorf("shared settings lost: %+v", k)
+	}
+}
+
+// TestTheNewShapeWinsOverTheOld - a file written by a newer version must not
+// grow a duplicate mailbox on every load just because the old keys are still
+// standing next to the list.
+func TestTheNewShapeWinsOverTheOld(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("S3MAIL_CONFIG_DIR", dir)
+	both := `{"bucket":"alt","prefix":"mail/","accounts":[
+	           {"bucket":"neu","prefix":"mail/a/"},{"bucket":"neu","prefix":"mail/b/"}]}`
+	if err := os.WriteFile(filepath.Join(dir, "config.json"), []byte(both), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	k := Load()
+	if len(k.Accounts) != 2 {
+		t.Fatalf("%d mailboxes, expected 2 - the old shape was taken along", len(k.Accounts))
+	}
+}
+
+// TestSaveAndLoadRoundTripsTwoMailboxes - what goes in has to come back out,
+// and the second one must not overwrite the first.
+func TestSaveAndLoadRoundTripsTwoMailboxes(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("S3MAIL_CONFIG_DIR", dir)
+	in := Defaults()
+	in.Accounts = []Account{
+		{Bucket: "post", Prefix: "mail/info", From: "info@firma.de"},
+		{Bucket: "post", Prefix: "mail/support", From: "support@firma.de", Label: "Support"},
+	}
+	if _, err := Save(in); err != nil {
+		t.Fatal(err)
+	}
+	back := Load()
+	if len(back.Accounts) != 2 {
+		t.Fatalf("%d mailboxes came back", len(back.Accounts))
+	}
+	// Save normalises the prefix - without it two IDs collide that are meant to
+	// be different.
+	if back.Accounts[0].Prefix != "mail/info/" || back.Accounts[1].Prefix != "mail/support/" {
+		t.Errorf("prefix not normalised: %+v", back.Accounts)
+	}
+	if back.Accounts[0].ID() == back.Accounts[1].ID() {
+		t.Fatalf("both mailboxes carry the same ID: %q", back.Accounts[0].ID())
+	}
+	if a, ok := back.Account(back.Accounts[1].ID()); !ok || a.From != "support@firma.de" {
+		t.Errorf("lookup by ID does not find the second: %+v %v", a, ok)
+	}
+}
+
+// TestTheIDSurvivesAReordering - it lands in a cookie and in a URL. A running
+// number would point at a different mailbox after somebody sorts the list.
+func TestTheIDSurvivesAReordering(t *testing.T) {
+	a := Account{Bucket: "post", Prefix: "mail/info/"}
+	b := Account{Bucket: "post", Prefix: "mail/info"} // same mailbox, sloppier prefix
+	if a.ID() != b.ID() {
+		t.Errorf("the same mailbox yields two IDs: %q vs %q", a.ID(), b.ID())
+	}
+	if strings.ContainsAny(a.ID(), "/ ?&#") {
+		t.Errorf("ID has to survive a URL and a cookie: %q", a.ID())
+	}
+}
+
+// TestTheNameSaysSomething - the switcher shows this. A mailbox nobody named
+// still has to be distinguishable from the one next to it.
+func TestTheNameSaysSomething(t *testing.T) {
+	for _, f := range []struct {
+		account Account
+		want    string
+	}{
+		{Account{Label: "Support", From: "s@x.de", Bucket: "b"}, "Support"},
+		{Account{From: "s@x.de", Bucket: "b", Prefix: "mail/"}, "s@x.de"},
+		{Account{Bucket: "b", Prefix: "mail/support/"}, "b/mail/support"},
+	} {
+		if got := f.account.Name(); got != f.want {
+			t.Errorf("%+v -> %q, expected %q", f.account, got, f.want)
+		}
+	}
 }

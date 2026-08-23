@@ -20,8 +20,9 @@ import (
 // The test goes through a real request on purpose. Checking the map alone would
 // pass a renamed key on both sides while the page still came up wrong.
 func TestTheConfiguredLanguageReachesThePage(t *testing.T) {
-	k := config.Config{Bucket: "b", From: "post@firma.de", Language: "es"}
-	srv := web.NewServer(nil, "t", "127.0.0.1", 0, serverConfig(k, "mail/", false, 60))
+	k := config.Config{Language: "es",
+		Accounts: []config.Account{{Bucket: "b", From: "post@firma.de"}}}
+	srv := web.NewServer(nil, "t", "127.0.0.1", 0, serverConfig(k, 60))
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
 	srv.Port = portOfURL(ts.URL)

@@ -44,7 +44,13 @@ type Data struct {
 	From        string `json:"from"`
 	AllowDelete *bool  `json:"allow_delete"`
 	Signature   string `json:"signature"`
-	Days        int    `json:"days"`
+	Label       string `json:"label"`
+
+	// Account is the mailbox being edited, by its ID. Empty means the first one,
+	// "new" means: add one. Without it a second mailbox would overwrite the
+	// first, because the wizard only ever knew one.
+	Account string `json:"account"`
+	Days    int    `json:"days"`
 
 	// Language is set by the HTTP layer from the request, not by the browser
 	// from the form: it is already in the cookie there, and two sources for
@@ -71,17 +77,52 @@ func inputError(format string, a ...any) error {
 }
 
 // Info returns everything the page needs while loading.
-func (a *Wizard) Info(_ context.Context, _ Data) (map[string]any, error) {
+func (a *Wizard) Info(_ context.Context, d Data) (map[string]any, error) {
 	regions := make([]map[string]string, 0, len(Regions))
 	for _, r := range Regions {
 		regions = append(regions, map[string]string{"id": r[0], "label": r[1] + " · " + r[0]})
 	}
+	k := config.Load()
+	boxes := make([]map[string]string, 0, len(k.Accounts))
+	for _, acc := range k.Accounts {
+		boxes = append(boxes, map[string]string{"id": acc.ID(), "name": acc.Name()})
+	}
 	return map[string]any{
-		"config":      config.Load(),
+		"config":      flatten(k, editing(k, d.Account)),
+		"accounts":    boxes,
 		"profiles":    config.Profiles(),
 		"regions":     regions,
 		"config_file": config.File(),
 	}, nil
+}
+
+// editing picks the mailbox the wizard is working on: the one named, "new" for
+// another one, otherwise the first. A wizard that always edited the first would
+// silently overwrite it the moment somebody adds a second.
+func editing(k config.Config, id string) config.Account {
+	if id == "new" {
+		return config.DefaultAccount()
+	}
+	if id != "" {
+		if acc, ok := k.Account(id); ok {
+			return acc
+		}
+	}
+	if len(k.Accounts) == 0 {
+		return config.DefaultAccount()
+	}
+	return k.Accounts[0]
+}
+
+// flatten is the shape the page expects: one mailbox plus what applies to all
+// of them, side by side. The page shows one form, so it gets one object.
+func flatten(k config.Config, acc config.Account) map[string]any {
+	return map[string]any{
+		"profile": acc.Profile, "region": acc.Region, "bucket": acc.Bucket,
+		"prefix": acc.Prefix, "from": acc.From, "signature": acc.Signature,
+		"label": acc.Label, "account": acc.ID(),
+		"allow_delete": k.AllowDelete, "language": k.Language,
+	}
 }
 
 // Credentials writes access key and secret as a named AWS profile.
@@ -176,12 +217,20 @@ func (a *Wizard) Lifecycle(ctx context.Context, d Data) (map[string]any, error) 
 // Save writes the configuration and arms the mailbox.
 func (a *Wizard) Save(_ context.Context, d Data) (map[string]any, error) {
 	k := config.Load()
-	k.Profile, k.Region = d.Profile, d.Region
-	k.Bucket = strings.TrimSpace(d.Bucket)
-	k.Prefix = config.NormalizePrefix(d.Prefix)
-	k.From = strings.TrimSpace(d.From)
 	k.AllowDelete = d.AllowDelete == nil || *d.AllowDelete
-	k.Signature = strings.TrimRight(d.Signature, " \t\n\r")
+
+	acc := config.Account{
+		Profile: d.Profile, Region: d.Region,
+		Bucket:    strings.TrimSpace(d.Bucket),
+		Prefix:    config.NormalizePrefix(d.Prefix),
+		From:      strings.TrimSpace(d.From),
+		Signature: strings.TrimRight(d.Signature, " \t\n\r"),
+		Label:     strings.TrimSpace(d.Label),
+	}
+	// Which entry this replaces is decided by the ID the form came with, not by
+	// the one the new values produce: whoever corrects a prefix would otherwise
+	// leave the old mailbox standing and add a second next to it.
+	k.Accounts = place(k.Accounts, acc, d.Account)
 
 	path, err := config.Save(k)
 	if err != nil {
@@ -189,10 +238,36 @@ func (a *Wizard) Save(_ context.Context, d Data) (map[string]any, error) {
 	}
 	if a.Activate != nil {
 		if err := a.Activate(k); err != nil {
-			return nil, InputError{awsx.PlainText(err, k.Profile, i18n.Get(d.Language))}
+			return nil, InputError{awsx.PlainText(err, acc.Profile, i18n.Get(d.Language))}
 		}
 	}
-	return map[string]any{"config": k, "path": path}, nil
+	return map[string]any{"config": flatten(k, acc), "path": path}, nil
+}
+
+// place puts the mailbox where the one being edited stood, or appends it.
+func place(list []config.Account, acc config.Account, editingID string) []config.Account {
+	if editingID != "" && editingID != "new" {
+		for i := range list {
+			if list[i].ID() == editingID {
+				list[i] = acc
+				return list
+			}
+		}
+	}
+	// No ID: the wizard came up on the first mailbox, which is what it edits.
+	if editingID == "" && len(list) > 0 {
+		list[0] = acc
+		return list
+	}
+	// A mailbox that already exists is not added a second time - the same bucket
+	// and prefix are the same mailbox, whatever the form calls it.
+	for i := range list {
+		if list[i].ID() == acc.ID() {
+			list[i] = acc
+			return list
+		}
+	}
+	return append(list, acc)
 }
 
 // Route picks the handler for a path.

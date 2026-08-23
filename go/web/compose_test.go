@@ -40,9 +40,9 @@ func serverWithSender(t *testing.T) (*httptest.Server, *store.Mailbox, *fakeSend
 		t.Fatal(err)
 	}
 	sender := &fakeSender{}
-	srv := NewServer(mb, testToken, "127.0.0.1", 0, map[string]any{
-		"bucket": "test-bucket", "root": "mail/", "can_send": true})
-	srv.WithSender(sender, "post@firma.de")
+	accounts := one(mb)
+	accounts[0].Sender = sender
+	srv := NewServer(accounts, testToken, "127.0.0.1", 0, nil)
 	ts := httptest.NewServer(srv)
 	t.Cleanup(ts.Close)
 	srv.Port = portOf(ts.URL)
@@ -97,8 +97,9 @@ func TestSendingSurvivesAFailedCopy(t *testing.T) {
 	ctx := context.Background()
 	f := s3fake.New()
 	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), true)
-	srv := NewServer(mb, testToken, "127.0.0.1", 0, map[string]any{"can_send": true})
-	srv.WithSender(&fakeSender{}, "post@firma.de")
+	accounts := one(mb)
+	accounts[0].Sender = &fakeSender{}
+	srv := NewServer(accounts, testToken, "127.0.0.1", 0, nil)
 	ts := httptest.NewServer(srv)
 	t.Cleanup(ts.Close)
 	srv.Port = portOf(ts.URL)
@@ -228,8 +229,9 @@ func TestDraftsGoDespiteNoDelete(t *testing.T) {
 	ctx := context.Background()
 	f := s3fake.New()
 	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), false)
-	srv := NewServer(mb, testToken, "127.0.0.1", 0, map[string]any{"can_send": true})
-	srv.WithSender(&fakeSender{}, "post@firma.de")
+	accounts := one(mb)
+	accounts[0].Sender = &fakeSender{}
+	srv := NewServer(accounts, testToken, "127.0.0.1", 0, nil)
 	ts := httptest.NewServer(srv)
 	t.Cleanup(ts.Close)
 	srv.Port = portOf(ts.URL)

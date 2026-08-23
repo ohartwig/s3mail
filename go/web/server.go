@@ -23,17 +23,28 @@ import (
 
 // Server is the local web server. It binds to 127.0.0.1 and knows no users - the
 // access hangs on a token, see guard.
-type Server struct {
-	Mailbox *store.Mailbox
-	Token   string
-	Bind    string
-	Port    int
-	Config  map[string]any
+// Account is one mailbox as the server sees it: the store below it, and who it
+// sends as. Sending sits here and not on the Server because each mailbox has
+// its own sender address - and the suppression list belongs to the AWS account
+// behind it, which two mailboxes need not share.
+type Account struct {
+	ID, Name  string
+	Mailbox   *store.Mailbox
+	Sender    Sender
+	From      string
+	Signature string
+	Blocked   SuppressionList
+}
 
-	sender       Sender
-	suppressions SuppressionList
-	defaultFrom  string
-	wizard       *wizard.Wizard
+type Server struct {
+	Token  string
+	Bind   string
+	Port   int
+	Config map[string]any
+
+	accounts []Account
+	byID     map[string]*Account
+	wizard   *wizard.Wizard
 
 	// OnShutdown is called by /api/quit. Without it the server keeps running after
 	// the window is closed, and nobody sees that it is still there.
@@ -42,8 +53,12 @@ type Server struct {
 	mux *http.ServeMux
 }
 
-func NewServer(mb *store.Mailbox, token, bind string, port int, config map[string]any) *Server {
-	s := &Server{Mailbox: mb, Token: token, Bind: bind, Port: port, Config: config}
+func NewServer(accounts []Account, token, bind string, port int, config map[string]any) *Server {
+	s := &Server{Token: token, Bind: bind, Port: port, Config: config,
+		accounts: accounts, byID: map[string]*Account{}}
+	for i := range s.accounts {
+		s.byID[s.accounts[i].ID] = &s.accounts[i]
+	}
 	s.mux = http.NewServeMux()
 	s.routes()
 	s.sendRoute()
@@ -51,6 +66,59 @@ func NewServer(mb *store.Mailbox, token, bind string, port int, config map[strin
 	s.suppressionRoutes()
 	s.wizardRoutes()
 	return s
+}
+
+// SetAccounts swaps the mailboxes at runtime - the wizard arms the program
+// without a restart, and after "save and start" the list is a different one.
+func (s *Server) SetAccounts(accounts []Account) {
+	s.accounts = accounts
+	s.byID = map[string]*Account{}
+	for i := range s.accounts {
+		s.byID[s.accounts[i].ID] = &s.accounts[i]
+	}
+}
+
+// Accounts is what the sidebar shows in its switcher.
+func (s *Server) Accounts() []Account { return s.accounts }
+
+// ready says whether there is a mailbox at all. Before the setup there is none,
+// and then only the wizard answers.
+func (s *Server) ready() bool { return len(s.accounts) > 0 }
+
+// account resolves which mailbox an request means: the one it names, otherwise
+// the one last chosen, otherwise the first.
+//
+// The choice rides in a cookie rather than in every URL, so a download link
+// stays a plain link. A named but unknown mailbox is an error and not silently
+// the first one - otherwise a stale bookmark would file mail into a stranger's
+// folder without saying so.
+func (s *Server) account(r *http.Request) (*Account, error) {
+	if id := r.URL.Query().Get("account"); id != "" {
+		if a, ok := s.byID[id]; ok {
+			return a, nil
+		}
+		return nil, fmt.Errorf("%w: unknown mailbox %q", core.ErrBadInput, id)
+	}
+	if c, err := r.Cookie("s3mail_account"); err == nil && c.Value != "" {
+		if a, ok := s.byID[c.Value]; ok {
+			return a, nil
+		}
+	}
+	if !s.ready() {
+		return nil, fmt.Errorf("%w: no mailbox", core.ErrBadInput)
+	}
+	return &s.accounts[0], nil
+}
+
+// pick is what the handlers use: it answers the error itself, so every one of
+// them stays two lines shorter and none of them forgets it.
+func (s *Server) pick(w http.ResponseWriter, r *http.Request) (*Account, bool) {
+	a, err := s.account(r)
+	if err != nil {
+		s.translate(w, r, err)
+		return nil, false
+	}
+	return a, true
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -62,7 +130,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// /api/quit answer. Otherwise the mailbox routes would run into a nil pointer;
 	// and without the exception for quit, quitting would be impossible in the
 	// wizard of all places, the state a first-time reader is in.
-	if s.Mailbox == nil && strings.HasPrefix(r.URL.Path, "/api/") &&
+	if !s.ready() && strings.HasPrefix(r.URL.Path, "/api/") &&
 		!strings.HasPrefix(r.URL.Path, "/api/setup/") && r.URL.Path != "/api/quit" {
 		s.writeError(w, http.StatusServiceUnavailable, s.text(r, "error.notSetUp"))
 		return
@@ -70,7 +138,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.mux.ServeHTTP(w, r)
 }
 
-// -- Zugangskontrolle ------------------------------------------------------- //
+// -- access control --------------------------------------------------------- //
 
 var loopback = map[string]bool{"127.0.0.1": true, "localhost": true, "::1": true}
 
@@ -140,8 +208,6 @@ func (s *Server) checkAccess(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
-// -- Antworten -------------------------------------------------------------- //
-
 func (s *Server) json(w http.ResponseWriter, code int, v any) {
 	blob, err := json.Marshal(v)
 	if err != nil {
@@ -208,14 +274,24 @@ func (s *Server) writePage(w http.ResponseWriter, content string) {
 //
 // The folders come from core with their translation key and become text here -
 // only here is it known which language the asker reads.
-func (s *Server) overview(r *http.Request) map[string]any {
-	d := s.Mailbox.State.Data()
+func (s *Server) overview(r *http.Request, acc *Account) map[string]any {
+	d := acc.Mailbox.State.Data()
+	boxes := make([]map[string]any, 0, len(s.accounts))
+	for _, a := range s.accounts {
+		boxes = append(boxes, map[string]any{"id": a.ID, "name": a.Name})
+	}
 	return map[string]any{
-		"folders":      s.localizedFolders(r),
+		"folders":      s.localizedFolders(r, acc),
 		"tags":         d.Tags,
 		"rules":        d.Rules,
-		"state_remote": s.Mailbox.State.RemoteOK(),
-		"allow_delete": s.Mailbox.AllowDelete,
+		"state_remote": acc.Mailbox.State.RemoteOK(),
+		"allow_delete": acc.Mailbox.AllowDelete,
+		"accounts":     boxes,
+		"account":      acc.ID,
+		"can_send":     acc.Sender != nil,
+		"can_block":    acc.Blocked != nil,
+		"default_from": acc.From,
+		"signature":    acc.Signature,
 	}
 }
 
@@ -229,8 +305,6 @@ func with(base map[string]any, extra map[string]any) map[string]any {
 	}
 	return out
 }
-
-// -- Routen ----------------------------------------------------------------- //
 
 type request struct {
 	Keys    []string    `json:"keys"`
@@ -260,7 +334,7 @@ func (a request) allKeys() []string {
 
 func (s *Server) routes() {
 	s.mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
-		if s.Mailbox == nil {
+		if !s.ready() {
 			s.writePage(w, page("setup", PageWizard, s.language(r), nil)) // not set up yet
 			return
 		}
@@ -285,10 +359,18 @@ func (s *Server) routes() {
 	})
 
 	s.mux.HandleFunc("GET /api/overview", func(w http.ResponseWriter, r *http.Request) {
-		s.json(w, http.StatusOK, s.overview(r))
+		acc, ok := s.pick(w, r)
+		if !ok {
+			return
+		}
+		s.json(w, http.StatusOK, s.overview(r, acc))
 	})
 
 	s.mux.HandleFunc("GET /api/messages", func(w http.ResponseWriter, r *http.Request) {
+		acc, ok := s.pick(w, r)
+		if !ok {
+			return
+		}
 		q := r.URL.Query()
 		o := core.SearchOpts{
 			Tag:        q.Get("tag"),
@@ -303,14 +385,18 @@ func (s *Server) routes() {
 			}
 			o.Folder = &folder
 		}
-		s.json(w, http.StatusOK, with(s.overview(r), map[string]any{
-			"messages": s.localizedSubjects(r, s.Mailbox.Search(q.Get("q"), o)),
+		s.json(w, http.StatusOK, with(s.overview(r, acc), map[string]any{
+			"messages": s.localizedSubjects(r, acc.Mailbox.Search(q.Get("q"), o)),
 		}))
 	})
 
 	s.mux.HandleFunc("GET /api/message", func(w http.ResponseWriter, r *http.Request) {
+		acc, ok := s.pick(w, r)
+		if !ok {
+			return
+		}
 		key := r.URL.Query().Get("key")
-		obj, err := s.readMail(r, key, true)
+		obj, err := s.readMail(r, acc, key, true)
 		if err != nil {
 			s.translate(w, r, err)
 			return
@@ -321,21 +407,25 @@ func (s *Server) routes() {
 		case mimeparse.SubjectNone:
 			obj.Subject = s.text(r, "mail.noSubject")
 		}
-		e := s.Mailbox.State.Get(s.Mailbox.Mid(key))
+		e := acc.Mailbox.State.Get(acc.Mailbox.Mid(key))
 		tags := e.Tags
 		if tags == nil {
 			tags = []string{}
 		}
 		s.json(w, http.StatusOK, with(map[string]any{
-			"key": key, "mid": s.Mailbox.Mid(key), "folder": s.Mailbox.FolderOf(key),
+			"key": key, "mid": acc.Mailbox.Mid(key), "folder": acc.Mailbox.FolderOf(key),
 			"read": true, "star": e.Star, "tags": tags,
 		}, alsMap(obj)))
 	})
 
 	s.mux.HandleFunc("GET /api/attachment", func(w http.ResponseWriter, r *http.Request) {
+		acc, ok := s.pick(w, r)
+		if !ok {
+			return
+		}
 		q := r.URL.Query()
 		idx, _ := strconv.Atoi(q.Get("index"))
-		obj, err := s.readMail(r, q.Get("key"), false)
+		obj, err := s.readMail(r, acc, q.Get("key"), false)
 		if err != nil {
 			s.translate(w, r, err)
 			return
@@ -358,100 +448,107 @@ func (s *Server) routes() {
 	})
 
 	s.mux.HandleFunc("GET /api/raw", func(w http.ResponseWriter, r *http.Request) {
+		acc, ok := s.pick(w, r)
+		if !ok {
+			return
+		}
 		key := r.URL.Query().Get("key")
-		if err := s.Mailbox.Own(key); err != nil {
+		if err := acc.Mailbox.Own(key); err != nil {
 			s.translate(w, r, err)
 			return
 		}
-		raw, err := s.Mailbox.Fetch(r.Context(), key, 0)
+		raw, err := acc.Mailbox.Fetch(r.Context(), key, 0)
 		if err != nil {
 			s.translate(w, r, err)
 			return
 		}
 		w.Header().Set("Content-Type", "message/rfc822")
 		w.Header().Set("Content-Disposition",
-			fmt.Sprintf(`attachment; filename="%s.eml"`, cleanName(s.Mailbox.Mid(key))))
+			fmt.Sprintf(`attachment; filename="%s.eml"`, cleanName(acc.Mailbox.Mid(key))))
 		_, _ = w.Write(raw)
 	})
 
-	s.post("/api/refresh", func(w http.ResponseWriter, r *http.Request, a request) {
-		res, err := s.Mailbox.Refresh(r.Context())
+	s.post("/api/refresh", func(w http.ResponseWriter, r *http.Request, a request, acc *Account) {
+		res, err := acc.Mailbox.Refresh(r.Context())
 		if err != nil {
 			s.translate(w, r, err)
 			return
 		}
-		if _, err := s.Mailbox.ApplyRules(r.Context(), nil, false); err != nil {
+		if _, err := acc.Mailbox.ApplyRules(r.Context(), nil, false); err != nil {
 			s.translate(w, r, err)
 			return
 		}
-		s.json(w, http.StatusOK, with(s.overview(r), map[string]any{
+		s.json(w, http.StatusOK, with(s.overview(r, acc), map[string]any{
 			"geprueft": res.Checked, "neu": res.New, "entfernt": res.Removed}))
 	})
 
-	s.post("/api/move", func(w http.ResponseWriter, r *http.Request, a request) {
-		res, err := s.Mailbox.Move(r.Context(), a.allKeys(), a.Folder)
+	s.post("/api/move", func(w http.ResponseWriter, r *http.Request, a request, acc *Account) {
+		res, err := acc.Mailbox.Move(r.Context(), a.allKeys(), a.Folder)
 		if err != nil {
 			s.translate(w, r, err)
 			return
 		}
-		s.json(w, http.StatusOK, with(s.overview(r), map[string]any{"moved": res}))
+		s.json(w, http.StatusOK, with(s.overview(r, acc), map[string]any{"moved": res}))
 	})
 
-	s.post("/api/delete", func(w http.ResponseWriter, r *http.Request, a request) {
-		n, err := s.Mailbox.Delete(r.Context(), a.allKeys(), false)
+	s.post("/api/delete", func(w http.ResponseWriter, r *http.Request, a request, acc *Account) {
+		n, err := acc.Mailbox.Delete(r.Context(), a.allKeys(), false)
 		if err != nil {
 			s.translate(w, r, err)
 			return
 		}
-		s.json(w, http.StatusOK, with(s.overview(r), map[string]any{"deleted": n}))
+		s.json(w, http.StatusOK, with(s.overview(r, acc), map[string]any{"deleted": n}))
 	})
 
-	s.post("/api/empty-trash", func(w http.ResponseWriter, r *http.Request, a request) {
-		n, err := s.Mailbox.EmptyTrash(r.Context())
+	s.post("/api/empty-trash", func(w http.ResponseWriter, r *http.Request, a request, acc *Account) {
+		n, err := acc.Mailbox.EmptyTrash(r.Context())
 		if err != nil {
 			s.translate(w, r, err)
 			return
 		}
-		s.json(w, http.StatusOK, with(s.overview(r), map[string]any{"deleted": n}))
+		s.json(w, http.StatusOK, with(s.overview(r, acc), map[string]any{"deleted": n}))
 	})
 
-	s.post("/api/flag", func(w http.ResponseWriter, r *http.Request, a request) {
-		s.mutate(w, r, core.Op{T: "flags", Mids: s.midsOf(a), Read: a.Read, Star: a.Star})
+	s.post("/api/flag", func(w http.ResponseWriter, r *http.Request, a request, acc *Account) {
+		s.mutate(w, r, acc, core.Op{T: "flags", Mids: midsOf(acc, a), Read: a.Read, Star: a.Star})
 	})
 
-	s.post("/api/tag", func(w http.ResponseWriter, r *http.Request, a request) {
-		s.mutate(w, r, core.Op{T: "tags", Mids: s.midsOf(a), Add: a.Add, Remove: a.Remove})
+	s.post("/api/tag", func(w http.ResponseWriter, r *http.Request, a request, acc *Account) {
+		s.mutate(w, r, acc, core.Op{T: "tags", Mids: midsOf(acc, a), Add: a.Add, Remove: a.Remove})
 	})
 
-	s.post("/api/tags", func(w http.ResponseWriter, r *http.Request, a request) {
+	s.post("/api/tags", func(w http.ResponseWriter, r *http.Request, a request, acc *Account) {
 		switch a.Action {
 		case "delete":
-			s.mutate(w, r, core.Op{T: "tagdel", Name: a.Name})
+			s.mutate(w, r, acc, core.Op{T: "tagdel", Name: a.Name})
 		case "rename", "create":
 			old := a.Old
 			if old == "" {
 				old = a.Name
 			}
-			s.mutate(w, r, core.Op{T: "tagren", Old: old, New: a.Name, Color: a.Color})
+			s.mutate(w, r, acc, core.Op{T: "tagren", Old: old, New: a.Name, Color: a.Color})
 		default:
 			s.writeError(w, http.StatusBadRequest, s.text(r, "error.unknownTagAction"))
 		}
 	})
 
-	s.post("/api/rules", func(w http.ResponseWriter, r *http.Request, a request) {
+	s.post("/api/rules", func(w http.ResponseWriter, r *http.Request, a request, acc *Account) {
 		clean, err := core.CleanRules(a.Rules)
 		if err != nil {
 			s.writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		if err := s.Mailbox.State.Mutate(r.Context(), core.Op{T: "rules", Rules: clean}); err != nil {
+		if err := acc.Mailbox.State.Mutate(r.Context(), core.Op{T: "rules", Rules: clean}); err != nil {
 			s.translate(w, r, err)
 			return
 		}
-		s.json(w, http.StatusOK, with(s.overview(r), map[string]any{"rules": clean}))
+		s.json(w, http.StatusOK, with(s.overview(r, acc), map[string]any{"rules": clean}))
 	})
 
-	s.post("/api/quit", func(w http.ResponseWriter, r *http.Request, a request) {
+	// Quitting is the one thing that must work without a mailbox: before the
+	// setup there is none, and without a console the button is the only way out.
+	// So it is registered raw and not through post(), which resolves a mailbox.
+	s.mux.HandleFunc("POST /api/quit", func(w http.ResponseWriter, r *http.Request) {
 		s.json(w, http.StatusOK, map[string]any{"ok": true})
 		if s.OnShutdown != nil {
 			// Answer first, shut down after - otherwise the interface sees a dropped
@@ -463,17 +560,19 @@ func (s *Server) routes() {
 		}
 	})
 
-	s.post("/api/rules/apply", func(w http.ResponseWriter, r *http.Request, a request) {
-		n, err := s.Mailbox.ApplyRules(r.Context(), nil, true)
+	s.post("/api/rules/apply", func(w http.ResponseWriter, r *http.Request, a request, acc *Account) {
+		n, err := acc.Mailbox.ApplyRules(r.Context(), nil, true)
 		if err != nil {
 			s.translate(w, r, err)
 			return
 		}
-		s.json(w, http.StatusOK, with(s.overview(r), map[string]any{"moved": n}))
+		s.json(w, http.StatusOK, with(s.overview(r, acc), map[string]any{"moved": n}))
 	})
 }
 
-func (s *Server) post(path string, fn func(http.ResponseWriter, *http.Request, request)) {
+// post reads the body and resolves the mailbox once, so no handler below can
+// forget either.
+func (s *Server) post(path string, fn func(http.ResponseWriter, *http.Request, request, *Account)) {
 	s.mux.HandleFunc("POST "+path, func(w http.ResponseWriter, r *http.Request) {
 		var a request
 		if r.ContentLength != 0 {
@@ -482,40 +581,44 @@ func (s *Server) post(path string, fn func(http.ResponseWriter, *http.Request, r
 				return
 			}
 		}
-		fn(w, r, a)
+		acc, ok := s.pick(w, r)
+		if !ok {
+			return
+		}
+		fn(w, r, a, acc)
 	})
 }
 
-func (s *Server) midsOf(a request) []string {
+func midsOf(acc *Account, a request) []string {
 	keys := a.allKeys()
 	out := make([]string, 0, len(keys))
 	for _, k := range keys {
-		out = append(out, s.Mailbox.Mid(k))
+		out = append(out, acc.Mailbox.Mid(k))
 	}
 	return out
 }
 
-func (s *Server) mutate(w http.ResponseWriter, r *http.Request, op core.Op) {
-	if err := s.Mailbox.State.Mutate(r.Context(), op); err != nil {
+func (s *Server) mutate(w http.ResponseWriter, r *http.Request, acc *Account, op core.Op) {
+	if err := acc.Mailbox.State.Mutate(r.Context(), op); err != nil {
 		s.translate(w, r, err)
 		return
 	}
-	s.json(w, http.StatusOK, with(s.overview(r), map[string]any{"ok": true}))
+	s.json(w, http.StatusOK, with(s.overview(r, acc), map[string]any{"ok": true}))
 }
 
 // readMail fetches a message and marks it read on request.
-func (s *Server) readMail(r *http.Request, key string, asRead bool) (mimeparse.Full, error) {
-	if err := s.Mailbox.Own(key); err != nil {
+func (s *Server) readMail(r *http.Request, acc *Account, key string, asRead bool) (mimeparse.Full, error) {
+	if err := acc.Mailbox.Own(key); err != nil {
 		return mimeparse.Full{}, err
 	}
-	raw, err := s.Mailbox.Fetch(r.Context(), key, 0)
+	raw, err := acc.Mailbox.Fetch(r.Context(), key, 0)
 	if err != nil {
 		return mimeparse.Full{}, err
 	}
 	obj := mimeparse.Read(raw, time.Unix(0, 0).UTC())
 	if asRead {
-		_ = s.Mailbox.State.Mutate(r.Context(), core.Op{T: "flags",
-			Mids: []string{s.Mailbox.Mid(key)}, Read: core.Ptr(true)})
+		_ = acc.Mailbox.State.Mutate(r.Context(), core.Op{T: "flags",
+			Mids: []string{acc.Mailbox.Mid(key)}, Read: core.Ptr(true)})
 	}
 	return obj, nil
 }
@@ -534,9 +637,9 @@ func cleanName(s string) string { return unsafeChars.ReplaceAllString(s, "_") }
 // localizedFolders replaces the translation key of the system folders with text.
 // Folders somebody created carry their own name and stay as they are - somebody
 // called them that.
-func (s *Server) localizedFolders(r *http.Request) []core.FolderInfo {
+func (s *Server) localizedFolders(r *http.Request, acc *Account) []core.FolderInfo {
 	cat := i18n.Get(s.language(r))
-	folder := s.Mailbox.Folders()
+	folder := acc.Mailbox.Folders()
 	for i, f := range folder {
 		if f.System {
 			folder[i].Label = cat.T(f.Label)

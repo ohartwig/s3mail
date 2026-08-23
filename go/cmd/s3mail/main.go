@@ -60,14 +60,22 @@ func main() {
 	// The SDK has to look for the credentials where the wizard writes them.
 	awsx.SharedDir = config.AWSDir()
 
-	setIf(&k.Bucket, *bucket)
-	setIf(&k.Region, *region)
-	setIf(&k.Profile, *profile)
-	setIf(&k.From, *sender)
-	setIf(&k.Host, *host)
-	if *prefix != "" {
-		k.Prefix = config.NormalizePrefix(*prefix)
+	// The switches address the first mailbox - that is where the single one used
+	// to be, and a flag cannot say which of several it means.
+	if k.Accounts == nil && (*bucket != "" || *prefix != "") {
+		k.Accounts = []config.Account{config.DefaultAccount()}
 	}
+	if len(k.Accounts) > 0 {
+		a := &k.Accounts[0]
+		setIf(&a.Bucket, *bucket)
+		setIf(&a.Region, *region)
+		setIf(&a.Profile, *profile)
+		setIf(&a.From, *sender)
+		if *prefix != "" {
+			a.Prefix = config.NormalizePrefix(*prefix)
+		}
+	}
+	setIf(&k.Host, *host)
 	if *port != 0 {
 		k.Port = *port
 	}
@@ -93,11 +101,11 @@ func main() {
 	}
 	srv.WithWizard(wiz)
 
-	if k.Bucket != "" && !*setup {
+	if len(k.Accounts) > 0 && !*setup {
 		if err := activate(ctx, srv, k, *noSend, *refreshSecs); err != nil {
 			// At startup there is no request and therefore no language from
 			// the browser - the one from the configuration has to do.
-			startErr = awsx.PlainText(err, k.Profile, cat)
+			startErr = awsx.PlainText(err, k.First().Profile, cat)
 		}
 	}
 
@@ -129,11 +137,13 @@ func main() {
 	if startErr != "" {
 		report(logFile, "%s", cat.Tf("cli.connectFailed", startErr))
 	}
-	if srv.Mailbox == nil {
+	if len(srv.Accounts()) == 0 {
 		report(logFile, "%s", cat.Tf("cli.notConfigured", url))
 	} else {
 		report(logFile, "%s", cat.Tf("cli.running", url))
-		report(logFile, "%s", cat.Tf("cli.bucketLine", k.Bucket, k.Prefix))
+		for _, a := range srv.Accounts() {
+			report(logFile, "%s", cat.Tf("cli.mailboxLine", a.Name))
+		}
 	}
 	// On Windows s3mail starts by double click; whoever closes the console window
 	// would otherwise have no way back to the address.
@@ -169,36 +179,55 @@ func main() {
 // stored, used for the console and then ignored by the very page it was made
 // on - the browser's preference wins instead, and the setting looks broken
 // while it is only unread.
-func serverConfig(k config.Config, root string, noSend bool, refreshSeconds int) map[string]any {
+// serverConfig is what the page gets to see of the configuration. Only what
+// applies to every mailbox - the rest rides with each answer, because it
+// changes when the reader switches mailbox.
+func serverConfig(k config.Config, refreshSeconds int) map[string]any {
 	return map[string]any{
-		"bucket": k.Bucket, "root": root, "default_from": k.From,
-		"can_send": !noSend, "config_file": config.File(),
-		"refresh_seconds": refreshSeconds, "language": k.Language,
-		"signature": k.Signature,
+		"config_file": config.File(), "refresh_seconds": refreshSeconds,
+		"language": k.Language,
 	}
 }
 
 // activate builds mailbox and sending from a configuration.
+// activate builds a mailbox per account and hands them to the server.
+//
+// A mailbox that cannot be armed does not stop the others: whoever has two and
+// mistypes the profile of the second should still get at the first. The error
+// comes back so the start line can name it, but the program keeps running as
+// long as anything came up.
 func activate(ctx context.Context, srv *web.Server, k config.Config, noSend bool, refreshSeconds int) error {
-	cfg, err := awsx.Session(ctx, k.Profile, k.Region)
-	if err != nil {
-		return err
+	accounts := make([]web.Account, 0, len(k.Accounts))
+	var firstErr error
+	for _, a := range k.Accounts {
+		cfg, err := awsx.Session(ctx, a.Profile, a.Region)
+		if err == nil {
+			err = awsx.CheckAccess(ctx, cfg)
+		}
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		mb := store.NewMailbox(ctx, awsx.NewS3(cfg, ""), awsx.NewKMS(cfg, ""),
+			a.Bucket, a.Prefix, config.CacheDir(), k.AllowDelete)
+		acc := web.Account{ID: a.ID(), Name: a.Name(), Mailbox: mb,
+			From: a.From, Signature: a.Signature}
+		if !noSend {
+			acc.Sender = awsx.NewSES(cfg, "")
+			// The suppression list hangs off sending: whoever may not send need not
+			// be able to exclude anyone from being sent to either.
+			acc.Blocked = suppressions{awsx.NewSuppressions(cfg, "")}
+		}
+		accounts = append(accounts, acc)
 	}
-	if err := awsx.CheckAccess(ctx, cfg); err != nil {
-		return err
+	srv.SetAccounts(accounts)
+	srv.Config = serverConfig(k, refreshSeconds)
+	if len(accounts) == 0 && firstErr == nil {
+		firstErr = config.ErrNoBucket
 	}
-	s3 := awsx.NewS3(cfg, "")
-	mb := store.NewMailbox(ctx, s3, awsx.NewKMS(cfg, ""), k.Bucket, k.Prefix,
-		config.CacheDir(), k.AllowDelete)
-	srv.Mailbox = mb
-	srv.Config = serverConfig(k, mb.Root, noSend, refreshSeconds)
-	if !noSend {
-		srv.WithSender(awsx.NewSES(cfg, ""), k.From)
-		// The suppression list hangs off sending: whoever may not send need not be
-		// able to exclude anyone from being sent to either.
-		srv.WithSuppressionList(suppressions{awsx.NewSuppressions(cfg, "")})
-	}
-	return nil
+	return firstErr
 }
 
 func setIf(target *string, value string) {

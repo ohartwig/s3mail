@@ -15,18 +15,16 @@ type Sender interface {
 	Send(ctx context.Context, n mailer.Message) (string, error)
 }
 
-// WithSender enables replying and forwarding. Without it s3mail runs read-only
-// (--no-send).
-func (s *Server) WithSender(v Sender, defaultFrom string) {
-	s.sender, s.defaultFrom = v, defaultFrom
-}
-
 // WithWizard attaches the /api/setup/* routes.
 func (s *Server) WithWizard(a *wizard.Wizard) { s.wizard = a }
 
 func (s *Server) sendRoute() {
 	s.mux.HandleFunc("POST /api/send", func(w http.ResponseWriter, r *http.Request) {
-		if s.sender == nil {
+		acc, ok := s.pick(w, r)
+		if !ok {
+			return
+		}
+		if acc.Sender == nil {
 			s.writeError(w, http.StatusBadRequest, s.text(r, "error.sendingOff"))
 			return
 		}
@@ -39,7 +37,7 @@ func (s *Server) sendRoute() {
 		if e.Key != "" {
 			// On a reply, fetch the original's headers so the thread holds - and on a
 			// forward the raw message for the attachment.
-			obj, err := s.readMail(r, e.Key, false)
+			obj, err := s.readMail(r, acc, e.Key, false)
 			if err != nil {
 				s.translate(w, r, err)
 				return
@@ -47,17 +45,17 @@ func (s *Server) sendRoute() {
 			o = mailer.Original{MessageID: obj.MessageID, References: obj.References,
 				Subject: obj.Subject}
 			if e.Mode == "forward" {
-				if raw, err := s.Mailbox.Fetch(r.Context(), e.Key, 0); err == nil {
+				if raw, err := acc.Mailbox.Fetch(r.Context(), e.Key, 0); err == nil {
 					o.Raw = raw
 				}
 			}
 		}
-		n, err := mailer.Build(e, s.defaultFrom, o, time.Now())
+		n, err := mailer.Build(e, acc.From, o, time.Now())
 		if err != nil {
 			s.translate(w, r, err)
 			return
 		}
-		id, err := s.sender.Send(r.Context(), n)
+		id, err := acc.Sender.Send(r.Context(), n)
 		if err != nil {
 			s.translate(w, r, err)
 			return
@@ -67,15 +65,15 @@ func (s *Server) sendRoute() {
 		// turn the answer into an error - it would read as "not sent" and get
 		// sent a second time.
 		out := map[string]any{"message_id": id}
-		if _, err := s.Mailbox.Put(r.Context(), core.Sent, n.ID, n.Raw); err != nil {
+		if _, err := acc.Mailbox.Put(r.Context(), core.Sent, n.ID, n.Raw); err != nil {
 			out["warning"] = s.text(r, "compose.sentNotStored")
 		}
 		if e.DraftKey != "" {
-			if err := s.Mailbox.DropDraft(r.Context(), e.DraftKey); err != nil {
+			if err := acc.Mailbox.DropDraft(r.Context(), e.DraftKey); err != nil {
 				out["warning"] = s.text(r, "compose.draftNotRemoved")
 			}
 		}
-		s.json(w, http.StatusOK, with(s.overview(r), out))
+		s.json(w, http.StatusOK, with(s.overview(r, acc), out))
 	})
 }
 
@@ -84,17 +82,21 @@ func (s *Server) sendRoute() {
 // is visible from a second machine, and needs no storage of its own.
 func (s *Server) draftRoute() {
 	s.mux.HandleFunc("POST /api/draft", func(w http.ResponseWriter, r *http.Request) {
+		acc, ok := s.pick(w, r)
+		if !ok {
+			return
+		}
 		var e mailer.Draft
 		if err := readJSON(r, &e); err != nil {
 			s.writeError(w, http.StatusBadRequest, s.text(r, "error.badJson"))
 			return
 		}
-		n, err := mailer.BuildDraft(e, s.defaultFrom, mailer.Original{}, time.Now())
+		n, err := mailer.BuildDraft(e, acc.From, mailer.Original{}, time.Now())
 		if err != nil {
 			s.translate(w, r, err)
 			return
 		}
-		key, err := s.Mailbox.Put(r.Context(), core.Drafts, n.ID, n.Raw)
+		key, err := acc.Mailbox.Put(r.Context(), core.Drafts, n.ID, n.Raw)
 		if err != nil {
 			s.translate(w, r, err)
 			return
@@ -102,9 +104,9 @@ func (s *Server) draftRoute() {
 		// The previous version goes only once the new one lies there. The other
 		// way round a failed write would leave nothing behind at all.
 		if e.DraftKey != "" && e.DraftKey != key {
-			_ = s.Mailbox.DropDraft(r.Context(), e.DraftKey)
+			_ = acc.Mailbox.DropDraft(r.Context(), e.DraftKey)
 		}
-		s.json(w, http.StatusOK, with(s.overview(r), map[string]any{"key": key}))
+		s.json(w, http.StatusOK, with(s.overview(r, acc), map[string]any{"key": key}))
 	})
 }
 

@@ -124,8 +124,6 @@ func (s *State) PendingOps() int {
 	return s.openOps
 }
 
-// -- Laden ------------------------------------------------------------------ //
-
 func (s *State) fetchSnapshot(ctx context.Context) *core.Data {
 	obj, err := s.s3.Get(ctx, s.bucket, s.key, "")
 	if err != nil {
@@ -239,8 +237,6 @@ func (s *State) Load(ctx context.Context) {
 		s.Compact(ctx, open)
 	}
 }
-
-// -- Schreiben -------------------------------------------------------------- //
 
 // opName is unique and sortable by write time: the timestamp first, so the
 // lexicographic order matches the write order, then this process's identifier
