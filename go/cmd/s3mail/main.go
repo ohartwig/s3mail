@@ -221,6 +221,18 @@ func activate(ctx context.Context, srv *web.Server, k config.Config, noSend bool
 			acc.Blocked = suppressions{awsx.NewSuppressions(cfg, "")}
 		}
 		accounts = append(accounts, acc)
+
+		// Push, where the mailbox has a queue. Without one the timer in the page
+		// does it, exactly as before - a mailbox whose infrastructure predates
+		// this must keep working.
+		if a.Queue != "" {
+			q := awsx.NewQueue(cfg, a.Queue)
+			id := acc.ID
+			go watchQueue(ctx, srv, id, q, func(c context.Context) error {
+				_, err := mb.Refresh(c)
+				return err
+			})
+		}
 	}
 	srv.SetAccounts(accounts)
 	srv.Config = serverConfig(k, refreshSeconds)

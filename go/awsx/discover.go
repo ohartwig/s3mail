@@ -19,6 +19,10 @@ type Finding struct {
 	Prefix string `json:"prefix"`
 	From   string `json:"from"`
 	Region string `json:"region"`
+
+	// Queue is the SQS queue new mail is announced through. Empty means: no
+	// push, the timer does it - which is what every mailbox did until now.
+	Queue string `json:"queue"`
 }
 
 // Complete says whether the wizard can go on without asking.

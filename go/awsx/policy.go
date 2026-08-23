@@ -10,7 +10,7 @@ import (
 // be checked without an account, and whether the wizard suggests the right
 // thing hangs on exactly that.
 
-// fromPolicies reads bucket, prefix and sender from IAM policy documents.
+// fromPolicies reads bucket, prefix, sender and queue from IAM policy documents.
 func fromPolicies(documents []string) Finding {
 	var f Finding
 	for _, d := range documents {
@@ -30,6 +30,14 @@ func fromPolicies(documents []string) Finding {
 			case hasPrefix(actions, "ses:"):
 				if a := senderFrom(s.Condition); a != "" {
 					f.From = a
+				}
+			case hasPrefix(actions, "sqs:"):
+				// The queue the mailbox is allowed to receive from is the one it
+				// should hang on. Whoever may read it was meant to be told.
+				for _, arn := range list(s.Resource) {
+					if url := QueueURL(arn); url != "" {
+						f.Queue = url
+					}
 				}
 			}
 		}

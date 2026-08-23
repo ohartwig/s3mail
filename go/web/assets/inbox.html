@@ -894,6 +894,25 @@ $("#ruleApply").onclick = guard(async () => {
    a message that arrives a minute later. */
 let autoTimer = null;
 
+/* The program says when something arrived, instead of being asked every minute.
+   The timer stays as a fallback: a stream that breaks and a browser that does
+   not reconnect would otherwise leave the mailbox standing still with nobody
+   able to tell. EventSource reconnects by itself, but "by itself" is not a
+   promise anybody made us. */
+function listenForMail() {
+  if (!window.EventSource) return;
+  const src = new EventSource("/api/events");
+  src.addEventListener("mail", e => {
+    let data = {};
+    try { data = JSON.parse(e.data); } catch (_) { /* an event without data still means: look */ }
+    // Another mailbox is none of this page's business - it shows one.
+    if (data.account && over.account && data.account !== over.account) return;
+    if (document.querySelector("#compose")) return;   // a draft is open
+    if ($("#refresh").disabled) return;               // already running
+    load().catch(() => {});
+  });
+}
+
 function scheduleAutoRefresh() {
   const secs = CFG.refresh_seconds | 0;
   if (autoTimer) clearInterval(autoTimer);
@@ -994,6 +1013,7 @@ document.addEventListener("keydown", e => {
     if (!messages.length && !over.folders.some(f => f.count)) $("#refresh").click();
   } catch (e) { toast(e.message, true); }
   scheduleAutoRefresh();
+  listenForMail();
 })();
 </script>
 </body>

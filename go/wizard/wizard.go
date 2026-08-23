@@ -45,6 +45,7 @@ type Data struct {
 	AllowDelete *bool  `json:"allow_delete"`
 	Signature   string `json:"signature"`
 	Label       string `json:"label"`
+	Queue       string `json:"queue"`
 
 	// Account is the mailbox being edited, by its ID. Empty means the first one,
 	// "new" means: add one. Without it a second mailbox would overwrite the
@@ -120,7 +121,7 @@ func flatten(k config.Config, acc config.Account) map[string]any {
 	return map[string]any{
 		"profile": acc.Profile, "region": acc.Region, "bucket": acc.Bucket,
 		"prefix": acc.Prefix, "from": acc.From, "signature": acc.Signature,
-		"label": acc.Label, "account": acc.ID(),
+		"label": acc.Label, "account": acc.ID(), "queue": acc.Queue,
 		"allow_delete": k.AllowDelete, "language": k.Language,
 	}
 }
@@ -160,7 +161,7 @@ func (a *Wizard) Buckets(ctx context.Context, d Data) (map[string]any, error) {
 	// What the access reveals about itself, nobody has to retype. If that fails
 	// (older mailboxes may not read their own policy), the wizard falls back to
 	// typing - hence no error surfaces here.
-	if f, err := awsx.Discover(ctx, cfg); err == nil && (f.Bucket != "" || f.From != "") {
+	if f, err := awsx.Discover(ctx, cfg); err == nil && (f.Bucket != "" || f.From != "" || f.Queue != "") {
 		out["found"] = f
 	}
 	if len(buckets) == 0 {
@@ -226,6 +227,7 @@ func (a *Wizard) Save(_ context.Context, d Data) (map[string]any, error) {
 		From:      strings.TrimSpace(d.From),
 		Signature: strings.TrimRight(d.Signature, " \t\n\r"),
 		Label:     strings.TrimSpace(d.Label),
+		Queue:     strings.TrimSpace(d.Queue),
 	}
 	// Which entry this replaces is decided by the ID the form came with, not by
 	// the one the new values produce: whoever corrects a prefix would otherwise

@@ -120,3 +120,37 @@ func TestUserFromArn(t *testing.T) {
 		}
 	}
 }
+
+// TestTheQueueComesOutOfThePolicy - the same trick as bucket and prefix: what
+// the access is allowed to do says where its mailbox is. One AWS call fewer,
+// and one question fewer in the wizard.
+func TestTheQueueComesOutOfThePolicy(t *testing.T) {
+	doc := `{"Version":"2012-10-17","Statement":[
+	  {"Effect":"Allow","Action":["sqs:ReceiveMessage","sqs:DeleteMessage"],
+	   "Resource":"arn:aws:sqs:eu-north-1:123456789012:s3mail-ole"}]}`
+	f := fromPolicies([]string{doc})
+	want := "https://sqs.eu-north-1.amazonaws.com/123456789012/s3mail-ole"
+	if f.Queue != want {
+		t.Errorf("queue = %q, expected %q", f.Queue, want)
+	}
+}
+
+// TestAWildcardQueueIsNoSuggestion - the same rule as for the bucket: a pattern
+// names nothing anybody could hang on.
+func TestAWildcardQueueIsNoSuggestion(t *testing.T) {
+	doc := `{"Statement":[{"Effect":"Allow","Action":"sqs:ReceiveMessage",
+	         "Resource":"arn:aws:sqs:eu-north-1:123456789012:*"}]}`
+	if f := fromPolicies([]string{doc}); f.Queue != "" {
+		t.Errorf("queue from a wildcard ARN: %q", f.Queue)
+	}
+}
+
+// TestGarbageArnsYieldNothing - a policy is somebody else's text.
+func TestGarbageArnsYieldNothing(t *testing.T) {
+	for _, arn := range []string{"", "arn:aws:s3:::bucket", "arn:aws:sqs:::name",
+		"nonsense", "arn:aws:sqs:eu-north-1:123456789012:"} {
+		if got := QueueURL(arn); got != "" {
+			t.Errorf("%q -> %q, expected nothing", arn, got)
+		}
+	}
+}

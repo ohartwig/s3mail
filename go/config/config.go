@@ -31,6 +31,11 @@ type Account struct {
 	// Label is what the switcher shows. Empty means: build one from the address
 	// or the bucket - a mailbox nobody named still has to be distinguishable.
 	Label string `json:"label"`
+
+	// Queue is the SQS queue new mail is announced through. Empty means: no
+	// push, the timer does it. The wizard reads it out of the IAM policy, so
+	// nobody has to type a URL.
+	Queue string `json:"queue"`
 }
 
 // ID names the mailbox in a URL and in a cookie. It comes from bucket and

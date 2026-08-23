@@ -213,6 +213,7 @@
   "setup.envDefault": "(Umgebungsvariablen / Standard)",
   "setup.error.noBucket": "Bitte einen Bucket angeben",
   "setup.found.folder": "Ordner",
+  "setup.found.queue": "die Benachrichtigung für neue Mail",
   "setup.found.sender": "Absender",
   "setup.label": "Name (optional)",
   "setup.label.hint": "Steht im Umschalter. Leer heißt: die Absenderadresse.",

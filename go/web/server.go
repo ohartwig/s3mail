@@ -45,6 +45,7 @@ type Server struct {
 	accounts []Account
 	byID     map[string]*Account
 	wizard   *wizard.Wizard
+	events   *events
 
 	// OnShutdown is called by /api/quit. Without it the server keeps running after
 	// the window is closed, and nobody sees that it is still there.
@@ -55,7 +56,7 @@ type Server struct {
 
 func NewServer(accounts []Account, token, bind string, port int, config map[string]any) *Server {
 	s := &Server{Token: token, Bind: bind, Port: port, Config: config,
-		accounts: accounts, byID: map[string]*Account{}}
+		accounts: accounts, byID: map[string]*Account{}, events: newEvents()}
 	for i := range s.accounts {
 		s.byID[s.accounts[i].ID] = &s.accounts[i]
 	}
@@ -63,6 +64,7 @@ func NewServer(accounts []Account, token, bind string, port int, config map[stri
 	s.routes()
 	s.sendRoute()
 	s.draftRoute()
+	s.eventsRoute()
 	s.suppressionRoutes()
 	s.wizardRoutes()
 	return s

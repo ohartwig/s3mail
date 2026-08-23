@@ -199,3 +199,19 @@ func TestSignatureReachesBothPages(t *testing.T) {
 		t.Error("the signature does not arrive in the page")
 	}
 }
+
+// TestThePageListensForEvents - the way there is a string in a page; without a
+// test a lost line would leave the mailbox back on its timer and nobody would
+// notice, because the timer still works.
+func TestThePageListensForEvents(t *testing.T) {
+	out := page("inbox", PageMailbox, "de", map[string]any{"bucket": "b"})
+	for _, anchor := range []string{"EventSource", "/api/events", `addEventListener("mail"`} {
+		if !strings.Contains(out, anchor) {
+			t.Errorf("%q missing from the page - it is back on polling", anchor)
+		}
+	}
+	// And the timer has to stay: it is the fallback for a broken stream.
+	if !strings.Contains(out, "scheduleAutoRefresh") {
+		t.Error("the timer is gone - a broken stream would stop the mailbox for good")
+	}
+}

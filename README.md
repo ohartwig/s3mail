@@ -511,8 +511,10 @@ sie melden dann einen Rechtefehler im Klartext.
 - Kein IMAP: ein normales Mailprogramm kann das Postfach nicht öffnen. Senden
   ginge dort über den SMTP-Endpunkt von SES, lesen nicht – SES kennt keinen
   Postfachdienst.
-- Kein Push. Der Abgleich läuft im Takt von `--refresh` (Standard 60 Sekunden);
-  eine Mail kann also bis zu einer Minute brauchen, bis sie auftaucht.
+- Push braucht eine Klingel in AWS: SES benachrichtigt ein SNS-Topic, das in eine
+  SQS-Queue schreibt, an der s3mail hängt. Ist das eingerichtet, taucht neue Mail
+  sofort auf; ohne läuft der Takt von `--refresh` (Standard 60 Sekunden) weiter.
+  Die Queue liest s3mail aus der eigenen IAM-Policy – einzutragen ist nichts.
 - Der Zugang hängt an einem Token, nicht an Benutzern (siehe
   [Wer darf ran](#wer-darf-ran)). Wer die Adresse aus dem Terminal hat, sieht das
   ganze Postfach. `--host` auf eine öffentliche Adresse zu legen heißt weiterhin,

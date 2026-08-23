@@ -213,6 +213,7 @@
   "setup.envDefault": "(environment variables / default)",
   "setup.error.noBucket": "Please name a bucket",
   "setup.found.folder": "Folder",
+  "setup.found.queue": "the notification for new mail",
   "setup.found.sender": "Sender",
   "setup.label": "Name (optional)",
   "setup.label.hint": "Shown in the switcher. Empty means: the sender address.",

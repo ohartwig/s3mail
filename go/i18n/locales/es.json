@@ -213,6 +213,7 @@
   "setup.envDefault": "(variables de entorno / predeterminado)",
   "setup.error.noBucket": "Indica un bucket, por favor",
   "setup.found.folder": "Carpeta",
+  "setup.found.queue": "el aviso de correo nuevo",
   "setup.found.sender": "Remitente",
   "setup.label": "Nombre (opcional)",
   "setup.label.hint": "Aparece en el selector. Vacío significa: la dirección del remitente.",
