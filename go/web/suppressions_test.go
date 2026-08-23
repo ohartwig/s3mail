@@ -80,8 +80,8 @@ func TestBlockAndUnblock(t *testing.T) {
 	f := &fakeSperrliste{drin: map[string]bool{}}
 	ts, _ := serverMitSperrliste(t, f)
 
-	ruf := func(pfad, koerper string) *http.Response {
-		req, _ := http.NewRequest("POST", ts.URL+pfad, strings.NewReader(koerper))
+	ruf := func(path, body string) *http.Response {
+		req, _ := http.NewRequest("POST", ts.URL+path, strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-S3mail-Token", testToken)
 		resp, err := ts.Client().Do(req)
@@ -139,9 +139,9 @@ func TestNoSendingNoSuppressionList(t *testing.T) {
 
 // TestSuppressionListInTheInterface - der Knopf ist der einzige Weg dorthin.
 func TestSuppressionListInTheInterface(t *testing.T) {
-	for _, teil := range []string{`id="vBlock"`, `id="blockedBtn"`, "/api/unblock"} {
-		if !strings.Contains(SeitePostfach, teil) {
-			t.Errorf("Postfachseite ohne %s", teil)
+	for _, part := range []string{`id="vBlock"`, `id="blockedBtn"`, "/api/unblock"} {
+		if !strings.Contains(SeitePostfach, part) {
+			t.Errorf("Postfachseite ohne %s", part)
 		}
 	}
 }

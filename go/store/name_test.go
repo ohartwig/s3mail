@@ -29,12 +29,12 @@ func TestOpNamesSort(t *testing.T) {
 // TestInstanceIDIsUnique - ohne das koennten zwei Rechner in derselben
 // Mikrosekunde denselben Op-Namen erzeugen, und einer waere weg.
 func TestInstanceIDIsUnique(t *testing.T) {
-	gesehen := map[string]bool{}
+	seen := map[string]bool{}
 	for i := 0; i < 200; i++ {
 		k := InstanceID()
-		if gesehen[k] {
+		if seen[k] {
 			t.Fatalf("Kennung %q zweimal", k)
 		}
-		gesehen[k] = true
+		seen[k] = true
 	}
 }

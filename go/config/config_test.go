@@ -21,12 +21,12 @@ func TestSaveAndLoad(t *testing.T) {
 	sandkasten(t)
 	k := Defaults()
 	k.Bucket, k.Prefix, k.Absender = "mein-bucket", "mail", "support@firma.de"
-	pfad, err := Save(k)
+	path, err := Save(k)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if runtime.GOOS != "windows" {
-		info, _ := os.Stat(pfad)
+		info, _ := os.Stat(path)
 		if info.Mode().Perm() != 0o600 {
 			t.Errorf("Rechte: %v", info.Mode().Perm())
 		}

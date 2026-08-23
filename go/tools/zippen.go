@@ -24,13 +24,13 @@ func main() {
 		fmt.Fprintln(os.Stderr, "usage: zippen.go ziel.zip datei [datei…]")
 		os.Exit(2)
 	}
-	ziel, err := os.Create(os.Args[1])
+	target, err := os.Create(os.Args[1])
 	if err != nil {
 		abbruch(err)
 	}
-	defer ziel.Close()
+	defer target.Close()
 
-	w := zip.NewWriter(ziel)
+	w := zip.NewWriter(target)
 	for _, name := range os.Args[2:] {
 		info, err := os.Stat(name)
 		if err != nil {
@@ -40,26 +40,26 @@ func main() {
 			// Ein macOS-App-Bundle ist ein Verzeichnis. Die Struktur darunter muss
 			// erhalten bleiben, sonst ist es kein Bundle mehr, sondern ein Ordner.
 			wurzel := filepath.Dir(strings.TrimSuffix(name, string(filepath.Separator)))
-			err = filepath.WalkDir(name, func(pfad string, d os.DirEntry, err error) error {
+			err = filepath.WalkDir(name, func(path string, d os.DirEntry, err error) error {
 				if err != nil || d.IsDir() {
 					return err
 				}
-				rel, err := filepath.Rel(wurzel, pfad)
+				rel, err := filepath.Rel(wurzel, path)
 				if err != nil {
 					return err
 				}
-				return schreibe(w, pfad, filepath.ToSlash(rel), d)
+				return schreibe(w, path, filepath.ToSlash(rel), d)
 			})
 			if err != nil {
 				abbruch(err)
 			}
 			continue
 		}
-		eintrag, err := os.Lstat(name)
+		entry, err := os.Lstat(name)
 		if err != nil {
 			abbruch(err)
 		}
-		if err := schreibe(w, name, filepath.Base(name), fsEintrag{eintrag}); err != nil {
+		if err := schreibe(w, name, filepath.Base(name), fsEintrag{entry}); err != nil {
 			abbruch(err)
 		}
 	}
@@ -69,34 +69,34 @@ func main() {
 }
 
 // schreibe legt eine Datei ins Archiv und behaelt ihre Rechte.
-func schreibe(w *zip.Writer, pfad, name string, d os.DirEntry) error {
+func schreibe(w *zip.Writer, path, name string, d os.DirEntry) error {
 	info, err := d.Info()
 	if err != nil {
 		return err
 	}
-	kopf, err := zip.FileInfoHeader(info)
+	header, err := zip.FileInfoHeader(info)
 	if err != nil {
 		return err
 	}
-	kopf.Name = name
-	kopf.Method = zip.Deflate
+	header.Name = name
+	header.Method = zip.Deflate
 	// Alles, was ausfuehrbar war, bleibt es - und das Startprogramm eines Bundles
 	// muss es sein, sonst startet der Doppelklick nichts.
 	modus := info.Mode()
 	if modus&0o111 != 0 || filepath.Ext(name) == "" {
 		modus |= 0o111
 	}
-	kopf.SetMode(modus)
-	teil, err := w.CreateHeader(kopf)
+	header.SetMode(modus)
+	part, err := w.CreateHeader(header)
 	if err != nil {
 		return err
 	}
-	quelle, err := os.Open(pfad)
+	source, err := os.Open(path)
 	if err != nil {
 		return err
 	}
-	defer quelle.Close()
-	_, err = io.Copy(teil, quelle)
+	defer source.Close()
+	_, err = io.Copy(part, source)
 	return err
 }
 

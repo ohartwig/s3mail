@@ -150,12 +150,12 @@ func (f *Fake) Keys(prefix string) []string {
 	return out
 }
 
-func (f *Fake) PutZaehler(teil string) int {
+func (f *Fake) PutZaehler(part string) int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	n := 0
 	for _, a := range f.Aufrufe {
-		if strings.HasPrefix(a, "put ") && strings.Contains(a, teil) {
+		if strings.HasPrefix(a, "put ") && strings.Contains(a, part) {
 			n++
 		}
 	}

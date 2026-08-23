@@ -56,14 +56,14 @@ func TestPlainText(t *testing.T) {
 	}
 	for _, f := range faelle {
 		got := awsx.PlainText(f.err, f.profil, i18n.Get("de"))
-		for _, teil := range f.muss {
-			if !strings.Contains(got, teil) {
-				t.Errorf("%s: %q enthaelt nicht %q", f.name, got, teil)
+		for _, part := range f.muss {
+			if !strings.Contains(got, part) {
+				t.Errorf("%s: %q enthaelt nicht %q", f.name, got, part)
 			}
 		}
-		for _, teil := range f.darfNicht {
-			if strings.Contains(got, teil) {
-				t.Errorf("%s: %q sollte %q nicht enthalten", f.name, got, teil)
+		for _, part := range f.darfNicht {
+			if strings.Contains(got, part) {
+				t.Errorf("%s: %q sollte %q nicht enthalten", f.name, got, part)
 			}
 		}
 	}

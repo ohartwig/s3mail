@@ -38,13 +38,13 @@ func CleanRules(rules []Rule) ([]Rule, error) {
 		if rn := []rune(name); len(rn) > 60 {
 			name = string(rn[:60])
 		}
-		var ordner *string
+		var folder *string
 		if r.Folder != nil && *r.Folder != "-" {
 			f, err := ValidFolder(*r.Folder)
 			if err != nil {
 				return nil, err
 			}
-			ordner = &f
+			folder = &f
 		}
 		tags := make([]string, 0, 5)
 		for _, t := range r.Tags {
@@ -52,7 +52,7 @@ func CleanRules(rules []Rule) ([]Rule, error) {
 				tags = append(tags, t)
 			}
 		}
-		out = append(out, Rule{name, feld, contains, ordner, tags, r.Star, r.Read, r.Enabled})
+		out = append(out, Rule{name, feld, contains, folder, tags, r.Star, r.Read, r.Enabled})
 	}
 	return out, nil
 }
@@ -126,8 +126,8 @@ func PlanRules(pool []Message, d *Data, force bool) []RuleAction {
 				aktion.SetStar = Ptr(true)
 			}
 			if r.Folder != nil && *r.Folder != m.Folder {
-				ziel := *r.Folder
-				aktion.MoveTo = &ziel
+				target := *r.Folder
+				aktion.MoveTo = &target
 			}
 			break // erste passende Regel gewinnt
 		}

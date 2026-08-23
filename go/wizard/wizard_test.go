@@ -16,12 +16,12 @@ import (
 //
 //	✕ Cannot read properties of null (reading 'map')
 func TestNeverNullToTheInterface(t *testing.T) {
-	for name, wert := range map[string][]string{
+	for name, value := range map[string][]string{
 		"nil":  nil,
 		"leer": {},
 		"voll": {"a", "b"},
 	} {
-		blob, err := json.Marshal(map[string]any{"buckets": notNil(wert)})
+		blob, err := json.Marshal(map[string]any{"buckets": notNil(value)})
 		if err != nil {
 			t.Fatal(err)
 		}

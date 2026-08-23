@@ -20,10 +20,10 @@ import (
 // bei einem Tippfehler eine Falle.
 type Suppressions struct{ c *sesv2.Client }
 
-func NewSuppressions(cfg aws.Config, endpunkt string) *Suppressions {
+func NewSuppressions(cfg aws.Config, endpoint string) *Suppressions {
 	return &Suppressions{c: sesv2.NewFromConfig(cfg, func(o *sesv2.Options) {
-		if endpunkt != "" {
-			o.BaseEndpoint = aws.String(endpunkt)
+		if endpoint != "" {
+			o.BaseEndpoint = aws.String(endpoint)
 		}
 	})}
 }
@@ -38,18 +38,18 @@ type Entry struct {
 // Block traegt eine Adresse ein. Grund ist COMPLAINT: der Eintrag entsteht,
 // weil jemand darum gebeten hat, nicht mehr angeschrieben zu werden - genau
 // das, was SES unter einer Beschwerde versteht. BOUNCE traegt SES selbst ein.
-func (s *Suppressions) Block(ctx context.Context, adresse string) error {
+func (s *Suppressions) Block(ctx context.Context, address string) error {
 	_, err := s.c.PutSuppressedDestination(ctx, &sesv2.PutSuppressedDestinationInput{
-		EmailAddress: aws.String(adresse),
+		EmailAddress: aws.String(address),
 		Reason:       v2types.SuppressionListReasonComplaint,
 	})
 	return err
 }
 
 // Unblock nimmt eine Adresse wieder heraus.
-func (s *Suppressions) Unblock(ctx context.Context, adresse string) error {
+func (s *Suppressions) Unblock(ctx context.Context, address string) error {
 	_, err := s.c.DeleteSuppressedDestination(ctx, &sesv2.DeleteSuppressedDestinationInput{
-		EmailAddress: aws.String(adresse),
+		EmailAddress: aws.String(address),
 	})
 	return err
 }

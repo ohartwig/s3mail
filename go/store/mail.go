@@ -47,7 +47,7 @@ type Mailbox struct {
 	verschluesselt bool
 
 	State  *State
-	inhalt *bodyCache
+	content *bodyCache
 }
 
 func NewMailbox(ctx context.Context, s3 S3, kms KMS, bucket, root, cacheDir string,
@@ -66,7 +66,7 @@ func NewMailbox(ctx context.Context, s3 S3, kms KMS, bucket, root, cacheDir stri
 		_ = os.MkdirAll(cacheDir, 0o700)
 		m.CacheFile = filepath.Join(cacheDir, slug+".json")
 		m.readCache()
-		m.inhalt = neuerBodyCache(filepath.Join(cacheDir, slug+".bodies"))
+		m.content = neuerBodyCache(filepath.Join(cacheDir, slug+".bodies"))
 	}
 	lokal := ""
 	if cacheDir != "" {
@@ -111,7 +111,7 @@ func (m *Mailbox) Fetch(ctx context.Context, key string, headBytes int) ([]byte,
 	m.mu.RUnlock()
 
 	if !teilweise && headBytes == 0 {
-		if b, da := m.inhalt.lesen(etag); da {
+		if b, da := m.content.lesen(etag); da {
 			return b, nil
 		}
 	}
@@ -126,7 +126,7 @@ func (m *Mailbox) Fetch(ctx context.Context, key string, headBytes int) ([]byte,
 	}
 	if !IsEnvelope(obj.Meta) {
 		if headBytes == 0 {
-			m.inhalt.schreiben(etag, obj.Body)
+			m.content.schreiben(etag, obj.Body)
 		}
 		return obj.Body, nil
 	}
@@ -147,13 +147,13 @@ func (m *Mailbox) Fetch(ctx context.Context, key string, headBytes int) ([]byte,
 		// KMS-Aufruf mit, nicht nur den S3-GET. Der Zwischenspeicher liegt dafuer
 		// im Klartext auf der Platte - genau wie der Index, der Absender und
 		// Vorschautext ohnehin schon dort haelt.
-		m.inhalt.schreiben(etag, klar)
+		m.content.schreiben(etag, klar)
 	}
 	return klar, err
 }
 
 // ClearCache wirft die zwischengespeicherten Inhalte weg.
-func (m *Mailbox) ClearCache() { m.inhalt.Leeren() }
+func (m *Mailbox) ClearCache() { m.content.Leeren() }
 
 // Encrypted sagt, ob im Postfach client-seitig verschluesselte Objekte liegen.
 func (m *Mailbox) Encrypted() bool {
@@ -269,7 +269,7 @@ type MoveResult struct {
 // Speicherklasse des Originals werden dabei mitgenommen, sonst landete die Kopie
 // unter dem Standardschluessel des Buckets.
 func (m *Mailbox) Move(ctx context.Context, keys []string, folder string) ([]MoveResult, error) {
-	ziel, err := core.ValidFolder(folder)
+	target, err := core.ValidFolder(folder)
 	if err != nil {
 		return nil, err
 	}
@@ -280,17 +280,17 @@ func (m *Mailbox) Move(ctx context.Context, keys []string, folder string) ([]Mov
 				return err
 			}
 			m.mu.RLock()
-			eintrag, bekannt := m.index[key]
+			entry, bekannt := m.index[key]
 			m.mu.RUnlock()
 			if !bekannt {
 				continue
 			}
-			if m.FolderOf(key) == ziel {
+			if m.FolderOf(key) == target {
 				out = append(out, MoveResult{Key: key, NewKey: key, Skipped: true})
 				continue
 			}
 			mid := m.Mid(key)
-			neuerKey, neueMid := m.freeKey(mid, ziel)
+			neuerKey, neueMid := m.freeKey(mid, target)
 
 			if err := m.s3.Copy(ctx, m.bucket, key, neuerKey, m.copyOpts(ctx, key)); err != nil {
 				return err
@@ -300,8 +300,8 @@ func (m *Mailbox) Move(ctx context.Context, keys []string, folder string) ([]Mov
 			}
 			m.mu.Lock()
 			delete(m.index, key)
-			eintrag.Key, eintrag.Mid, eintrag.Folder = neuerKey, neueMid, ziel
-			m.index[neuerKey] = eintrag
+			entry.Key, entry.Mid, entry.Folder = neuerKey, neueMid, target
+			m.index[neuerKey] = entry
 			m.mu.Unlock()
 
 			if neueMid != mid { // Zustand mitziehen
@@ -309,7 +309,7 @@ func (m *Mailbox) Move(ctx context.Context, keys []string, folder string) ([]Mov
 					return err
 				}
 			}
-			out = append(out, MoveResult{Key: key, NewKey: neuerKey, Folder: ziel})
+			out = append(out, MoveResult{Key: key, NewKey: neuerKey, Folder: target})
 		}
 		return nil
 	})
@@ -318,10 +318,10 @@ func (m *Mailbox) Move(ctx context.Context, keys []string, folder string) ([]Mov
 }
 
 // freeKey entschaerft eine Namenskollision im Zielordner.
-func (m *Mailbox) freeKey(mid, ziel string) (string, string) {
+func (m *Mailbox) freeKey(mid, target string) (string, string) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	kandidat, _ := m.KeyFor(mid, ziel)
+	kandidat, _ := m.KeyFor(mid, target)
 	for n := 1; ; n++ {
 		if _, belegt := m.index[kandidat]; !belegt {
 			return kandidat, m.Mid(kandidat)
@@ -330,7 +330,7 @@ func (m *Mailbox) freeKey(mid, ziel string) (string, string) {
 		if i := strings.Index(mid, "."); i >= 0 {
 			stamm, punkt, endung = mid[:i], ".", mid[i+1:]
 		}
-		kandidat, _ = m.KeyFor(fmt.Sprintf("%s-%d%s%s", stamm, n, punkt, endung), ziel)
+		kandidat, _ = m.KeyFor(fmt.Sprintf("%s-%d%s%s", stamm, n, punkt, endung), target)
 	}
 }
 

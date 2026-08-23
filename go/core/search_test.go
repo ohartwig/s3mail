@@ -14,15 +14,15 @@ func laden(t *testing.T) ([]Message, *Data) {
 	var index []Message
 	var data Data
 	for _, p := range []struct {
-		datei string
-		ziel  any
+		file string
+		target  any
 	}{{"index.json", &index}, {"state.json", &data}} {
-		blob, err := os.ReadFile(filepath.Join("testdata", p.datei))
+		blob, err := os.ReadFile(filepath.Join("testdata", p.file))
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := json.Unmarshal(blob, p.ziel); err != nil {
-			t.Fatalf("%s: %v", p.datei, err)
+		if err := json.Unmarshal(blob, p.target); err != nil {
+			t.Fatalf("%s: %v", p.file, err)
 		}
 	}
 	return index, data.Normalize()

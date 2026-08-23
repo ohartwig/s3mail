@@ -13,15 +13,15 @@ func opsLaden(t *testing.T) ([]Op, *Data) {
 	var ops []Op
 	var want Data
 	for _, p := range []struct {
-		datei string
-		ziel  any
+		file string
+		target  any
 	}{{"ops.json", &ops}, {"ops_result.json", &want}} {
-		blob, err := os.ReadFile(filepath.Join("testdata", p.datei))
+		blob, err := os.ReadFile(filepath.Join("testdata", p.file))
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := json.Unmarshal(blob, p.ziel); err != nil {
-			t.Fatalf("%s: %v", p.datei, err)
+		if err := json.Unmarshal(blob, p.target); err != nil {
+			t.Fatalf("%s: %v", p.file, err)
 		}
 	}
 	return ops, want.Normalize()

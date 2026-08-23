@@ -9,8 +9,8 @@ import (
 // Sperrliste ist der Ausschnitt der SES-Unterdrueckungsliste, den der Server
 // braucht. Als Interface, damit die Tests ohne AWS auskommen.
 type Sperrliste interface {
-	Sperren(ctx context.Context, adresse string) error
-	Freigeben(ctx context.Context, adresse string) error
+	Sperren(ctx context.Context, address string) error
+	Freigeben(ctx context.Context, address string) error
 	Lesen(ctx context.Context) ([]Sperreintrag, error)
 }
 
@@ -30,12 +30,12 @@ func (s *Server) sperrlistenRouten() {
 			s.writeError(w, http.StatusBadRequest, s.text(r, "error.noBlocklist"))
 			return
 		}
-		liste, err := s.sperrliste.Lesen(r.Context())
+		list, err := s.sperrliste.Lesen(r.Context())
 		if err != nil {
 			s.uebersetzen(w, err)
 			return
 		}
-		s.json(w, http.StatusOK, map[string]any{"blocked": liste})
+		s.json(w, http.StatusOK, map[string]any{"blocked": list})
 	})
 
 	s.post("/api/block", func(w http.ResponseWriter, r *http.Request, a request) {
@@ -51,29 +51,29 @@ func (s *Server) sperrlisteAendern(w http.ResponseWriter, r *http.Request, a req
 		s.writeError(w, http.StatusBadRequest, s.text(r, "error.noBlocklist"))
 		return
 	}
-	adresse := adresseAus(a.Address)
-	if adresse == "" {
+	address := adresseAus(a.Address)
+	if address == "" {
 		s.writeError(w, http.StatusBadRequest, s.text(r, "error.noAddress"))
 		return
 	}
 	var err error
 	if sperren {
-		err = s.sperrliste.Sperren(r.Context(), adresse)
+		err = s.sperrliste.Sperren(r.Context(), address)
 	} else {
-		err = s.sperrliste.Freigeben(r.Context(), adresse)
+		err = s.sperrliste.Freigeben(r.Context(), address)
 	}
 	if err != nil {
 		s.uebersetzen(w, err)
 		return
 	}
-	liste, err := s.sperrliste.Lesen(r.Context())
+	list, err := s.sperrliste.Lesen(r.Context())
 	if err != nil {
 		// Eingetragen ist eingetragen - dass die Liste danach nicht zu lesen war,
 		// darf die Handlung nicht als gescheitert erscheinen lassen.
-		s.json(w, http.StatusOK, map[string]any{"address": adresse})
+		s.json(w, http.StatusOK, map[string]any{"address": address})
 		return
 	}
-	s.json(w, http.StatusOK, map[string]any{"address": adresse, "blocked": liste})
+	s.json(w, http.StatusOK, map[string]any{"address": address, "blocked": list})
 }
 
 // adresseAus holt die nackte Adresse aus einer Kopfzeile: aus

@@ -13,10 +13,10 @@ import (
 //	has:anhang is:ungelesen tag:wichtig in:archiv
 var (
 	tokenRe  = regexp.MustCompile(`\w+:"[^"]*"|\w+:\S+|"[^"]*"|\S+`)
-	filterRe = regexp.MustCompile(`(?i)^(from|to|subject|betreff|after|before|has|tag|is|in)\s*:\s*"?([^"]*)"?$`)
+	filterRe = regexp.MustCompile(`(?i)^(from|von|de|to|an|para|subject|betreff|asunto|after|nach|desde|before|vor|hasta|has|hat|tiene|tag|etiqueta|is|ist|es|in|en)\s*:\s*"?([^"]*)"?$`)
 )
 
-type filter struct{ feld, wert string }
+type filter struct{ feld, value string }
 
 // Query ist eine geparste Suchanfrage.
 type Query struct {
@@ -59,45 +59,53 @@ func (q Query) Matches(m Message) bool {
 }
 
 func passt(f filter, m Message) bool {
-	hat := func(s string) bool { return strings.Contains(strings.ToLower(s), f.wert) }
+	hat := func(s string) bool { return strings.Contains(strings.ToLower(s), f.value) }
 	switch f.feld {
-	case "from":
+	case "from", "von", "de":
 		return hat(m.From)
-	case "to":
+	case "to", "an", "para":
 		return hat(m.To + m.Cc)
-	case "subject", "betreff":
+	case "subject", "betreff", "asunto":
 		return hat(m.Subject)
-	case "after":
-		return datumsteil(m.Date) >= f.wert
-	case "before":
-		return datumsteil(m.Date) <= f.wert
-	case "tag":
+	case "after", "nach", "desde":
+		return datumsteil(m.Date) >= f.value
+	case "before", "vor", "hasta":
+		return datumsteil(m.Date) <= f.value
+	case "tag", "etiqueta":
 		for _, t := range m.Tags {
-			if strings.ToLower(t) == f.wert {
+			if strings.ToLower(t) == f.value {
 				return true
 			}
 		}
 		return false
-	case "in":
-		ordner := m.Folder
-		if ordner == "" {
-			ordner = "posteingang"
+	case "in", "en":
+		// The inbox has no prefix of its own - its key is the empty string.
+		// Which word a reader types for it depends on their language, so all
+		// three are accepted rather than one being declared canonical.
+		folder := strings.ToLower(m.Folder)
+		if folder == "" {
+			switch f.value {
+			case "posteingang", "inbox", "entrada", "bandeja":
+				return true
+			}
+			return false
 		}
-		return strings.ToLower(ordner) == f.wert
-	case "has":
-		if strings.HasPrefix(f.wert, "att") || strings.HasPrefix(f.wert, "anh") {
+		return folder == f.value
+	case "has", "hat", "tiene":
+		if strings.HasPrefix(f.value, "att") || strings.HasPrefix(f.value, "anh") ||
+			strings.HasPrefix(f.value, "adj") {
 			return m.HasAttachment
 		}
-		if f.wert == "spam" {
+		if f.value == "spam" {
 			return m.Spam
 		}
-	case "is":
-		switch f.wert {
-		case "ungelesen", "unread":
+	case "is", "ist", "es":
+		switch f.value {
+		case "ungelesen", "unread", "sinleer":
 			return !m.Read
-		case "gelesen", "read":
+		case "gelesen", "read", "leido", "leído":
 			return m.Read
-		case "stern", "star", "starred":
+		case "stern", "star", "starred", "destacado":
 			return m.Star
 		}
 	}

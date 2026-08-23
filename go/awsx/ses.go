@@ -13,10 +13,10 @@ import (
 // SES verschickt Antworten und Weiterleitungen.
 type SES struct{ c *ses.Client }
 
-func NewSES(cfg aws.Config, endpunkt string) *SES {
+func NewSES(cfg aws.Config, endpoint string) *SES {
 	return &SES{c: ses.NewFromConfig(cfg, func(o *ses.Options) {
-		if endpunkt != "" {
-			o.BaseEndpoint = aws.String(endpunkt)
+		if endpoint != "" {
+			o.BaseEndpoint = aws.String(endpoint)
 		}
 	})}
 }
@@ -86,14 +86,14 @@ func (s *SES) VerifizierteDomains(ctx context.Context) []string {
 }
 
 // Verifiziert sagt, ob Adresse oder Domain in SES freigeschaltet sind.
-func (s *SES) Verifiziert(ctx context.Context, adresse, domain string) ([]string, error) {
+func (s *SES) Verifiziert(ctx context.Context, address, domain string) ([]string, error) {
 	resp, err := s.c.GetIdentityVerificationAttributes(ctx,
-		&ses.GetIdentityVerificationAttributesInput{Identities: []string{adresse, domain}})
+		&ses.GetIdentityVerificationAttributesInput{Identities: []string{address, domain}})
 	if err != nil {
 		return nil, err
 	}
 	var gut []string
-	for _, id := range []string{adresse, domain} {
+	for _, id := range []string{address, domain} {
 		if a, da := resp.VerificationAttributes[id]; da &&
 			a.VerificationStatus == types.VerificationStatusSuccess {
 			gut = append(gut, id)

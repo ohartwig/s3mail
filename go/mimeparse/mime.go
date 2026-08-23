@@ -318,7 +318,7 @@ func vollWalk(ent *message.Entity, idx *int, text, html *[]string, v *Full) {
 	case rolleInline:
 		return
 	case rolleAnhang:
-		inhalt, _ := io.ReadAll(ent.Body)
+		content, _ := io.ReadAll(ent.Body)
 		_, dparams, _ := ent.Header.ContentDisposition()
 		name := dparams["filename"]
 		if name == "" {
@@ -328,7 +328,7 @@ func vollWalk(ent *message.Entity, idx *int, text, html *[]string, v *Full) {
 			name = fmt.Sprintf("anhang-%d", i)
 		}
 		v.Anhaenge = append(v.Anhaenge, Anhang{Index: i, Filename: Dec(name),
-			ContentType: ctype, Size: len(inhalt), Inhalt: inhalt})
+			ContentType: ctype, Size: len(content), Inhalt: content})
 		return
 	}
 	body, err := io.ReadAll(ent.Body)

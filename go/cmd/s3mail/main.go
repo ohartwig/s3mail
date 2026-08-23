@@ -36,7 +36,7 @@ func main() {
 		prefix      = flag.String("prefix", "", "Wurzel-Prefix, z.B. mail/")
 		region      = flag.String("region", "", "AWS-Region, z.B. eu-central-1")
 		profil      = flag.String("profile", "", "AWS-Profil aus ~/.aws/credentials")
-		absender    = flag.String("from", "", "Absender fuer Antworten (in SES verifiziert)")
+		sender    = flag.String("from", "", "Absender fuer Antworten (in SES verifiziert)")
 		port        = flag.Int("port", 0, "Standard 8765")
 		host        = flag.String("host", "", "Standard 127.0.0.1")
 		setup       = flag.Bool("setup", false, "Assistent oeffnen, auch wenn schon konfiguriert")
@@ -60,7 +60,7 @@ func main() {
 	setzeWenn(&k.Bucket, *bucket)
 	setzeWenn(&k.Region, *region)
 	setzeWenn(&k.Profil, *profil)
-	setzeWenn(&k.Absender, *absender)
+	setzeWenn(&k.Absender, *sender)
 	setzeWenn(&k.Host, *host)
 	if *prefix != "" {
 		k.Prefix = config.NormalizePrefix(*prefix)
@@ -99,8 +99,8 @@ func main() {
 	protokoll := starteProtokoll()
 	defer protokoll.Close()
 
-	adresse := net.JoinHostPort(k.Host, strconv.Itoa(k.Port))
-	lauscher, err := net.Listen("tcp", adresse)
+	address := net.JoinHostPort(k.Host, strconv.Itoa(k.Port))
+	lauscher, err := net.Listen("tcp", address)
 	if err != nil {
 		// Meistens heisst das: s3mail laeuft schon. Als Bundle ohne Konsole ist
 		// das die unangenehmste Variante - der Doppelklick meldet nur einen
@@ -113,7 +113,7 @@ func main() {
 			openWindow(url)
 			return
 		}
-		fmt.Fprintf(os.Stderr, "Kann nicht auf %s lauschen: %v\n", adresse, err)
+		fmt.Fprintf(os.Stderr, "Kann nicht auf %s lauschen: %v\n", address, err)
 		os.Exit(1)
 	}
 	srv.Port = lauscher.Addr().(*net.TCPAddr).Port
@@ -130,8 +130,8 @@ func main() {
 	}
 	// Unter Windows startet s3mail per Doppelklick; wer das Konsolenfenster
 	// schliesst, kaeme sonst nicht mehr an die Adresse heran.
-	if pfad, err := web.TokenDateiSchreiben(config.Dir(), url); err == nil && pfad != "" {
-		melde(protokoll, "Adresse steht auch in: %s", pfad)
+	if path, err := web.TokenDateiSchreiben(config.Dir(), url); err == nil && path != "" {
+		melde(protokoll, "Adresse steht auch in: %s", path)
 	}
 	defer web.TokenDateiEntfernen(config.Dir())
 
@@ -182,8 +182,8 @@ func scharfschalten(ctx context.Context, srv *web.Server, k config.Config, noSen
 	return nil
 }
 
-func setzeWenn(ziel *string, wert string) {
-	if wert != "" {
-		*ziel = wert
+func setzeWenn(target *string, value string) {
+	if value != "" {
+		*target = value
 	}
 }

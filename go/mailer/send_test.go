@@ -137,7 +137,7 @@ func TestForwardAttachesTheMail(t *testing.T) {
 }
 
 func TestMessageIDIsUnique(t *testing.T) {
-	gesehen := map[string]bool{}
+	seen := map[string]bool{}
 	for i := 0; i < 100; i++ {
 		n, err := Build(Draft{To: "a@b.de", Body: "x"}, "support@firma.de",
 			Original{}, jetzt())
@@ -145,12 +145,12 @@ func TestMessageIDIsUnique(t *testing.T) {
 			t.Fatal(err)
 		}
 		id := lies(t, n.Roh).Header.Get("Message-Id")
-		if gesehen[id] {
+		if seen[id] {
 			t.Fatalf("Message-ID doppelt: %s", id)
 		}
 		if !strings.HasSuffix(id, "@firma.de>") {
 			t.Errorf("Domain aus dem Absender fehlt: %s", id)
 		}
-		gesehen[id] = true
+		seen[id] = true
 	}
 }

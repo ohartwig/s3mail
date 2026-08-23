@@ -19,10 +19,10 @@ import (
 // S3 setzt store.S3 auf das AWS-SDK um.
 type S3 struct{ c *s3.Client }
 
-func NewS3(cfg aws.Config, endpunkt string) *S3 {
+func NewS3(cfg aws.Config, endpoint string) *S3 {
 	return &S3{c: s3.NewFromConfig(cfg, func(o *s3.Options) {
-		if endpunkt != "" { // fuer Tests und S3-Klone
-			o.BaseEndpoint = aws.String(endpunkt)
+		if endpoint != "" { // fuer Tests und S3-Klone
+			o.BaseEndpoint = aws.String(endpoint)
 			o.UsePathStyle = true
 		}
 	})}
@@ -35,11 +35,11 @@ func (a *S3) List(ctx context.Context, bucket, prefix string) ([]store.ObjectInf
 	p := s3.NewListObjectsV2Paginator(a.c, &s3.ListObjectsV2Input{
 		Bucket: aws.String(bucket), Prefix: aws.String(prefix)})
 	for p.HasMorePages() {
-		seite, err := p.NextPage(ctx)
+		page, err := p.NextPage(ctx)
 		if err != nil {
 			return nil, translateError(err)
 		}
-		for _, o := range seite.Contents {
+		for _, o := range page.Contents {
 			out = append(out, store.ObjectInfo{
 				Key:          aws.ToString(o.Key),
 				ETag:         strings.Trim(aws.ToString(o.ETag), `"`),

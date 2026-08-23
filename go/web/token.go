@@ -28,26 +28,26 @@ func equal(a, b string) bool {
 // Unter Windows startet s3mail per Doppelklick, und wer das Konsolenfenster
 // schliesst, kommt an die Adresse nicht mehr heran - der Server laeuft dann noch,
 // ist aber unerreichbar. Deshalb steht sie zusaetzlich hier.
-func TokenDateiSchreiben(verzeichnis, url string) (string, error) {
-	if verzeichnis == "" {
+func TokenDateiSchreiben(dir, url string) (string, error) {
+	if dir == "" {
 		return "", nil
 	}
-	if err := os.MkdirAll(verzeichnis, 0o700); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
-	pfad := filepath.Join(verzeichnis, "adresse.txt")
-	inhalt := url + "\n\nDiese Adresse gilt, solange s3mail laeuft. Nach einem\n" +
+	path := filepath.Join(dir, "adresse.txt")
+	content := url + "\n\nDiese Adresse gilt, solange s3mail laeuft. Nach einem\n" +
 		"Neustart steht hier eine neue.\n"
-	if err := os.WriteFile(pfad, []byte(inhalt), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		return "", err
 	}
-	return pfad, nil
+	return path, nil
 }
 
 // TokenDateiEntfernen raeumt beim Beenden auf - eine abgelaufene Adresse in einer
 // Datei stiftet nur Verwirrung.
-func TokenDateiEntfernen(verzeichnis string) {
-	if verzeichnis != "" {
-		_ = os.Remove(filepath.Join(verzeichnis, "adresse.txt"))
+func TokenDateiEntfernen(dir string) {
+	if dir != "" {
+		_ = os.Remove(filepath.Join(dir, "adresse.txt"))
 	}
 }

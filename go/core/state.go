@@ -151,12 +151,12 @@ func Apply(d *Data, op Op) {
 	case "tagren":
 		alt, neu, farbe := op.Old, op.New, op.Color
 		if alt != neu {
-			if vorhanden, ok := d.Tags[alt]; ok {
+			if present, ok := d.Tags[alt]; ok {
 				delete(d.Tags, alt)
 				if farbe != "" {
 					d.Tags[neu] = farbe
 				} else {
-					d.Tags[neu] = vorhanden
+					d.Tags[neu] = present
 				}
 			} else {
 				d.Tags[neu] = farbeOder(d, neu, farbe)
@@ -180,8 +180,8 @@ func farbeOder(d *Data, tag, farbe string) string {
 	if farbe != "" {
 		return farbe
 	}
-	if vorhanden, ok := d.Tags[tag]; ok {
-		return vorhanden
+	if present, ok := d.Tags[tag]; ok {
+		return present
 	}
 	return TagColors[len(d.Tags)%len(TagColors)]
 }

@@ -30,22 +30,22 @@ type Environment interface {
 
 // SESChecker meldet, ob eine Absenderadresse in SES freigeschaltet ist.
 type SESChecker interface {
-	Verifiziert(ctx context.Context, adresse, domain string) ([]string, error)
+	Verifiziert(ctx context.Context, address, domain string) ([]string, error)
 }
 
 // Run geht die Liste durch. probeSchreiben legt ein Testobjekt an und
 // loescht es wieder - nur so laesst sich das Schreibrecht ehrlich pruefen.
 func Run(ctx context.Context, s3 store.S3, kms store.KMS, ses SESChecker,
-	bucket, prefix, absender string, cat i18n.Catalog) []Item {
-	var punkte []Item
-	add := func(p Item) { punkte = append(punkte, p) }
+	bucket, prefix, sender string, cat i18n.Catalog) []Item {
+	var items []Item
+	add := func(p Item) { items = append(items, p) }
 
 	// 1. Auflisten
 	objs, err := s3.List(ctx, bucket, prefix)
 	if err != nil {
 		add(Item{Name: cat.T("check.listBucket"), Detail: short(err),
 			Hint: listHint(prefix, cat)})
-		return punkte
+		return items
 	}
 	var beispiel string
 	for _, o := range objs {
@@ -105,17 +105,17 @@ func Run(ctx context.Context, s3 store.S3, kms store.KMS, ses SESChecker,
 	}
 
 	// 6. SES-Absender
-	if absender == "" {
+	if sender == "" {
 		add(Item{Name: cat.T("check.sender"), OK: true, Skipped: true,
 			Detail: cat.T("check.sender.none")})
 	} else if ses == nil {
 		add(Item{Name: cat.T("check.sender"), OK: true, Skipped: true, Detail: cat.T("check.notChecked")})
 	} else {
-		domain := absender
-		if i := strings.LastIndex(absender, "@"); i >= 0 {
-			domain = absender[i+1:]
+		domain := sender
+		if i := strings.LastIndex(sender, "@"); i >= 0 {
+			domain = sender[i+1:]
 		}
-		gut, err := ses.Verifiziert(ctx, absender, domain)
+		gut, err := ses.Verifiziert(ctx, sender, domain)
 		switch {
 		case err != nil:
 			add(Item{Name: cat.T("check.sender"), Detail: short(err), Skipped: true,
@@ -123,11 +123,11 @@ func Run(ctx context.Context, s3 store.S3, kms store.KMS, ses SESChecker,
 		case len(gut) > 0:
 			add(Item{Name: cat.T("check.sender"), OK: true, Detail: cat.Tf("check.sender.verified", strings.Join(gut, ", "))})
 		default:
-			add(Item{Name: cat.T("check.sender"), Detail: cat.Tf("check.sender.unverified", absender),
+			add(Item{Name: cat.T("check.sender"), Detail: cat.Tf("check.sender.unverified", sender),
 				Hint: cat.T("check.sender.hint")})
 		}
 	}
-	return punkte
+	return items
 }
 
 // encryption schaut sich eine echte Mail an und sagt, womit man es zu tun hat.
@@ -164,8 +164,8 @@ func encryption(ctx context.Context, s3 store.S3, kms store.KMS,
 }
 
 // AllOK sagt, ob die Liste insgesamt in Ordnung ist.
-func AllOK(punkte []Item) bool {
-	for _, p := range punkte {
+func AllOK(items []Item) bool {
+	for _, p := range items {
 		if !p.OK && !p.Skipped {
 			return false
 		}
@@ -174,8 +174,8 @@ func AllOK(punkte []Item) bool {
 }
 
 func isInternal(key, prefix string) bool {
-	for _, teil := range strings.Split(strings.TrimPrefix(key, prefix), "/") {
-		if strings.HasPrefix(teil, ".") {
+	for _, part := range strings.Split(strings.TrimPrefix(key, prefix), "/") {
+		if strings.HasPrefix(part, ".") {
 			return true
 		}
 	}

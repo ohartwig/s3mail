@@ -127,11 +127,11 @@ func TestLanguageRouteSetsACookie(t *testing.T) {
 // opens that dialog in that language ever sees it.
 func TestPagesUseOnlyKnownKeys(t *testing.T) {
 	keys := map[string]bool{}
-	for _, seite := range []string{SeitePostfach, SeiteAssistent, SeiteToken} {
-		for _, m := range regexp.MustCompile(`T\["([^"]+)"\]`).FindAllStringSubmatch(seite, -1) {
+	for _, page := range []string{SeitePostfach, SeiteAssistent, SeiteToken} {
+		for _, m := range regexp.MustCompile(`T\["([^"]+)"\]`).FindAllStringSubmatch(page, -1) {
 			keys[m[1]] = true
 		}
-		for _, m := range regexp.MustCompile(`\{\{t "([^"]+)"\}\}`).FindAllStringSubmatch(seite, -1) {
+		for _, m := range regexp.MustCompile(`\{\{t "([^"]+)"\}\}`).FindAllStringSubmatch(page, -1) {
 			keys[m[1]] = true
 		}
 	}

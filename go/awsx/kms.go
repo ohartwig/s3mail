@@ -12,10 +12,10 @@ import (
 // KMS setzt store.KMS auf das AWS-SDK um.
 type KMS struct{ c *kms.Client }
 
-func NewKMS(cfg aws.Config, endpunkt string) *KMS {
+func NewKMS(cfg aws.Config, endpoint string) *KMS {
 	return &KMS{c: kms.NewFromConfig(cfg, func(o *kms.Options) {
-		if endpunkt != "" {
-			o.BaseEndpoint = aws.String(endpunkt)
+		if endpoint != "" {
+			o.BaseEndpoint = aws.String(endpoint)
 		}
 	})}
 }

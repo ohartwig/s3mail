@@ -218,27 +218,27 @@ func (s *State) Load(ctx context.Context) {
 	basis.Normalize()
 
 	schnitt := len(s.opsPrefix)
-	var offen []string
+	var open []string
 	for _, k := range s.opsAuflisten(ctx) {
 		if len(k) > schnitt && k[schnitt:] > upto {
-			offen = append(offen, k)
+			open = append(open, k)
 		}
 	}
-	for _, ops := range s.opsHolen(ctx, offen) {
+	for _, ops := range s.opsHolen(ctx, open) {
 		for _, op := range ops {
 			core.Apply(basis, op)
 		}
 	}
 
 	s.mu.Lock()
-	s.data, s.upto, s.openOps = basis, upto, len(offen)
+	s.data, s.upto, s.openOps = basis, upto, len(open)
 	for _, op := range s.pending { // eigene offene Aenderungen erneut drauf
 		core.Apply(s.data, op)
 	}
 	s.mu.Unlock()
 
-	if len(offen) >= CompactAfter {
-		s.Compact(ctx, offen)
+	if len(open) >= CompactAfter {
+		s.Compact(ctx, open)
 	}
 }
 

@@ -95,8 +95,8 @@ func (s *Store) KeyFor(mid, folder string) (string, error) {
 // und den Ops-Ordner darunter. Beginnt irgendein Pfadsegment unter der Wurzel mit
 // einem Punkt, gehoert es uns - nicht dem Postfach.
 func (s *Store) Internal(key string) bool {
-	for _, teil := range strings.Split(strings.TrimPrefix(key, s.Root), "/") {
-		if strings.HasPrefix(teil, ".") {
+	for _, part := range strings.Split(strings.TrimPrefix(key, s.Root), "/") {
+		if strings.HasPrefix(part, ".") {
 			return true
 		}
 	}

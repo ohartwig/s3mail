@@ -50,13 +50,13 @@ func TestReadAttachmentsWithContent(t *testing.T) {
 }
 
 func TestReadFilenames(t *testing.T) {
-	for _, f := range []struct{ datei, name string }{
+	for _, f := range []struct{ file, name string }{
 		{"06-rfc2231-filename", "Bescheid Übersicht.pdf"},
 		{"07-raw-filename", "Übersicht Größe.xlsx"},
 	} {
-		v := Read(korpus(t, f.datei), time.Unix(0, 0).UTC())
+		v := Read(korpus(t, f.file), time.Unix(0, 0).UTC())
 		if len(v.Anhaenge) != 1 || v.Anhaenge[0].Filename != f.name {
-			t.Errorf("%s: %v, erwartet %q", f.datei, v.Anhaenge, f.name)
+			t.Errorf("%s: %v, erwartet %q", f.file, v.Anhaenge, f.name)
 		}
 	}
 }

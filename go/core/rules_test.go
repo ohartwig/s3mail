@@ -89,16 +89,16 @@ func TestRulesLeaveTrashAndSpamAlone(t *testing.T) {
 	d := NewData()
 	archiv := Archive
 	d.Rules = []Rule{{Contains: "shop", Field: "any", Folder: &archiv, Tags: []string{"A"}, Enabled: true}}
-	for _, ordner := range []string{Trash, Spam} {
-		plan := PlanRules([]Message{mail("m1", ordner, "news@shop.io", "x")}, d, false)
+	for _, folder := range []string{Trash, Spam} {
+		plan := PlanRules([]Message{mail("m1", folder, "news@shop.io", "x")}, d, false)
 		if len(plan) != 1 {
-			t.Fatalf("%s: %+v", ordner, plan)
+			t.Fatalf("%s: %+v", folder, plan)
 		}
 		if plan[0].MoveTo != nil || len(plan[0].AddTags) > 0 {
-			t.Errorf("%s wurde angefasst: %+v", ordner, plan[0])
+			t.Errorf("%s wurde angefasst: %+v", folder, plan[0])
 		}
 		if !plan[0].MarkRuled {
-			t.Errorf("%s: Ruled-Marke fehlt, die Mail wird bei jedem Lauf neu geprueft", ordner)
+			t.Errorf("%s: Ruled-Marke fehlt, die Mail wird bei jedem Lauf neu geprueft", folder)
 		}
 	}
 }

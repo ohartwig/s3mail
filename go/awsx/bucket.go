@@ -55,7 +55,7 @@ func (a *S3) LifecycleTage(ctx context.Context, bucket string) int {
 
 // LifecycleSetzen legt die Papierkorb-Regel an, aendert sie oder nimmt sie mit
 // tage=0 wieder heraus. Fremde Regeln im Bucket bleiben stehen.
-func (a *S3) LifecycleSetzen(ctx context.Context, bucket, prefix string, tage int) (string, error) {
+func (a *S3) LifecycleSetzen(ctx context.Context, bucket, prefix string, days int) (string, error) {
 	var bestehend []types.LifecycleRule
 	if resp, err := a.c.GetBucketLifecycleConfiguration(ctx,
 		&s3.GetBucketLifecycleConfigurationInput{Bucket: aws.String(bucket)}); err == nil {
@@ -65,12 +65,12 @@ func (a *S3) LifecycleSetzen(ctx context.Context, bucket, prefix string, tage in
 			}
 		}
 	}
-	if tage > 0 {
+	if days > 0 {
 		bestehend = append(bestehend, types.LifecycleRule{
 			ID:         aws.String(LifecycleRegelID),
 			Status:     types.ExpirationStatusEnabled,
 			Filter:     &types.LifecycleRuleFilter{Prefix: aws.String(prefix + "trash/")},
-			Expiration: &types.LifecycleExpiration{Days: aws.Int32(int32(tage))},
+			Expiration: &types.LifecycleExpiration{Days: aws.Int32(int32(days))},
 		})
 	}
 	if len(bestehend) == 0 {
@@ -87,8 +87,8 @@ func (a *S3) LifecycleSetzen(ctx context.Context, bucket, prefix string, tage in
 	if err != nil {
 		return "", err
 	}
-	if tage == 0 {
+	if days == 0 {
 		return "Papierkorb-Automatik entfernt.", nil
 	}
-	return fmt.Sprintf("Papierkorb wird nach %d Tagen automatisch geleert.", tage), nil
+	return fmt.Sprintf("Papierkorb wird nach %d Tagen automatisch geleert.", days), nil
 }

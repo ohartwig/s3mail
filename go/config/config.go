@@ -1,7 +1,6 @@
-// Package konfig haelt die Konfigurationsdatei und das Schreiben der
-// AWS-Zugangsdaten. Die Pfade folgen den Gepflogenheiten der jeweiligen
-// Plattform - unter Windows landet nichts in einem ~/.config, das dort niemand
-// sucht.
+// Package config holds the configuration file and the writing of AWS
+// credentials. The paths follow each platform's own habits - on Windows
+// nothing ends up in a ~/.config nobody there would look in.
 package config
 
 import (
@@ -13,7 +12,7 @@ import (
 	"strings"
 )
 
-// Config ist, was in config.json steht.
+// Config is what config.json holds.
 type Config struct {
 	Profil      string `json:"profile"`
 	Region      string `json:"region"`
@@ -24,9 +23,9 @@ type Config struct {
 	Port        int    `json:"port"`
 	Host        string `json:"host"`
 
-	// Sprache der Oberflaeche. Leer heisst: die des Browsers nehmen - das ist
-	// bei einem Programm, das neben dem Browser laeuft, die bessere Vorgabe
-	// als eine geratene.
+	// Language of the interface. Empty means: take the browser's - for a
+	// program running next to the browser that is a better default than a
+	// guessed one.
 	Sprache string `json:"language"`
 }
 
@@ -35,8 +34,8 @@ func Defaults() Config {
 		Port: 8765, Host: "127.0.0.1"}
 }
 
-// Dir ist der Ort der Konfiguration: ~/.config/s3mail unter Linux,
-// ~/Library/Application Support/s3mail unter macOS, %AppData%\s3mail unter Windows.
+// Dir is where the configuration lives: ~/.config/s3mail on Linux,
+// ~/Library/Application Support/s3mail on macOS, %AppData%\s3mail on Windows.
 func Dir() string {
 	if v := os.Getenv("S3MAIL_CONFIG_DIR"); v != "" {
 		return v
@@ -48,7 +47,7 @@ func Dir() string {
 	return filepath.Join(basis, "s3mail")
 }
 
-// CacheDir ist der Ort des Index - Daten, deren Verlust nur Zeit kostet.
+// CacheDir is where the index lives - data whose loss costs nothing but time.
 func CacheDir() string {
 	if v := os.Getenv("S3MAIL_CACHE_DIR"); v != "" {
 		return v
@@ -86,8 +85,8 @@ func Load() Config {
 	return k
 }
 
-// Save legt die Datei mit 0600 an - dort steht zwar kein Geheimnis, aber
-// der Bucketname geht auch niemanden etwas an.
+// Save writes the file with mode 0600 - it holds no secret, but the bucket
+// name is nobody else's business either.
 func Save(k Config) (string, error) {
 	if strings.TrimSpace(k.Bucket) == "" {
 		return "", errors.New("ohne Bucket geht es nicht")
@@ -100,14 +99,14 @@ func Save(k Config) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	pfad := File()
-	if err := os.WriteFile(pfad, blob, 0o600); err != nil {
+	path := File()
+	if err := os.WriteFile(path, blob, 0o600); err != nil {
 		return "", err
 	}
-	return pfad, nil
+	return path, nil
 }
 
-// NormalizePrefix macht aus "/mail" und "mail" jeweils "mail/".
+// NormalizePrefix turns both "/mail" and "mail" into "mail/".
 func NormalizePrefix(p string) string {
 	p = strings.TrimSpace(p)
 	p = strings.TrimLeft(p, "/")
@@ -117,9 +116,9 @@ func NormalizePrefix(p string) string {
 	return p
 }
 
-// -- AWS-Zugangsdaten ------------------------------------------------------- //
+// -- AWS credentials -------------------------------------------------------- //
 
-// AWSDir ist ~/.aws - derselbe Ort, den auch die AWS-Werkzeuge lesen.
+// AWSDir is ~/.aws - the same place the AWS tools read.
 func AWSDir() string {
 	if v := os.Getenv("S3MAIL_AWS_DIR"); v != "" {
 		return v
@@ -131,30 +130,30 @@ func AWSDir() string {
 	return filepath.Join(heim, ".aws")
 }
 
-// Profiles liest die Profilnamen aus ~/.aws/credentials und ~/.aws/config.
+// Profiles reads the profile names from ~/.aws/credentials and ~/.aws/config.
 func Profiles() []string {
-	gesehen := map[string]bool{}
+	seen := map[string]bool{}
 	var out []string
 	fuegeHinzu := func(name string) {
-		if name != "" && !gesehen[name] {
-			gesehen[name] = true
+		if name != "" && !seen[name] {
+			seen[name] = true
 			out = append(out, name)
 		}
 	}
-	for _, f := range []struct{ datei, praefix string }{
+	for _, f := range []struct{ file, prefix string }{
 		{"credentials", ""}, {"config", "profile "},
 	} {
-		blob, err := os.ReadFile(filepath.Join(AWSDir(), f.datei))
+		blob, err := os.ReadFile(filepath.Join(AWSDir(), f.file))
 		if err != nil {
 			continue
 		}
-		for _, zeile := range strings.Split(string(blob), "\n") {
-			zeile = strings.TrimSpace(zeile)
-			if !strings.HasPrefix(zeile, "[") || !strings.HasSuffix(zeile, "]") {
+		for _, line := range strings.Split(string(blob), "\n") {
+			line = strings.TrimSpace(line)
+			if !strings.HasPrefix(line, "[") || !strings.HasSuffix(line, "]") {
 				continue
 			}
-			name := strings.TrimSpace(zeile[1 : len(zeile)-1])
-			name = strings.TrimPrefix(name, f.praefix)
+			name := strings.TrimSpace(line[1 : len(line)-1])
+			name = strings.TrimPrefix(name, f.prefix)
 			if strings.HasPrefix(name, "sso-session ") || strings.HasPrefix(name, "services ") {
 				continue // das sind keine Profile
 			}
@@ -164,12 +163,12 @@ func Profiles() []string {
 	return out
 }
 
-// WriteCredentials legt die Schluessel als benanntes Profil in
-// ~/.aws/credentials ab - additiv, vorhandene Profile bleiben unberuehrt.
-func WriteCredentials(profil, keyID, secret, region string) (string, error) {
-	profil = strings.TrimSpace(profil)
-	if profil == "" {
-		profil = "s3mail"
+// WriteCredentials stores the keys as a named profile in ~/.aws/credentials -
+// additively, existing profiles are left untouched.
+func WriteCredentials(profile, keyID, secret, region string) (string, error) {
+	profile = strings.TrimSpace(profile)
+	if profile == "" {
+		profile = "s3mail"
 	}
 	keyID, secret = strings.TrimSpace(keyID), strings.TrimSpace(secret)
 	if keyID == "" || secret == "" {
@@ -181,42 +180,42 @@ func WriteCredentials(profil, keyID, secret, region string) (string, error) {
 	if err := os.MkdirAll(AWSDir(), 0o700); err != nil {
 		return "", err
 	}
-	if err := iniSetzen(filepath.Join(AWSDir(), "credentials"), profil,
+	if err := iniSet(filepath.Join(AWSDir(), "credentials"), profile,
 		map[string]string{"aws_access_key_id": keyID, "aws_secret_access_key": secret}); err != nil {
 		return "", err
 	}
-	abschnitt := "profile " + profil
-	if profil == "default" {
-		abschnitt = "default"
+	section := "profile " + profile
+	if profile == "default" {
+		section = "default"
 	}
 	if region == "" {
 		region = "eu-central-1"
 	}
-	if err := iniSetzen(filepath.Join(AWSDir(), "config"), abschnitt,
+	if err := iniSet(filepath.Join(AWSDir(), "config"), section,
 		map[string]string{"region": region}); err != nil {
 		return "", err
 	}
-	return profil, nil
+	return profile, nil
 }
 
-// iniSetzen schreibt Schluessel in einen Abschnitt und laesst alles andere in Ruhe.
-// Bewusst zeilenweise statt mit einer INI-Bibliothek: die schriebe die Datei neu
-// und wuerfe Kommentare und fremde Formatierung weg.
-func iniSetzen(pfad, abschnitt string, werte map[string]string) error {
-	blob, err := os.ReadFile(pfad)
+// iniSet writes keys into a section and leaves everything else alone.
+// Line by line on purpose rather than with an INI library: that would rewrite
+// the file and throw away comments and other people's formatting.
+func iniSet(path, section string, values map[string]string) error {
+	blob, err := os.ReadFile(path)
 	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	zeilen := []string{}
+	lines := []string{}
 	if len(blob) > 0 {
-		zeilen = strings.Split(strings.TrimRight(string(blob), "\n"), "\n")
+		lines = strings.Split(strings.TrimRight(string(blob), "\n"), "\n")
 	}
-	kopf := "[" + abschnitt + "]"
+	header := "[" + section + "]"
 
-	start, ende := -1, len(zeilen)
-	for i, z := range zeilen {
+	start, ende := -1, len(lines)
+	for i, z := range lines {
 		t := strings.TrimSpace(z)
-		if t == kopf {
+		if t == header {
 			start = i
 			continue
 		}
@@ -226,16 +225,16 @@ func iniSetzen(pfad, abschnitt string, werte map[string]string) error {
 		}
 	}
 	if start < 0 { // Abschnitt anhaengen
-		if len(zeilen) > 0 {
-			zeilen = append(zeilen, "")
+		if len(lines) > 0 {
+			lines = append(lines, "")
 		}
-		zeilen = append(zeilen, kopf)
-		for k, v := range werte {
-			zeilen = append(zeilen, fmt.Sprintf("%s = %s", k, v))
+		lines = append(lines, header)
+		for k, v := range values {
+			lines = append(lines, fmt.Sprintf("%s = %s", k, v))
 		}
 	} else {
-		block := append([]string{}, zeilen[start+1:ende]...)
-		for k, v := range werte {
+		block := append([]string{}, lines[start+1:ende]...)
+		for k, v := range values {
 			ersetzt := false
 			for i, z := range block {
 				if strings.HasPrefix(strings.TrimSpace(z), k) &&
@@ -250,10 +249,10 @@ func iniSetzen(pfad, abschnitt string, werte map[string]string) error {
 				block = append(block, fmt.Sprintf("%s = %s", k, v))
 			}
 		}
-		neu := append([]string{}, zeilen[:start+1]...)
+		neu := append([]string{}, lines[:start+1]...)
 		neu = append(neu, block...)
-		neu = append(neu, zeilen[ende:]...)
-		zeilen = neu
+		neu = append(neu, lines[ende:]...)
+		lines = neu
 	}
-	return os.WriteFile(pfad, []byte(strings.Join(zeilen, "\n")+"\n"), 0o600)
+	return os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o600)
 }

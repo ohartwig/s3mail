@@ -69,18 +69,18 @@ func userFromArn(arn string) string {
 // policyDocuments holt die Policy-Dokumente des Benutzers - erst die eingebetteten,
 // dann die angehaengten. Jeder Schritt darf scheitern, ohne den Rest mitzureissen:
 // die meisten Zugaenge duerfen nur einen Teil davon lesen, manche gar nichts.
-func policyDocuments(ctx context.Context, c *iam.Client, benutzer string) []string {
+func policyDocuments(ctx context.Context, c *iam.Client, user string) []string {
 	var out []string
-	if l, err := c.ListUserPolicies(ctx, &iam.ListUserPoliciesInput{UserName: &benutzer}); err == nil {
+	if l, err := c.ListUserPolicies(ctx, &iam.ListUserPoliciesInput{UserName: &user}); err == nil {
 		for _, n := range l.PolicyNames {
-			p, err := c.GetUserPolicy(ctx, &iam.GetUserPolicyInput{UserName: &benutzer, PolicyName: &n})
+			p, err := c.GetUserPolicy(ctx, &iam.GetUserPolicyInput{UserName: &user, PolicyName: &n})
 			if err == nil {
 				out = append(out, aws.ToString(p.PolicyDocument))
 			}
 		}
 	}
 	if l, err := c.ListAttachedUserPolicies(ctx,
-		&iam.ListAttachedUserPoliciesInput{UserName: &benutzer}); err == nil {
+		&iam.ListAttachedUserPoliciesInput{UserName: &user}); err == nil {
 		for _, a := range l.AttachedPolicies {
 			m, err := c.GetPolicy(ctx, &iam.GetPolicyInput{PolicyArn: a.PolicyArn})
 			if err != nil {
@@ -110,9 +110,9 @@ func BucketRegion(ctx context.Context, cfg aws.Config, bucket string) string {
 		}
 		return cfg.Region
 	}
-	var antwort interface{ HTTPResponse() *http.Response }
-	if errors.As(err, &antwort) {
-		if r := antwort.HTTPResponse().Header.Get("x-amz-bucket-region"); r != "" {
+	var response interface{ HTTPResponse() *http.Response }
+	if errors.As(err, &response) {
+		if r := response.HTTPResponse().Header.Get("x-amz-bucket-region"); r != "" {
 			return r
 		}
 	}

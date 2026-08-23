@@ -69,14 +69,14 @@ func (r ruf) json(t *testing.T) map[string]any {
 	return m
 }
 
-func rufen(t *testing.T, ts *httptest.Server, methode, pfad string, body string,
+func rufen(t *testing.T, ts *httptest.Server, methode, path string, body string,
 	header map[string]string) ruf {
 	t.Helper()
 	var leser io.Reader
 	if body != "" {
 		leser = strings.NewReader(body)
 	}
-	req, err := http.NewRequest(methode, ts.URL+pfad, leser)
+	req, err := http.NewRequest(methode, ts.URL+path, leser)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +144,7 @@ func TestMailboxRoutes(t *testing.T) {
 func TestErrorCodes(t *testing.T) {
 	ts, _ := serverBauen(t)
 	faelle := []struct {
-		name, methode, pfad, body string
+		name, methode, path, body string
 		code                      int
 	}{
 		{"ungueltiger Ordner", "POST", "/api/move", `{"keys":["mail/m1"],"folder":"../boese"}`, 400},
@@ -155,7 +155,7 @@ func TestErrorCodes(t *testing.T) {
 		{"unbekannte Tag-Aktion", "POST", "/api/tags", `{"action":"quatsch","name":"x"}`, 400},
 	}
 	for _, f := range faelle {
-		if r := rufen(t, ts, f.methode, f.pfad, f.body, nil); r.Code != f.code {
+		if r := rufen(t, ts, f.methode, f.path, f.body, nil); r.Code != f.code {
 			t.Errorf("%s: HTTP %d, erwartet %d (%s)", f.name, r.Code, f.code, r.Body)
 		}
 	}
@@ -263,7 +263,7 @@ func TestInterfaceIsComplete(t *testing.T) {
 	// Die Tokenseite ist seit der Uebersetzung ein Geruest: ihre Saetze stehen
 	// in den Katalogen, nicht in der Datei. Fuer sie zaehlt, dass die Vorlage
 	// da ist, nicht wie lang sie ist.
-	for name, seite := range map[string]string{
+	for name, page := range map[string]string{
 		"Postfach":  SeitePostfach,
 		"Assistent": SeiteAssistent,
 		"Token":     SeiteToken,
@@ -272,10 +272,10 @@ func TestInterfaceIsComplete(t *testing.T) {
 		if name == "Token" {
 			mindestens = 200
 		}
-		if len(seite) < mindestens {
-			t.Errorf("%s: nur %d Zeichen - eingebettet?", name, len(seite))
+		if len(page) < mindestens {
+			t.Errorf("%s: nur %d Zeichen - eingebettet?", name, len(page))
 		}
-		if !strings.Contains(seite, "<!doctype html>") && !strings.Contains(seite, "<!DOCTYPE html>") {
+		if !strings.Contains(page, "<!doctype html>") && !strings.Contains(page, "<!DOCTYPE html>") {
 			t.Errorf("%s: kein Dokumentkopf", name)
 		}
 	}
@@ -293,11 +293,11 @@ func TestWithoutMailbox(t *testing.T) {
 	defer ts.Close()
 	srv.Port = portVon(ts.URL)
 
-	for _, pfad := range []string{"/api/messages?folder=", "/api/overview",
+	for _, path := range []string{"/api/messages?folder=", "/api/overview",
 		"/api/message?key=mail/m1", "/api/raw?key=mail/m1"} {
-		r := rufen(t, ts, "GET", pfad, "", nil)
+		r := rufen(t, ts, "GET", path, "", nil)
 		if r.Code != 503 {
-			t.Errorf("%s: HTTP %d, erwartet 503", pfad, r.Code)
+			t.Errorf("%s: HTTP %d, erwartet 503", path, r.Code)
 		}
 	}
 	if r := rufen(t, ts, "POST", "/api/refresh", "{}", nil); r.Code != 503 {
@@ -346,17 +346,17 @@ func TestAutoRefreshIsShipped(t *testing.T) {
 	defer ts.Close()
 	srv.Port = portVon(ts.URL)
 
-	seite := string(rufen(t, ts, "GET", "/?t="+testToken, "", nil).Body)
-	if !strings.Contains(seite, "autoAbgleichPlanen") {
+	page := string(rufen(t, ts, "GET", "/?t="+testToken, "", nil).Body)
+	if !strings.Contains(page, "autoAbgleichPlanen") {
 		t.Error("der automatische Abgleich fehlt in der ausgelieferten Seite")
 	}
-	if !strings.Contains(seite, `"refresh_seconds":45`) {
+	if !strings.Contains(page, `"refresh_seconds":45`) {
 		t.Error("das Intervall kommt nicht in der Seite an")
 	}
 	// Ohne Intervall muss der Takt ausbleiben, nicht auf einen Standardwert fallen
 	srv.Config = map[string]any{"bucket": "test-bucket", "refresh_seconds": 0}
-	seite = string(rufen(t, ts, "GET", "/?t="+testToken, "", nil).Body)
-	if !strings.Contains(seite, `"refresh_seconds":0`) {
+	page = string(rufen(t, ts, "GET", "/?t="+testToken, "", nil).Body)
+	if !strings.Contains(page, `"refresh_seconds":0`) {
 		t.Error("abgeschalteter Abgleich wird nicht als 0 ausgeliefert")
 	}
 }
@@ -365,9 +365,9 @@ func TestAutoRefreshIsShipped(t *testing.T) {
 // eine Mail ohne Vorlage nicht: der Server konnte es (mode "new"), nur fuehrte
 // kein Weg dorthin. Das faellt niemandem auf, der ein volles Postfach testet.
 func TestComposeWithoutATemplate(t *testing.T) {
-	for _, teil := range []string{`id="new"`, `compose("new")`, `mode === "new" ? ""`} {
-		if !strings.Contains(SeitePostfach, teil) {
-			t.Errorf("Postfachseite ohne %s - neue Nachricht nicht erreichbar", teil)
+	for _, part := range []string{`id="new"`, `compose("new")`, `mode === "new" ? ""`} {
+		if !strings.Contains(SeitePostfach, part) {
+			t.Errorf("Postfachseite ohne %s - neue Nachricht nicht erreichbar", part)
 		}
 	}
 	// Der Schluessel der offenen Mail darf nicht mitgehen, sonst haengt die neue

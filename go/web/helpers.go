@@ -8,13 +8,13 @@ import (
 	"s3mail/wizard"
 )
 
-func readJSON(r *http.Request, ziel any) error {
+func readJSON(r *http.Request, target any) error {
 	if r.ContentLength == 0 {
 		return nil
 	}
-	return json.NewDecoder(r.Body).Decode(ziel)
+	return json.NewDecoder(r.Body).Decode(target)
 }
 
-func asInputError(err error, ziel *wizard.InputError) bool {
-	return errors.As(err, ziel)
+func asInputError(err error, target *wizard.InputError) bool {
+	return errors.As(err, target)
 }

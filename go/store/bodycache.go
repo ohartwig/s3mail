@@ -40,7 +40,7 @@ func neuerBodyCache(dir string) *bodyCache {
 	return &bodyCache{dir: dir}
 }
 
-func (c *bodyCache) pfad(etag string) string {
+func (c *bodyCache) path(etag string) string {
 	// Das ETag kann Zeichen enthalten, die in einem Dateinamen nichts zu suchen
 	// haben - also hashen statt hoffen.
 	sum := sha256.Sum256([]byte(etag))
@@ -51,7 +51,7 @@ func (c *bodyCache) lesen(etag string) ([]byte, bool) {
 	if c == nil || etag == "" {
 		return nil, false
 	}
-	p := c.pfad(etag)
+	p := c.path(etag)
 	b, err := os.ReadFile(p)
 	if err != nil {
 		return nil, false
@@ -70,11 +70,11 @@ func (c *bodyCache) schreiben(etag string, body []byte) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	tmp := c.pfad(etag) + ".tmp"
+	tmp := c.path(etag) + ".tmp"
 	if os.WriteFile(tmp, body, 0o600) != nil {
 		return
 	}
-	if os.Rename(tmp, c.pfad(etag)) != nil {
+	if os.Rename(tmp, c.path(etag)) != nil {
 		_ = os.Remove(tmp)
 		return
 	}
@@ -84,23 +84,23 @@ func (c *bodyCache) schreiben(etag string, body []byte) {
 // aufraeumen wirft die am laengsten unbenutzten Eintraege weg, bis die Grenze
 // wieder eingehalten ist.
 func (c *bodyCache) aufraeumen() {
-	eintraege, err := os.ReadDir(c.dir)
+	entries, err := os.ReadDir(c.dir)
 	if err != nil {
 		return
 	}
-	type datei struct {
-		pfad    string
+	type file struct {
+		path    string
 		groesse int64
 		alter   int64
 	}
-	var alle []datei
+	var alle []file
 	var summe int64
-	for _, e := range eintraege {
+	for _, e := range entries {
 		info, err := e.Info()
 		if err != nil || e.IsDir() {
 			continue
 		}
-		alle = append(alle, datei{filepath.Join(c.dir, e.Name()), info.Size(), info.ModTime().Unix()})
+		alle = append(alle, file{filepath.Join(c.dir, e.Name()), info.Size(), info.ModTime().Unix()})
 		summe += info.Size()
 	}
 	if summe <= CacheMax {
@@ -111,7 +111,7 @@ func (c *bodyCache) aufraeumen() {
 		if summe <= CacheMax {
 			return
 		}
-		if os.Remove(d.pfad) == nil {
+		if os.Remove(d.path) == nil {
 			summe -= d.groesse
 		}
 	}

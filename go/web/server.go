@@ -176,11 +176,11 @@ func (s *Server) uebersetzen(w http.ResponseWriter, err error) {
 // writePage liefert eine Seite aus und setzt dabei das Token als Cookie - dadurch
 // funktionieren die Download-Links fuer Anhaenge und .eml, die keinen eigenen
 // Header setzen koennen.
-func (s *Server) writePage(w http.ResponseWriter, inhalt string) {
+func (s *Server) writePage(w http.ResponseWriter, content string) {
 	http.SetCookie(w, &http.Cookie{Name: "s3mail", Value: s.Token, Path: "/",
 		HttpOnly: true, SameSite: http.SameSiteStrictMode})
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = w.Write([]byte(inhalt))
+	_, _ = w.Write([]byte(content))
 }
 
 // overview haengt an den meisten Antworten mit dran, damit die Seitenleiste
@@ -257,11 +257,11 @@ func (s *Server) routen() {
 		code := i18n.Get(r.PathValue("code")).Code
 		http.SetCookie(w, &http.Cookie{Name: "s3mail_lang", Value: code, Path: "/",
 			HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: 60 * 60 * 24 * 365})
-		ziel := r.Header.Get("Referer")
-		if ziel == "" || !strings.HasPrefix(ziel, "http") {
-			ziel = "/"
+		target := r.Header.Get("Referer")
+		if target == "" || !strings.HasPrefix(target, "http") {
+			target = "/"
 		}
-		http.Redirect(w, r, ziel, http.StatusSeeOther)
+		http.Redirect(w, r, target, http.StatusSeeOther)
 	})
 
 	s.mux.HandleFunc("GET /api/overview", func(w http.ResponseWriter, r *http.Request) {
@@ -276,12 +276,12 @@ func (s *Server) routen() {
 			OnlyStar:   q.Get("star") == "1",
 		}
 		if f := q.Get("folder"); f != "*" {
-			ordner, err := core.ValidFolder(f)
+			folder, err := core.ValidFolder(f)
 			if err != nil {
 				s.writeError(w, http.StatusBadRequest, err.Error())
 				return
 			}
-			o.Folder = &ordner
+			o.Folder = &folder
 		}
 		s.json(w, http.StatusOK, with(s.overview(r), map[string]any{
 			"messages": s.Mailbox.Search(q.Get("q"), o),
@@ -447,8 +447,8 @@ func (s *Server) routen() {
 	})
 }
 
-func (s *Server) post(pfad string, fn func(http.ResponseWriter, *http.Request, request)) {
-	s.mux.HandleFunc("POST "+pfad, func(w http.ResponseWriter, r *http.Request) {
+func (s *Server) post(path string, fn func(http.ResponseWriter, *http.Request, request)) {
+	s.mux.HandleFunc("POST "+path, func(w http.ResponseWriter, r *http.Request) {
 		var a request
 		if r.ContentLength != 0 {
 			if err := json.NewDecoder(r.Body).Decode(&a); err != nil {
@@ -510,13 +510,13 @@ func sauberName(s string) string { return unsauber.ReplaceAllString(s, "_") }
 // sind - sie hat jemand so genannt.
 func (s *Server) localizedFolders(r *http.Request) []core.FolderInfo {
 	cat := i18n.Get(s.language(r))
-	ordner := s.Mailbox.Folders()
-	for i, f := range ordner {
+	folder := s.Mailbox.Folders()
+	for i, f := range folder {
 		if f.System {
-			ordner[i].Label = cat.T(f.Label)
+			folder[i].Label = cat.T(f.Label)
 		}
 	}
-	return ordner
+	return folder
 }
 
 // text holt einen Satz in der Sprache der Anfrage. Fuer die Handvoll Meldungen,

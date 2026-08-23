@@ -17,9 +17,9 @@ import (
 	"s3mail/store"
 )
 
-func nach(punkte []check.Item) map[string]check.Item {
+func nach(items []check.Item) map[string]check.Item {
 	out := map[string]check.Item{}
-	for _, p := range punkte {
+	for _, p := range items {
 		out[p.Name] = p
 	}
 	return out
@@ -108,7 +108,7 @@ func (k *kmsFake) Decrypt(_ []byte, _ map[string]string) ([]byte, error) {
 	return k.key, nil
 }
 
-func umschlag(t *testing.T) ([]byte, map[string]string, []byte) {
+func envelope(t *testing.T) ([]byte, map[string]string, []byte) {
 	t.Helper()
 	blob, err := os.ReadFile(filepath.Join("..", "store", "testdata", "envelopes.json"))
 	if err != nil {
@@ -133,7 +133,7 @@ func umschlag(t *testing.T) ([]byte, map[string]string, []byte) {
 // TestEncryptionIsDetected - der Assistent soll sagen, womit man es zu tun
 // hat, statt den Nutzer raten zu lassen.
 func TestEncryptionIsDetected(t *testing.T) {
-	body, meta, key := umschlag(t)
+	body, meta, key := envelope(t)
 
 	f := s3fake.Neu()
 	f.Setzen("mail/enc", body)

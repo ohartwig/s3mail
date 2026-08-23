@@ -66,17 +66,17 @@ func startAppMode(url string) bool {
 		return startAppModeMac(url)
 	}
 	for _, kandidat := range appModeBrowser() {
-		pfad := kandidat
-		if !filepath.IsAbs(pfad) {
-			gefunden, err := exec.LookPath(pfad)
+		path := kandidat
+		if !filepath.IsAbs(path) {
+			found, err := exec.LookPath(path)
 			if err != nil {
 				continue
 			}
-			pfad = gefunden
-		} else if _, err := os.Stat(pfad); err != nil {
+			path = found
+		} else if _, err := os.Stat(path); err != nil {
 			continue
 		}
-		if exec.Command(pfad, windowArgs(url)...).Start() == nil {
+		if exec.Command(path, windowArgs(url)...).Start() == nil {
 			return true
 		}
 	}

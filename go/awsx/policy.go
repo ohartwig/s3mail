@@ -18,10 +18,10 @@ func ausPolicies(dokumente []string) Finding {
 			if !strings.EqualFold(s.Effect, "Allow") {
 				continue // ein Deny sagt nichts darueber, wo das Postfach liegt
 			}
-			aktionen := liste(s.Action)
+			aktionen := list(s.Action)
 			switch {
 			case hatPraefix(aktionen, "s3:"):
-				bucket, prefix := ausS3(aktionen, liste(s.Resource), s.Condition)
+				bucket, prefix := ausS3(aktionen, list(s.Resource), s.Condition)
 				// Der laengste Prefix gewinnt: eine Policy darf den Bucket
 				// grob und das eigene Postfach genau nennen.
 				if bucket != "" && (f.Bucket == "" || len(prefix) > len(f.Prefix)) {
@@ -68,7 +68,7 @@ func statements(dokument string) []statement {
 }
 
 // liste nimmt "s3:GetObject" genauso wie ["s3:GetObject", "s3:PutObject"].
-func liste(r json.RawMessage) []string {
+func list(r json.RawMessage) []string {
 	if len(r) == 0 {
 		return nil
 	}
@@ -83,8 +83,8 @@ func liste(r json.RawMessage) []string {
 	return nil
 }
 
-func hatPraefix(werte []string, p string) bool {
-	for _, w := range werte {
+func hatPraefix(values []string, p string) bool {
+	for _, w := range values {
 		if strings.HasPrefix(strings.ToLower(w), p) {
 			return true
 		}
@@ -97,20 +97,20 @@ func hatPraefix(werte []string, p string) bool {
 func ausS3(aktionen, ressourcen []string, cond map[string]map[string]json.RawMessage) (string, string) {
 	var bucket, prefix string
 	for _, r := range ressourcen {
-		const kopf = "arn:aws:s3:::"
-		if !strings.HasPrefix(r, kopf) {
+		const header = "arn:aws:s3:::"
+		if !strings.HasPrefix(r, header) {
 			continue
 		}
-		rest := strings.TrimPrefix(r, kopf)
-		name, schluessel, geteilt := strings.Cut(rest, "/")
+		rest := strings.TrimPrefix(r, header)
+		name, key, geteilt := strings.Cut(rest, "/")
 		if name == "" || strings.ContainsAny(name, "*?") {
 			continue // ein Platzhalter im Bucket-Namen taugt nicht als Vorschlag
 		}
 		if bucket == "" {
 			bucket = name
 		}
-		if geteilt && len(folderOf(schluessel)) > len(prefix) {
-			prefix = folderOf(schluessel)
+		if geteilt && len(folderOf(key)) > len(prefix) {
+			prefix = folderOf(key)
 		}
 	}
 	if prefix == "" {
@@ -125,12 +125,12 @@ func ausS3(aktionen, ressourcen []string, cond map[string]map[string]json.RawMes
 
 // folderOf macht aus einem Schluesselmuster wie "mail/ole/*" den Ordner "mail/ole/".
 // Ein Muster mit Platzhalter mittendrin ("mail/*/posteingang") gibt nichts her.
-func folderOf(muster string) string {
-	i := strings.IndexAny(muster, "*?")
+func folderOf(pattern string) string {
+	i := strings.IndexAny(pattern, "*?")
 	if i < 0 {
-		i = len(muster)
+		i = len(pattern)
 	}
-	p := muster[:i]
+	p := pattern[:i]
 	if strings.ContainsAny(p, "*?") || p == "" {
 		return ""
 	}
@@ -157,12 +157,12 @@ func senderFrom(cond map[string]map[string]json.RawMessage) string {
 
 // condition sammelt die Werte eines Bedingungsschluessels ueber alle Operatoren.
 // IAM behandelt diese Schluessel ohne Ruecksicht auf Gross- und Kleinschreibung.
-func condition(cond map[string]map[string]json.RawMessage, schluessel string) []string {
+func condition(cond map[string]map[string]json.RawMessage, key string) []string {
 	var out []string
 	for _, paare := range cond {
 		for k, v := range paare {
-			if strings.EqualFold(k, schluessel) {
-				out = append(out, liste(v)...)
+			if strings.EqualFold(k, key) {
+				out = append(out, list(v)...)
 			}
 		}
 	}

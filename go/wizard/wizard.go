@@ -145,11 +145,11 @@ func (a *Wizard) Test(ctx context.Context, d Data) (map[string]any, error) {
 	}
 	s3 := awsx.NewS3(cfg, "")
 	prefix := config.NormalizePrefix(d.Prefix)
-	punkte := check.Run(ctx, s3, awsx.NewKMS(cfg, ""), awsx.NewSES(cfg, ""),
+	items := check.Run(ctx, s3, awsx.NewKMS(cfg, ""), awsx.NewSES(cfg, ""),
 		d.Bucket, prefix, strings.TrimSpace(d.Absender), i18n.Get(d.Sprache))
 	return map[string]any{
-		"checks":         punkte,
-		"ok":             check.AllOK(punkte),
+		"checks":         items,
+		"ok":             check.AllOK(items),
 		"lifecycle_days": s3.LifecycleTage(ctx, d.Bucket),
 	}, nil
 }
@@ -160,12 +160,12 @@ func (a *Wizard) Lifecycle(ctx context.Context, d Data) (map[string]any, error) 
 	if err != nil {
 		return nil, InputError{awsx.PlainText(err, d.Profil, i18n.Get(d.Sprache))}
 	}
-	nachricht, err := awsx.NewS3(cfg, "").LifecycleSetzen(ctx, d.Bucket,
+	msg, err := awsx.NewS3(cfg, "").LifecycleSetzen(ctx, d.Bucket,
 		config.NormalizePrefix(d.Prefix), d.Tage)
 	if err != nil {
 		return nil, InputError{awsx.PlainText(err, d.Profil, i18n.Get(d.Sprache))}
 	}
-	return map[string]any{"message": nachricht}, nil
+	return map[string]any{"message": msg}, nil
 }
 
 // Save schreibt die Konfiguration und schaltet das Postfach scharf.
@@ -177,7 +177,7 @@ func (a *Wizard) Save(_ context.Context, d Data) (map[string]any, error) {
 	k.Absender = strings.TrimSpace(d.Absender)
 	k.AllowDelete = d.AllowDelete == nil || *d.AllowDelete
 
-	pfad, err := config.Save(k)
+	path, err := config.Save(k)
 	if err != nil {
 		return nil, InputError{err.Error()}
 	}
@@ -186,12 +186,12 @@ func (a *Wizard) Save(_ context.Context, d Data) (map[string]any, error) {
 			return nil, InputError{awsx.PlainText(err, k.Profil, i18n.Get(d.Sprache))}
 		}
 	}
-	return map[string]any{"config": k, "path": pfad}, nil
+	return map[string]any{"config": k, "path": path}, nil
 }
 
 // Route waehlt den Handler zum Pfad.
-func (a *Wizard) Route(pfad string) (func(context.Context, Data) (map[string]any, error), bool) {
-	switch strings.TrimPrefix(pfad, "/api/setup/") {
+func (a *Wizard) Route(path string) (func(context.Context, Data) (map[string]any, error), bool) {
+	switch strings.TrimPrefix(path, "/api/setup/") {
 	case "info":
 		return a.Info, true
 	case "credentials":
