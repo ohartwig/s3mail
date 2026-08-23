@@ -174,6 +174,7 @@ func serverConfig(k config.Config, root string, noSend bool, refreshSeconds int)
 		"bucket": k.Bucket, "root": root, "default_from": k.From,
 		"can_send": !noSend, "config_file": config.File(),
 		"refresh_seconds": refreshSeconds, "language": k.Language,
+		"signature": k.Signature,
 	}
 }
 

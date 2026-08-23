@@ -238,6 +238,8 @@
   "setup.sender.hint": "or type an address — it has to be verified in SES",
   "setup.sender.placeholder": "– verified senders –",
   "setup.setRule": "Set rule",
+  "setup.signature": "Signature",
+  "setup.signature.hint": "Goes under every message you write – above the quote, so it does not drown at the end of a long thread. Leave empty for none.",
   "setup.step1": "AWS access",
   "setup.step1.hint": "s3mail needs access to your AWS account to fetch the mail out of S3. If this computer already has a profile set up, use that one.",
   "setup.step2": "Mailbox",

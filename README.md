@@ -221,6 +221,9 @@ S3-Konsole, und der Papierkorb lässt sich per Lifecycle-Regel automatisch leere
 
 - Antworten, Weiterleiten und neue Nachricht. Antworten hängen per `In-Reply-To`
   und `References` am Faden des Originals.
+- **Signatur** aus den Einstellungen, unter jeder Mail. Sie steht **über** dem
+  Zitat – am Ende eines langen Fadens sieht sie sonst niemand – und landet im
+  Textfeld statt beim Versand, damit sie vorher noch kürzbar ist.
 - **Anhänge**: Dateien anhängen, Cc und Blindkopie. Die Blindkopie geht über die
   Empfängerliste an SES und steht nie im Kopf der Mail – sonst hätten die
   Empfänger sie vor Augen. Bei mehr als 10 MB lehnt s3mail ab, bevor hochgeladen

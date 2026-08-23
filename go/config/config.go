@@ -27,6 +27,11 @@ type Config struct {
 	// program running next to the browser that is a better default than a
 	// guessed one.
 	Language string `json:"language"`
+
+	// Signature goes under every message that is written. It sits in the
+	// configuration and not in the catalogues: it is the writer's text, not
+	// ours, and it does not change with the language of the interface.
+	Signature string `json:"signature"`
 }
 
 func Defaults() Config {

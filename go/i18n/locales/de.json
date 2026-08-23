@@ -238,6 +238,8 @@
   "setup.sender.hint": "oder Adresse eintippen – muss in SES verifiziert sein",
   "setup.sender.placeholder": "– verifizierte Absender –",
   "setup.setRule": "Regel setzen",
+  "setup.signature": "Signatur",
+  "setup.signature.hint": "Steht unter jeder Mail, die du schreibst – über dem Zitat, damit sie am Ende eines langen Fadens nicht untergeht. Leer lassen heißt: keine.",
   "setup.step1": "AWS-Zugang",
   "setup.step1.hint": "s3mail braucht einen Zugang zu deinem AWS-Konto, um die Mails aus S3 zu holen. Wenn auf diesem Rechner schon ein Profil eingerichtet ist, nimm das.",
   "setup.step2": "Postfach",

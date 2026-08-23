@@ -598,7 +598,8 @@ function compose(kind, all) {
   if (kind === "new" || !m) {
     mode = "new";
     $("#c_title").textContent = T["compose.new"];
-    for (const f of ["#c_to", "#c_cc", "#c_subject", "#c_body"]) $(f).value = "";
+    for (const f of ["#c_to", "#c_cc", "#c_subject"]) $(f).value = "";
+    $("#c_body").value = signature();
     composeStart = composeState();
     $("#dlgCompose").showModal();
     $("#c_to").focus();
@@ -611,9 +612,11 @@ function compose(kind, all) {
   $("#c_subject").value = kind === "forward"
     ? (/^fwd:/i.test(sub) ? sub : T["compose.fwdPrefix"] + " " + sub)
     : (/^(re|aw):/i.test(sub) ? sub : T["compose.rePrefix"] + " " + sub);
-  $("#c_body").value = kind === "forward"
+  // The signature goes ABOVE the quote and above the forwarded message: at the
+  // bottom of a long thread nobody would ever see it.
+  $("#c_body").value = signature() + (kind === "forward"
     ? "\n\n--- " + T["compose.forwardedMessage"] + " ---\n" + T["compose.from"] + ": " + m.from + "\n" + T["compose.to"] + ": " + m.to + "\n" + T["compose.date"] + ": " + new Date(m.date).toLocaleString() + "\n" + T["compose.subject"] + ": " + sub + "\n\n" + (m.text || "")
-    : quote(m);
+    : quote(m));
   composeStart = composeState();
   $("#dlgCompose").showModal();
   $("#c_body").setSelectionRange(0, 0);
@@ -678,6 +681,15 @@ function draftBody() {
 }
 // How to tell whether anything happened since the dialog opened. Without it,
 // closing would save a draft even when nobody typed a thing.
+// signature is the writer's own text from the configuration. It goes into the
+// field rather than being appended on send, so it can still be shortened,
+// changed or deleted before the message leaves - a signature nobody can touch
+// is one people work around.
+function signature() {
+  const sig = (CFG.signature || "").replace(/\s+$/, "");
+  return sig ? "\n\n-- \n" + sig : "";
+}
+
 function composeState() {
   return JSON.stringify([$("#c_to").value, $("#c_cc").value, $("#c_bcc").value,
     $("#c_subject").value, $("#c_body").value, attachments.length]);
@@ -716,7 +728,7 @@ async function editDraft(key, m) {
   $("#c_cc").value = m.cc || "";
   $("#c_bcc").value = m.bcc || "";
   $("#c_subject").value = m.subject || "";
-  $("#c_body").value = m.text || "";
+  $("#c_body").value = m.text || "";   // the draft already carries its signature
   // Fetch the attachments back, so a continued draft keeps them.
   for (const a of m.attachments || []) {
     try {

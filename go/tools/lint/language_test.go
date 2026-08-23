@@ -113,3 +113,58 @@ func moduleRoot(t *testing.T) string {
 		dir = parent
 	}
 }
+
+// German stems that must not appear in an identifier. A deliberate deny list,
+// not a language detector: a heuristic over compound names produces false
+// alarms, and a check that cries wolf gets switched off.
+//
+// It exists because the rename sweep worked one occurrence per pass and left
+// wizard.Data.Absender behind - the field carried `json:"from"`, so nothing in
+// the interface noticed, and no test looked at the Go name.
+var germanStems = []string{
+	"Absender", "Empfaenger", "Ordner", "Nachricht", "Datei", "Schluessel",
+	"Sperr", "Entwurf", "Gesendet", "Verschieb", "Loesch", "Pruef", "Assistent",
+	"Zustand", "Anhang", "Anhaeng", "Betreff", "Postfach", "Kopfzeile", "Suche",
+	"Regel", "Zugang", "Fehler", "Meldung", "Antwort", "Sprache", "Konto",
+	"Benutzer", "Nutzer", "Verzeichnis", "Zaehler", "Aufruf", "Eintrag",
+}
+
+// TestIdentifiersAreEnglish walks the declarations rather than every token: a
+// German word inside a string or a comment is somebody else's business, a
+// German declaration is ours.
+func TestIdentifiersAreEnglish(t *testing.T) {
+	root := moduleRoot(t)
+	decl := regexp.MustCompile(`^\s*(func|type|var|const)\s+(\([^)]*\)\s+)?([A-Za-z_][A-Za-z0-9_]*)`)
+	field := regexp.MustCompile(`^\t([A-Z][A-Za-z0-9_]*)\s+[\[\]*A-Za-z]`)
+
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".go") {
+			return err
+		}
+		blob, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel(root, path)
+		for i, line := range strings.Split(string(blob), "\n") {
+			name := ""
+			if m := decl.FindStringSubmatch(line); m != nil {
+				name = m[3]
+			} else if m := field.FindStringSubmatch(line); m != nil {
+				name = m[1]
+			}
+			if name == "" {
+				continue
+			}
+			for _, stem := range germanStems {
+				if strings.Contains(name, stem) {
+					t.Errorf("German identifier: %s:%d %s", rel, i+1, name)
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}

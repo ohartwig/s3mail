@@ -41,8 +41,9 @@ type Data struct {
 	Region      string `json:"region"`
 	Bucket      string `json:"bucket"`
 	Prefix      string `json:"prefix"`
-	Absender    string `json:"from"`
+	From        string `json:"from"`
 	AllowDelete *bool  `json:"allow_delete"`
+	Signature   string `json:"signature"`
 	Days        int    `json:"days"`
 
 	// Language is set by the HTTP layer from the request, not by the browser
@@ -146,7 +147,7 @@ func (a *Wizard) Test(ctx context.Context, d Data) (map[string]any, error) {
 	s3 := awsx.NewS3(cfg, "")
 	prefix := config.NormalizePrefix(d.Prefix)
 	items := check.Run(ctx, s3, awsx.NewKMS(cfg, ""), awsx.NewSES(cfg, ""),
-		d.Bucket, prefix, strings.TrimSpace(d.Absender), i18n.Get(d.Language))
+		d.Bucket, prefix, strings.TrimSpace(d.From), i18n.Get(d.Language))
 	return map[string]any{
 		"checks":         items,
 		"ok":             check.AllOK(items),
@@ -178,8 +179,9 @@ func (a *Wizard) Save(_ context.Context, d Data) (map[string]any, error) {
 	k.Profile, k.Region = d.Profile, d.Region
 	k.Bucket = strings.TrimSpace(d.Bucket)
 	k.Prefix = config.NormalizePrefix(d.Prefix)
-	k.From = strings.TrimSpace(d.Absender)
+	k.From = strings.TrimSpace(d.From)
 	k.AllowDelete = d.AllowDelete == nil || *d.AllowDelete
+	k.Signature = strings.TrimRight(d.Signature, " \t\n\r")
 
 	path, err := config.Save(k)
 	if err != nil {

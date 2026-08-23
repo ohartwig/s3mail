@@ -238,6 +238,8 @@
   "setup.sender.hint": "o escribe una dirección: tiene que estar verificada en SES",
   "setup.sender.placeholder": "– remitentes verificados –",
   "setup.setRule": "Fijar la regla",
+  "setup.signature": "Firma",
+  "setup.signature.hint": "Va debajo de cada correo que escribas, encima de la cita, para que no se pierda al final de un hilo largo. Déjalo vacío si no quieres ninguna.",
   "setup.step1": "Acceso a AWS",
   "setup.step1.hint": "s3mail necesita acceso a tu cuenta de AWS para recoger el correo de S3. Si este ordenador ya tiene un perfil configurado, usa ese.",
   "setup.step2": "Buzón",

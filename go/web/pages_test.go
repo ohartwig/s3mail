@@ -180,3 +180,22 @@ func TestSentAndDraftsAreInTheSidebar(t *testing.T) {
 		}
 	}
 }
+
+// TestSignatureReachesBothPages - the signature is set in the wizard and used in
+// the composer. Two pages, one setting; if the way there breaks on either side,
+// it is stored and never seen or seen and never stored.
+func TestSignatureReachesBothPages(t *testing.T) {
+	setup := page("setup", PageWizard, "de", nil)
+	for _, anchor := range []string{`id="signature"`, "setup.signature"} {
+		if !strings.Contains(setup, anchor) {
+			t.Errorf("%q missing from the wizard - the signature cannot be set", anchor)
+		}
+	}
+	inbox := page("inbox", PageMailbox, "de", map[string]any{"signature": "Kai Ole Hartwig"})
+	if !strings.Contains(inbox, "function signature()") {
+		t.Error("the composer does not put the signature into the message")
+	}
+	if !strings.Contains(inbox, "Kai Ole Hartwig") {
+		t.Error("the signature does not arrive in the page")
+	}
+}

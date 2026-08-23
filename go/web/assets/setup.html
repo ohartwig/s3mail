@@ -100,6 +100,9 @@
     </div>
     <input id="from" placeholder="{{t "setup.sender.hint"}}" style="margin-top:8px">
     <div id="fromMsg" class="msg"></div>
+    <label style="margin-top:14px">{{t "setup.signature"}}</label>
+    <textarea id="signature" rows="4" style="width:100%"></textarea>
+    <div class="hint">{{t "setup.signature.hint"}}</div>
     <label style="display:flex;gap:8px;align-items:center;margin-top:14px">
       <input type="checkbox" id="allow_delete" checked style="width:auto">
       <span style="color:var(--text)">{{t "setup.allowDelete"}}</span>
@@ -155,6 +158,7 @@ const collect = () => ({
   profile: $("#profile").value, region: $("#region").value,
   bucket: $("#bucket").value.trim(), prefix: $("#prefix").value.trim(),
   from: $("#from").value.trim(), allow_delete: $("#allow_delete").checked,
+  signature: $("#signature").value,
 });
 
 async function boot() {
@@ -165,6 +169,7 @@ async function boot() {
   fillProfiles(c.profile);
   $("#bucket").value = c.bucket; $("#prefix").value = c.prefix || "mail/";
   $("#from").value = c.from; $("#allow_delete").checked = c.allow_delete !== false;
+  $("#signature").value = c.signature || "";
   $("#foot").textContent = T["setup.savedIn"].replace("%s", info.config_file);
   if (!info.profiles.length && !info.has_env_keys) $("#tabNew").click();
 }
