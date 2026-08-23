@@ -61,7 +61,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Assistenten nicht beenden, also in dem Zustand, in dem ein Erstnutzer steckt.
 	if s.Mailbox == nil && strings.HasPrefix(r.URL.Path, "/api/") &&
 		!strings.HasPrefix(r.URL.Path, "/api/setup/") && r.URL.Path != "/api/quit" {
-		s.fehler(w, http.StatusServiceUnavailable, "s3mail ist noch nicht eingerichtet")
+		s.fehler(w, http.StatusServiceUnavailable, s.text(r, "error.notSetUp"))
 		return
 	}
 	s.mux.ServeHTTP(w, r)
@@ -126,7 +126,7 @@ func (s *Server) zugangPruefen(w http.ResponseWriter, r *http.Request) bool {
 	}
 	if !gleich(s.token(r), s.Token) {
 		if strings.HasPrefix(r.URL.Path, "/api/") {
-			s.fehler(w, http.StatusForbidden, "Token fehlt oder passt nicht")
+			s.fehler(w, http.StatusForbidden, s.text(r, "error.badToken"))
 		} else {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.WriteHeader(http.StatusForbidden)
@@ -408,7 +408,7 @@ func (s *Server) routen() {
 			}
 			s.mutieren(w, r, core.Op{T: "tagren", Old: alt, New: a.Name, Color: a.Color})
 		default:
-			s.fehler(w, http.StatusBadRequest, "unbekannte Tag-Aktion")
+			s.fehler(w, http.StatusBadRequest, s.text(r, "error.unknownTagAction"))
 		}
 	})
 
@@ -452,7 +452,7 @@ func (s *Server) post(pfad string, fn func(http.ResponseWriter, *http.Request, a
 		var a anfrage
 		if r.ContentLength != 0 {
 			if err := json.NewDecoder(r.Body).Decode(&a); err != nil {
-				s.fehler(w, http.StatusBadRequest, "ungueltiges JSON")
+				s.fehler(w, http.StatusBadRequest, s.text(r, "error.badJson"))
 				return
 			}
 		}
@@ -517,4 +517,10 @@ func (s *Server) ordnerMitBeschriftung(r *http.Request) []core.FolderInfo {
 		}
 	}
 	return ordner
+}
+
+// text holt einen Satz in der Sprache der Anfrage. Fuer die Handvoll Meldungen,
+// die der Server selbst erzeugt - alles andere kommt aus den Seiten.
+func (s *Server) text(r *http.Request, key string) string {
+	return i18n.Get(s.language(r)).T(key)
 }

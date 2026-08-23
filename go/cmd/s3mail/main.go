@@ -21,6 +21,7 @@ import (
 
 	"s3mail/assistent"
 	"s3mail/awsx"
+	"s3mail/i18n"
 	"s3mail/konfig"
 	"s3mail/store"
 	"s3mail/web"
@@ -87,7 +88,9 @@ func main() {
 
 	if k.Bucket != "" && !*setup {
 		if err := scharfschalten(ctx, srv, k, *noSend, *refreshSek); err != nil {
-			startfehler = awsx.Klartext(err, k.Profil)
+			// Beim Start gibt es keine Anfrage und damit keine Sprache aus
+			// dem Browser - die aus der Konfiguration muss genuegen.
+			startfehler = awsx.Klartext(err, k.Profil, i18n.Get(k.Sprache))
 		}
 	}
 

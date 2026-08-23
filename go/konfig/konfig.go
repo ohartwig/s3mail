@@ -23,6 +23,11 @@ type Konfig struct {
 	AllowDelete bool   `json:"allow_delete"`
 	Port        int    `json:"port"`
 	Host        string `json:"host"`
+
+	// Sprache der Oberflaeche. Leer heisst: die des Browsers nehmen - das ist
+	// bei einem Programm, das neben dem Browser laeuft, die bessere Vorgabe
+	// als eine geratene.
+	Sprache string `json:"language"`
 }
 
 func Standard() Konfig {

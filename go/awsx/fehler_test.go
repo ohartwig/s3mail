@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"s3mail/i18n"
+
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/smithy-go"
 
@@ -53,7 +55,7 @@ func TestKlartext(t *testing.T) {
 			[]string{"Keine Verbindung zu AWS"}, nil},
 	}
 	for _, f := range faelle {
-		got := awsx.Klartext(f.err, f.profil)
+		got := awsx.Klartext(f.err, f.profil, i18n.Get("de"))
 		for _, teil := range f.muss {
 			if !strings.Contains(got, teil) {
 				t.Errorf("%s: %q enthaelt nicht %q", f.name, got, teil)
@@ -70,10 +72,10 @@ func TestKlartext(t *testing.T) {
 // TestKlartextVerschlucktNichts - was wir nicht kennen, muss durchkommen, sonst
 // steht der Nutzer vor einer freundlichen, aber nutzlosen Meldung.
 func TestKlartextVerschlucktNichts(t *testing.T) {
-	if got := awsx.Klartext(errors.New("Boom aus dem Nichts"), ""); !strings.Contains(got, "Boom") {
+	if got := awsx.Klartext(errors.New("Boom aus dem Nichts"), "", i18n.Get("de")); !strings.Contains(got, "Boom") {
 		t.Errorf("unbekannter Fehler verschluckt: %q", got)
 	}
-	if awsx.Klartext(nil, "") != "" {
+	if awsx.Klartext(nil, "", i18n.Get("de")) != "" {
 		t.Error("nil ergibt eine Meldung")
 	}
 }

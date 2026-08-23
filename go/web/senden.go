@@ -31,7 +31,7 @@ func (s *Server) sendenRoute() {
 		}
 		var e mailer.Entwurf
 		if err := jsonLesen(r, &e); err != nil {
-			s.fehler(w, http.StatusBadRequest, "ungueltiges JSON")
+			s.fehler(w, http.StatusBadRequest, s.text(r, "error.badJson"))
 			return
 		}
 		var o mailer.Original
@@ -68,19 +68,20 @@ func (s *Server) sendenRoute() {
 func (s *Server) assistentRouten() {
 	s.mux.HandleFunc("POST /api/setup/{aktion}", func(w http.ResponseWriter, r *http.Request) {
 		if s.assistent == nil {
-			s.fehler(w, http.StatusBadRequest, "Assistent ist nicht verfügbar")
+			s.fehler(w, http.StatusBadRequest, s.text(r, "error.noWizard"))
 			return
 		}
 		fn, da := s.assistent.Route(r.URL.Path)
 		if !da {
-			s.fehler(w, http.StatusNotFound, "unbekannte Aktion")
+			s.fehler(w, http.StatusNotFound, s.text(r, "error.unknownAction"))
 			return
 		}
 		var d assistent.Daten
 		if err := jsonLesen(r, &d); err != nil {
-			s.fehler(w, http.StatusBadRequest, "ungueltiges JSON")
+			s.fehler(w, http.StatusBadRequest, s.text(r, "error.badJson"))
 			return
 		}
+		d.Sprache = s.language(r)
 		erg, err := fn(r.Context(), d)
 		if err != nil {
 			var eingabe assistent.Eingabefehler

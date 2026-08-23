@@ -6,7 +6,7 @@ package pruefung
 
 import (
 	"context"
-	"fmt"
+	"s3mail/i18n"
 	"strings"
 
 	"s3mail/store"
@@ -36,15 +36,15 @@ type SESPruefer interface {
 // Ausfuehren geht die Liste durch. probeSchreiben legt ein Testobjekt an und
 // loescht es wieder - nur so laesst sich das Schreibrecht ehrlich pruefen.
 func Ausfuehren(ctx context.Context, s3 store.S3, kms store.KMS, ses SESPruefer,
-	bucket, prefix, absender string) []Punkt {
+	bucket, prefix, absender string, cat i18n.Catalog) []Punkt {
 	var punkte []Punkt
 	add := func(p Punkt) { punkte = append(punkte, p) }
 
 	// 1. Auflisten
 	objs, err := s3.List(ctx, bucket, prefix)
 	if err != nil {
-		add(Punkt{Name: "Bucket lesen", Detail: kurz(err),
-			Hinweis: hinweisAuflisten(prefix)})
+		add(Punkt{Name: cat.T("check.listBucket"), Detail: kurz(err),
+			Hinweis: hinweisAuflisten(prefix, cat)})
 		return punkte
 	}
 	var beispiel string
@@ -55,63 +55,61 @@ func Ausfuehren(ctx context.Context, s3 store.S3, kms store.KMS, ses SESPruefer,
 		}
 	}
 	if beispiel != "" {
-		add(Punkt{Name: "Bucket lesen", OK: true,
-			Detail: fmt.Sprintf("%d Objekt(e) unter „%s“ gefunden", len(objs), anzeige(prefix))})
+		add(Punkt{Name: cat.T("check.listBucket"), OK: true,
+			Detail: cat.Tf("check.listBucket.found", len(objs), anzeige(prefix))})
 	} else {
-		add(Punkt{Name: "Bucket lesen", OK: true,
-			Detail:  fmt.Sprintf("Zugriff klappt, aber unter „%s“ liegt noch nichts", anzeige(prefix)),
-			Hinweis: "Sobald SES die erste Mail ablegt, taucht sie hier auf."})
+		add(Punkt{Name: cat.T("check.listBucket"), OK: true,
+			Detail:  cat.Tf("check.listBucket.empty", anzeige(prefix)),
+			Hinweis: cat.T("check.listBucket.emptyHint")})
 	}
 
 	// 2. Eine echte Mail lesen - und dabei sehen, wie sie verschluesselt ist
 	if beispiel == "" {
-		add(Punkt{Name: "Mail lesen", OK: true, Detail: "übersprungen – noch keine Mail da",
+		add(Punkt{Name: cat.T("check.readMail"), OK: true, Detail: cat.T("check.skipped.noMail"),
 			Uebergangen: true})
-		add(Punkt{Name: "Verschlüsselung", OK: true, Detail: "übersprungen – noch keine Mail da",
+		add(Punkt{Name: cat.T("check.encryption"), OK: true, Detail: cat.T("check.skipped.noMail"),
 			Uebergangen: true})
 	} else {
 		obj, err := s3.Get(ctx, bucket, beispiel, "bytes=0-2047")
 		if err != nil {
-			add(Punkt{Name: "Mail lesen", Detail: kurz(err), Hinweis: "s3:GetObject fehlt."})
+			add(Punkt{Name: cat.T("check.readMail"), Detail: kurz(err), Hinweis: cat.T("check.readMail.hint")})
 		} else {
-			add(Punkt{Name: "Mail lesen", OK: true, Detail: basisname(beispiel)})
-			add(verschluesselung(ctx, s3, kms, bucket, beispiel, obj))
+			add(Punkt{Name: cat.T("check.readMail"), OK: true, Detail: basisname(beispiel)})
+			add(verschluesselung(ctx, s3, kms, bucket, beispiel, obj, cat))
 		}
 	}
 
 	// 3./4. Schreiben und Loeschen an einem Testobjekt
 	probe := prefix + ".s3mail-probe"
 	if err := s3.Put(ctx, bucket, probe, []byte("s3mail"), "text/plain"); err != nil {
-		add(Punkt{Name: "Schreiben", Detail: kurz(err),
-			Hinweis: "s3:PutObject fehlt. Ohne das gehen Tags, Verschieben und Papierkorb nicht."})
-		add(Punkt{Name: "Löschen", Detail: "übersprungen", Uebergangen: true, OK: true})
+		add(Punkt{Name: cat.T("check.write"), Detail: kurz(err),
+			Hinweis: cat.T("check.write.hint")})
+		add(Punkt{Name: cat.T("check.delete"), Detail: cat.T("check.skipped"), Uebergangen: true, OK: true})
 	} else {
-		add(Punkt{Name: "Schreiben", OK: true, Detail: "Testobjekt angelegt"})
+		add(Punkt{Name: cat.T("check.write"), OK: true, Detail: cat.T("check.write.ok")})
 		if err := s3.Delete(ctx, bucket, probe); err != nil {
-			add(Punkt{Name: "Löschen", Detail: kurz(err),
-				Hinweis: "s3:DeleteObject fehlt. Starte mit „Löschen sperren“, dann bleibt alles beim Lesen."})
+			add(Punkt{Name: cat.T("check.delete"), Detail: kurz(err),
+				Hinweis: cat.T("check.delete.hint")})
 		} else {
-			add(Punkt{Name: "Löschen", OK: true, Detail: "Testobjekt wieder entfernt"})
+			add(Punkt{Name: cat.T("check.delete"), OK: true, Detail: cat.T("check.delete.ok")})
 		}
 	}
 
 	// 5. Der Ordner, in dem die Zustandsaenderungen liegen
 	if _, err := s3.List(ctx, bucket, prefix+store.StateOps); err != nil {
-		add(Punkt{Name: "Zustand von mehreren Rechnern", Detail: kurz(err),
-			Hinweis: fmt.Sprintf("s3:ListBucket auf %s%s* fehlt. Ohne das sieht dieser "+
-				"Rechner Änderungen der anderen erst nach dem nächsten Zusammenfassen.",
-				prefix, store.StateOps)})
+		add(Punkt{Name: cat.T("check.sharedState"), Detail: kurz(err),
+			Hinweis: cat.Tf("check.sharedState.hint", prefix, store.StateOps)})
 	} else {
-		add(Punkt{Name: "Zustand von mehreren Rechnern", OK: true,
-			Detail: "Ordner für die Änderungen ist lesbar"})
+		add(Punkt{Name: cat.T("check.sharedState"), OK: true,
+			Detail: cat.T("check.sharedState.ok")})
 	}
 
 	// 6. SES-Absender
 	if absender == "" {
-		add(Punkt{Name: "SES-Absender", OK: true, Uebergangen: true,
-			Detail: "keine Adresse angegeben – Antworten bleibt aus"})
+		add(Punkt{Name: cat.T("check.sender"), OK: true, Uebergangen: true,
+			Detail: cat.T("check.sender.none")})
 	} else if ses == nil {
-		add(Punkt{Name: "SES-Absender", OK: true, Uebergangen: true, Detail: "nicht geprüft"})
+		add(Punkt{Name: cat.T("check.sender"), OK: true, Uebergangen: true, Detail: cat.T("check.notChecked")})
 	} else {
 		domain := absender
 		if i := strings.LastIndex(absender, "@"); i >= 0 {
@@ -120,13 +118,13 @@ func Ausfuehren(ctx context.Context, s3 store.S3, kms store.KMS, ses SESPruefer,
 		gut, err := ses.Verifiziert(ctx, absender, domain)
 		switch {
 		case err != nil:
-			add(Punkt{Name: "SES-Absender", Detail: kurz(err), Uebergangen: true,
-				Hinweis: "ses:GetIdentityVerificationAttributes fehlt – prüfe die Adresse selbst."})
+			add(Punkt{Name: cat.T("check.sender"), Detail: kurz(err), Uebergangen: true,
+				Hinweis: cat.T("check.sender.noPermission")})
 		case len(gut) > 0:
-			add(Punkt{Name: "SES-Absender", OK: true, Detail: "verifiziert: " + strings.Join(gut, ", ")})
+			add(Punkt{Name: cat.T("check.sender"), OK: true, Detail: cat.Tf("check.sender.verified", strings.Join(gut, ", "))})
 		default:
-			add(Punkt{Name: "SES-Absender", Detail: absender + " ist in SES nicht verifiziert",
-				Hinweis: "Adresse oder Domain in der SES-Konsole verifizieren – sonst lehnt SES den Versand ab."})
+			add(Punkt{Name: cat.T("check.sender"), Detail: cat.Tf("check.sender.unverified", absender),
+				Hinweis: cat.T("check.sender.hint")})
 		}
 	}
 	return punkte
@@ -134,7 +132,7 @@ func Ausfuehren(ctx context.Context, s3 store.S3, kms store.KMS, ses SESPruefer,
 
 // verschluesselung schaut sich eine echte Mail an und sagt, womit man es zu tun hat.
 func verschluesselung(ctx context.Context, s3 store.S3, kms store.KMS,
-	bucket, key string, obj store.Object) Punkt {
+	bucket, key string, obj store.Object, cat i18n.Catalog) Punkt {
 	if store.IstUmschlag(obj.Meta) {
 		// Ein Teilstueck laesst sich nicht entschluesseln - also ganz holen.
 		voll, err := s3.Get(ctx, bucket, key, "")
@@ -142,26 +140,26 @@ func verschluesselung(ctx context.Context, s3 store.S3, kms store.KMS,
 			_, err = store.Entschluesseln(voll.Body, voll.Meta, kms)
 		}
 		if err != nil {
-			return Punkt{Name: "Verschlüsselung",
-				Detail:  "client-seitig mit KMS – Entschlüsseln klappt nicht: " + kurz(err),
-				Hinweis: "kms:Decrypt auf dem Schlüssel aus der SES-Regel fehlt."}
+			return Punkt{Name: cat.T("check.encryption"),
+				Detail:  cat.Tf("check.encryption.clientFailed", kurz(err)),
+				Hinweis: cat.T("check.encryption.clientHint")}
 		}
-		return Punkt{Name: "Verschlüsselung", OK: true,
-			Detail: "client-seitig mit KMS – Entschlüsseln klappt"}
+		return Punkt{Name: cat.T("check.encryption"), OK: true,
+			Detail: cat.T("check.encryption.clientOk")}
 	}
 	head, err := s3.Head(ctx, bucket, key)
 	if err != nil {
-		return Punkt{Name: "Verschlüsselung", OK: true, Uebergangen: true, Detail: kurz(err)}
+		return Punkt{Name: cat.T("check.encryption"), OK: true, Uebergangen: true, Detail: kurz(err)}
 	}
 	switch {
 	case strings.Contains(head.ServerSideEncryption, "kms"):
-		return Punkt{Name: "Verschlüsselung", OK: true, Detail: "serverseitig mit KMS",
-			Hinweis: "Die IAM-Rolle braucht kms:Decrypt und kms:GenerateDataKey."}
+		return Punkt{Name: cat.T("check.encryption"), OK: true, Detail: cat.T("check.encryption.serverKms"),
+			Hinweis: cat.T("check.encryption.serverKmsHint")}
 	case head.ServerSideEncryption != "":
-		return Punkt{Name: "Verschlüsselung", OK: true,
-			Detail: "serverseitig (" + head.ServerSideEncryption + ")"}
+		return Punkt{Name: cat.T("check.encryption"), OK: true,
+			Detail: cat.Tf("check.encryption.server", head.ServerSideEncryption)}
 	default:
-		return Punkt{Name: "Verschlüsselung", OK: true, Detail: "keine – die Mails liegen im Klartext"}
+		return Punkt{Name: cat.T("check.encryption"), OK: true, Detail: cat.T("check.encryption.none")}
 	}
 }
 
@@ -218,14 +216,9 @@ func kurz(err error) string {
 // Pfad. "mail/" passt nicht auf "mail/person/*", und "mail/person" ohne
 // abschliessenden Schraegstrich ebenfalls nicht. Das sieht wie ein fehlendes
 // Recht aus und ist eine fehlende Stelle.
-func hinweisAuflisten(prefix string) string {
+func hinweisAuflisten(prefix string, cat i18n.Catalog) string {
 	if prefix == "" {
-		return "Fehlt s3:ListBucket, oder Bucket und Region passen nicht zueinander."
+		return cat.T("check.listBucket.hintNoPrefix")
 	}
-	return fmt.Sprintf(
-		"Am wahrscheinlichsten stimmt das Prefix nicht: Zugänge, die nur ein "+
-			"eigenes Postfach sehen dürfen, brauchen es exakt – „%s“ mit "+
-			"abschließendem Schrägstrich, nicht die Ebene darüber. Sonst fehlt "+
-			"s3:ListBucket, oder Bucket und Region passen nicht zueinander.",
-		prefix)
+	return cat.Tf("check.listBucket.hintPrefix", prefix)
 }

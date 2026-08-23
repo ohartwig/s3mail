@@ -27,7 +27,7 @@ func (s *Server) MitSperrliste(l Sperrliste) { s.sperrliste = l }
 func (s *Server) sperrlistenRouten() {
 	s.mux.HandleFunc("GET /api/blocked", func(w http.ResponseWriter, r *http.Request) {
 		if s.sperrliste == nil {
-			s.fehler(w, http.StatusBadRequest, "Sperrliste ist nicht verfuegbar")
+			s.fehler(w, http.StatusBadRequest, s.text(r, "error.noBlocklist"))
 			return
 		}
 		liste, err := s.sperrliste.Lesen(r.Context())
@@ -48,12 +48,12 @@ func (s *Server) sperrlistenRouten() {
 
 func (s *Server) sperrlisteAendern(w http.ResponseWriter, r *http.Request, a anfrage, sperren bool) {
 	if s.sperrliste == nil {
-		s.fehler(w, http.StatusBadRequest, "Sperrliste ist nicht verfuegbar")
+		s.fehler(w, http.StatusBadRequest, s.text(r, "error.noBlocklist"))
 		return
 	}
 	adresse := adresseAus(a.Address)
 	if adresse == "" {
-		s.fehler(w, http.StatusBadRequest, "keine Adresse angegeben")
+		s.fehler(w, http.StatusBadRequest, s.text(r, "error.noAddress"))
 		return
 	}
 	var err error

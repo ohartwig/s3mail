@@ -6,8 +6,8 @@ package awsx
 import (
 	"context"
 	"errors"
-	"fmt"
 	"path/filepath"
+	"s3mail/i18n"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -62,23 +62,21 @@ func ZugangPruefen(ctx context.Context, cfg aws.Config) error {
 // Das AWS-SDK meldet fehlende oder unbrauchbare Zugangsdaten in einem halben
 // Dutzend Formen, alle englisch und alle ohne Hinweis darauf, dass der Assistent
 // zwei Felder weiter oben genau das loesen wuerde.
-func Klartext(err error, profil string) string {
+func Klartext(err error, profil string, cat i18n.Catalog) string {
 	if err == nil {
 		return ""
 	}
-	wo := "das Standardprofil"
+	wo := cat.T("aws.defaultProfile")
 	if profil != "" {
-		wo = fmt.Sprintf("Profil „%s“", profil)
+		wo = cat.Tf("aws.namedProfile", profil)
 	}
-	keys := "Trag in Schritt 1 unter „Neue Zugangsdaten“ Access Key ID und Secret " +
-		"ein und klick auf „Zugangsdaten speichern“."
+	keys := cat.T("aws.enterKeys")
 	text := err.Error()
 
 	// Profil gibt es nicht
 	var fehltProfil config.SharedConfigProfileNotExistError
 	if errors.As(err, &fehltProfil) {
-		return fmt.Sprintf("Das AWS-Profil „%s“ gibt es auf diesem Rechner nicht. "+
-			"Wähle ein anderes – oder leg eins an: %s", profil, keys)
+		return cat.Tf("aws.noSuchProfile", profil, keys)
 	}
 
 	// SSO: die Anmeldung fehlt, nicht die Zugangsdaten
@@ -88,15 +86,13 @@ func Klartext(err error, profil string) string {
 		if profil != "" {
 			befehl += " --profile " + profil
 		}
-		return fmt.Sprintf("%s meldet sich über AWS SSO an, aber es liegt keine gültige "+
-			"Anmeldung vor. Einmal „%s“ im Terminal ausführen, dann hier noch einmal "+
-			"auf „Buckets laden“.", wo, befehl)
+		return cat.Tf("aws.ssoLoginNeeded", wo, befehl)
 	}
 
 	// Fehlende Region faellt sonst als kryptischer Endpunktfehler auf
 	if strings.Contains(text, "no region") || strings.Contains(text, "region is required") ||
 		strings.Contains(text, "MissingRegion") {
-		return "Es ist keine Region gesetzt. Wähle sie in Schritt 1 aus."
+		return cat.T("aws.noRegion")
 	}
 
 	var api smithy.APIError
@@ -104,20 +100,18 @@ func Klartext(err error, profil string) string {
 		switch api.ErrorCode() {
 		case "InvalidClientTokenId", "UnrecognizedClientException", "AuthFailure",
 			"InvalidAccessKeyId":
-			return "Die Access Key ID stimmt nicht. Bitte in Schritt 1 noch einmal prüfen."
+			return cat.T("aws.badKeyId")
 		case "SignatureDoesNotMatch":
-			return "Der Secret Access Key stimmt nicht. Bitte in Schritt 1 noch einmal " +
-				"eintragen – beim Kopieren geht gern ein Zeichen verloren."
+			return cat.T("aws.badSecret")
 		case "ExpiredToken", "ExpiredTokenException", "TokenRefreshRequired":
-			return fmt.Sprintf("Die Zugangsdaten für %s sind abgelaufen. %s", wo, keys)
+			return cat.Tf("aws.expired", wo, keys)
 		case "AccessDenied", "AccessDeniedException":
-			return "Die Zugangsdaten stimmen, aber ihnen fehlt ein Recht. Welches, sagt " +
-				"der Verbindungstest in Schritt 3 im Klartext."
+			return cat.T("aws.accessDenied")
 		case "NoSuchBucket":
-			return "Diesen Bucket gibt es nicht – Name oder Region stimmen nicht."
+			return cat.T("aws.noSuchBucket")
 		case "PermanentRedirect", "IllegalLocationConstraintException",
 			"AuthorizationHeaderMalformed":
-			return "Der Bucket liegt in einer anderen Region. Region oben umstellen."
+			return cat.T("aws.wrongRegion")
 		}
 	}
 
@@ -128,13 +122,13 @@ func Klartext(err error, profil string) string {
 		strings.Contains(text, "failed to retrieve credentials") ||
 		strings.Contains(text, "keine Zugangsdaten") ||
 		strings.Contains(text, "EmptyStaticCreds") {
-		return fmt.Sprintf("Für %s sind keine brauchbaren Zugangsdaten hinterlegt. %s", wo, keys)
+		return cat.Tf("aws.noCredentials", wo, keys)
 	}
 
 	// Netz
 	if strings.Contains(text, "no such host") || strings.Contains(text, "dial tcp") ||
 		strings.Contains(text, "connection refused") || strings.Contains(text, "timeout") {
-		return "Keine Verbindung zu AWS. Internet erreichbar? Proxy dazwischen?"
+		return cat.T("aws.noConnection")
 	}
 
 	return text // Unbekanntes nicht verschlucken

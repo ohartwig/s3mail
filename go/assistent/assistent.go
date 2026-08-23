@@ -8,23 +8,28 @@ import (
 	"strings"
 
 	"s3mail/awsx"
+	"s3mail/i18n"
 	"s3mail/konfig"
 	"s3mail/pruefung"
 )
 
 // Regionen, in denen SES eingehende Mail entgegennimmt. Andere anzubieten waere
 // eine Falle - der Bucket laesst sich ueberall anlegen, die Receipt-Rule nicht.
+//
+// Die Namen stehen englisch da und werden nicht uebersetzt: so heissen sie bei
+// AWS, und wer sie in der Konsole wiederfinden will, sucht nach genau diesem
+// Wort.
 var Regionen = [][2]string{
-	{"eu-central-1", "Europa (Frankfurt)"}, {"eu-west-1", "Europa (Irland)"},
-	{"eu-west-2", "Europa (London)"}, {"eu-west-3", "Europa (Paris)"},
-	{"eu-north-1", "Europa (Stockholm)"}, {"eu-south-1", "Europa (Mailand)"},
-	{"us-east-1", "USA Ost (N. Virginia)"}, {"us-east-2", "USA Ost (Ohio)"},
-	{"us-west-1", "USA West (N. Kalifornien)"}, {"us-west-2", "USA West (Oregon)"},
-	{"ca-central-1", "Kanada (Zentral)"}, {"sa-east-1", "Südamerika (São Paulo)"},
-	{"ap-northeast-1", "Asien-Pazifik (Tokio)"}, {"ap-northeast-2", "Asien-Pazifik (Seoul)"},
-	{"ap-southeast-1", "Asien-Pazifik (Singapur)"}, {"ap-southeast-2", "Asien-Pazifik (Sydney)"},
-	{"ap-south-1", "Asien-Pazifik (Mumbai)"}, {"il-central-1", "Israel (Tel Aviv)"},
-	{"af-south-1", "Afrika (Kapstadt)"}, {"me-south-1", "Naher Osten (Bahrain)"},
+	{"eu-central-1", "Europe (Frankfurt)"}, {"eu-west-1", "Europe (Ireland)"},
+	{"eu-west-2", "Europe (London)"}, {"eu-west-3", "Europe (Paris)"},
+	{"eu-north-1", "Europe (Stockholm)"}, {"eu-south-1", "Europe (Milan)"},
+	{"us-east-1", "US East (N. Virginia)"}, {"us-east-2", "US East (Ohio)"},
+	{"us-west-1", "US West (N. California)"}, {"us-west-2", "US West (Oregon)"},
+	{"ca-central-1", "Canada (Central)"}, {"sa-east-1", "South America (São Paulo)"},
+	{"ap-northeast-1", "Asia Pacific (Tokyo)"}, {"ap-northeast-2", "Asia Pacific (Seoul)"},
+	{"ap-southeast-1", "Asia Pacific (Singapore)"}, {"ap-southeast-2", "Asia Pacific (Sydney)"},
+	{"ap-south-1", "Asia Pacific (Mumbai)"}, {"il-central-1", "Israel (Tel Aviv)"},
+	{"af-south-1", "Africa (Cape Town)"}, {"me-south-1", "Middle East (Bahrain)"},
 }
 
 // Daten ist, was die Assistentenseite schickt.
@@ -39,6 +44,11 @@ type Daten struct {
 	Absender    string `json:"from"`
 	AllowDelete *bool  `json:"allow_delete"`
 	Tage        int    `json:"days"`
+
+	// Sprache setzt die HTTP-Schicht aus der Anfrage, nicht der Browser aus
+	// dem Formular: sie steht dort schon im Cookie, und zwei Quellen fuer
+	// dieselbe Angabe gehen irgendwann auseinander.
+	Sprache string `json:"-"`
 }
 
 // Scharfschalten wird nach dem Speichern gerufen, damit der laufende Prozess ohne
@@ -89,12 +99,12 @@ func (a *Assistent) Buckets(ctx context.Context, d Daten) (map[string]any, error
 		err = awsx.ZugangPruefen(ctx, cfg)
 	}
 	if err != nil {
-		return nil, Eingabefehler{awsx.Klartext(err, d.Profil)}
+		return nil, Eingabefehler{awsx.Klartext(err, d.Profil, i18n.Get(d.Sprache))}
 	}
 	s3 := awsx.NeuS3(cfg, "")
 	buckets, err := s3.Buckets(ctx)
 	if err != nil {
-		return nil, Eingabefehler{awsx.Klartext(err, d.Profil)}
+		return nil, Eingabefehler{awsx.Klartext(err, d.Profil, i18n.Get(d.Sprache))}
 	}
 	// Nie nil an die Oberflaeche geben: ein nil-Slice wird zu JSON `null`, und
 	// `null.map(...)` beendet das Skript der Seite - der Nutzer sieht dann nicht
@@ -116,9 +126,7 @@ func (a *Assistent) Buckets(ctx context.Context, d Daten) (map[string]any, error
 		// Policy gibt bewusst kein s3:ListAllMyBuckets, sonst saehe jeder alle
 		// Buckets des Kontos. Der Text fuehrt deshalb mit dem, was zu tun ist,
 		// und nicht mit dem, was fehlt.
-		out["note"] = "Bucket-Namen bitte direkt eintippen – dieser Zugang darf " +
-			"die Buckets des Kontos nicht auflisten (s3:ListAllMyBuckets). " +
-			"Das ist so gewollt und kein Fehler."
+		out["note"] = i18n.Get(d.Sprache).T("setup.note.noListBuckets")
 	}
 	return out, nil
 }
@@ -126,19 +134,19 @@ func (a *Assistent) Buckets(ctx context.Context, d Daten) (map[string]any, error
 // Test ist Schritt 3: die Checkliste.
 func (a *Assistent) Test(ctx context.Context, d Daten) (map[string]any, error) {
 	if strings.TrimSpace(d.Bucket) == "" {
-		return nil, fehler("Bitte einen Bucket angeben")
+		return nil, fehler("%s", i18n.Get(d.Sprache).T("setup.error.noBucket"))
 	}
 	cfg, err := awsx.Sitzung(ctx, d.Profil, d.Region)
 	if err == nil {
 		err = awsx.ZugangPruefen(ctx, cfg)
 	}
 	if err != nil {
-		return nil, Eingabefehler{awsx.Klartext(err, d.Profil)}
+		return nil, Eingabefehler{awsx.Klartext(err, d.Profil, i18n.Get(d.Sprache))}
 	}
 	s3 := awsx.NeuS3(cfg, "")
 	prefix := konfig.PrefixNormalisieren(d.Prefix)
 	punkte := pruefung.Ausfuehren(ctx, s3, awsx.NeuKMS(cfg, ""), awsx.NeuSES(cfg, ""),
-		d.Bucket, prefix, strings.TrimSpace(d.Absender))
+		d.Bucket, prefix, strings.TrimSpace(d.Absender), i18n.Get(d.Sprache))
 	return map[string]any{
 		"checks":         punkte,
 		"ok":             pruefung.Alles(punkte),
@@ -150,12 +158,12 @@ func (a *Assistent) Test(ctx context.Context, d Daten) (map[string]any, error) {
 func (a *Assistent) Lifecycle(ctx context.Context, d Daten) (map[string]any, error) {
 	cfg, err := awsx.Sitzung(ctx, d.Profil, d.Region)
 	if err != nil {
-		return nil, Eingabefehler{awsx.Klartext(err, d.Profil)}
+		return nil, Eingabefehler{awsx.Klartext(err, d.Profil, i18n.Get(d.Sprache))}
 	}
 	nachricht, err := awsx.NeuS3(cfg, "").LifecycleSetzen(ctx, d.Bucket,
 		konfig.PrefixNormalisieren(d.Prefix), d.Tage)
 	if err != nil {
-		return nil, Eingabefehler{awsx.Klartext(err, d.Profil)}
+		return nil, Eingabefehler{awsx.Klartext(err, d.Profil, i18n.Get(d.Sprache))}
 	}
 	return map[string]any{"message": nachricht}, nil
 }
@@ -175,7 +183,7 @@ func (a *Assistent) Speichern(_ context.Context, d Daten) (map[string]any, error
 	}
 	if a.Aktivieren != nil {
 		if err := a.Aktivieren(k); err != nil {
-			return nil, Eingabefehler{awsx.Klartext(err, k.Profil)}
+			return nil, Eingabefehler{awsx.Klartext(err, k.Profil, i18n.Get(d.Sprache))}
 		}
 	}
 	return map[string]any{"config": k, "path": pfad}, nil

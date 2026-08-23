@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"s3mail/i18n"
+
 	"s3mail/pruefung"
 	"s3mail/s3fake"
 	"s3mail/store"
@@ -26,7 +28,7 @@ func nach(punkte []pruefung.Punkt) map[string]pruefung.Punkt {
 func TestAllesInOrdnung(t *testing.T) {
 	f := s3fake.Neu()
 	f.Setzen("mail/m1", []byte("From: a@b.de\r\nSubject: x\r\n\r\nText\r\n"))
-	p := pruefung.Ausfuehren(context.Background(), f, nil, nil, "test-bucket", "mail/", "")
+	p := pruefung.Ausfuehren(context.Background(), f, nil, nil, "test-bucket", "mail/", "", i18n.Get("de"))
 	if !pruefung.Alles(p) {
 		t.Errorf("nicht alles gruen: %+v", p)
 	}
@@ -55,7 +57,7 @@ func TestFehlendesRechtNenntDieAktion(t *testing.T) {
 	f.Setzen("mail/m1", []byte("From: a@b.de\r\n\r\nText\r\n"))
 	f.PutErr = errors.New("AccessDenied")
 
-	p := pruefung.Ausfuehren(context.Background(), f, nil, nil, "test-bucket", "mail/", "")
+	p := pruefung.Ausfuehren(context.Background(), f, nil, nil, "test-bucket", "mail/", "", i18n.Get("de"))
 	k := nach(p)
 	if k["Schreiben"].OK {
 		t.Fatal("Schreibfehler nicht bemerkt")
@@ -70,7 +72,7 @@ func TestFehlendesRechtNenntDieAktion(t *testing.T) {
 
 func TestLeeresPostfachIstKeinFehler(t *testing.T) {
 	f := s3fake.Neu()
-	p := pruefung.Ausfuehren(context.Background(), f, nil, nil, "test-bucket", "mail/", "")
+	p := pruefung.Ausfuehren(context.Background(), f, nil, nil, "test-bucket", "mail/", "", i18n.Get("de"))
 	k := nach(p)
 	if !k["Bucket lesen"].OK || !strings.Contains(k["Bucket lesen"].Detail, "noch nichts") {
 		t.Errorf("%+v", k["Bucket lesen"])
@@ -88,7 +90,7 @@ func TestInterneObjekteSindKeineMail(t *testing.T) {
 	f := s3fake.Neu()
 	f.Setzen("mail/"+store.StateObject, []byte(`{"messages":{}}`))
 	f.Setzen("mail/"+store.StateOps+"x.json", []byte(`{"ops":[]}`))
-	p := nach(pruefung.Ausfuehren(context.Background(), f, nil, nil, "test-bucket", "mail/", ""))
+	p := nach(pruefung.Ausfuehren(context.Background(), f, nil, nil, "test-bucket", "mail/", "", i18n.Get("de")))
 	if !p["Mail lesen"].Uebergangen {
 		t.Errorf("Zustandsdatei als Mail geprueft: %+v", p["Mail lesen"])
 	}
@@ -137,14 +139,14 @@ func TestVerschluesselungWirdErkannt(t *testing.T) {
 	f.Setzen("mail/enc", body)
 	f.MetaSetzen("mail/enc", meta)
 	p := nach(pruefung.Ausfuehren(context.Background(), f, &kmsFake{key: key}, nil,
-		"test-bucket", "mail/", ""))
+		"test-bucket", "mail/", "", i18n.Get("de")))
 	if !p["Verschlüsselung"].OK || !strings.Contains(p["Verschlüsselung"].Detail, "klappt") {
 		t.Errorf("%+v", p["Verschlüsselung"])
 	}
 
 	// ohne kms:Decrypt muss der Punkt rot sein und die Aktion nennen
 	p = nach(pruefung.Ausfuehren(context.Background(), f,
-		&kmsFake{fehler: errors.New("AccessDenied")}, nil, "test-bucket", "mail/", ""))
+		&kmsFake{fehler: errors.New("AccessDenied")}, nil, "test-bucket", "mail/", "", i18n.Get("de")))
 	if p["Verschlüsselung"].OK {
 		t.Error("fehlendes kms:Decrypt nicht bemerkt")
 	}
@@ -156,7 +158,7 @@ func TestVerschluesselungWirdErkannt(t *testing.T) {
 	g := s3fake.Neu()
 	g.Setzen("mail/m1", []byte("From: a@b.de\r\n\r\nText\r\n"))
 	g.SSESetzen("mail/m1", store.CopyOpts{ServerSideEncryption: "aws:kms"})
-	p = nach(pruefung.Ausfuehren(context.Background(), g, nil, nil, "test-bucket", "mail/", ""))
+	p = nach(pruefung.Ausfuehren(context.Background(), g, nil, nil, "test-bucket", "mail/", "", i18n.Get("de")))
 	if !p["Verschlüsselung"].OK || !strings.Contains(p["Verschlüsselung"].Detail, "serverseitig") {
 		t.Errorf("%+v", p["Verschlüsselung"])
 	}
@@ -180,11 +182,11 @@ func TestSESAbsender(t *testing.T) {
 	ctx := context.Background()
 
 	p := nach(pruefung.Ausfuehren(ctx, f, nil, &sesFake{gut: []string{"support@firma.de"}},
-		"test-bucket", "mail/", "support@firma.de"))
+		"test-bucket", "mail/", "support@firma.de", i18n.Get("de")))
 	if !p["SES-Absender"].OK {
 		t.Errorf("%+v", p["SES-Absender"])
 	}
-	p = nach(pruefung.Ausfuehren(ctx, f, nil, &sesFake{}, "test-bucket", "mail/", "x@y.de"))
+	p = nach(pruefung.Ausfuehren(ctx, f, nil, &sesFake{}, "test-bucket", "mail/", "x@y.de", i18n.Get("de")))
 	if p["SES-Absender"].OK {
 		t.Error("unverifizierte Adresse als in Ordnung gemeldet")
 	}
@@ -192,7 +194,7 @@ func TestSESAbsender(t *testing.T) {
 		t.Errorf("Hinweis: %q", p["SES-Absender"].Hinweis)
 	}
 	// ohne Absender: uebersprungen, nicht rot
-	p = nach(pruefung.Ausfuehren(ctx, f, nil, &sesFake{}, "test-bucket", "mail/", ""))
+	p = nach(pruefung.Ausfuehren(ctx, f, nil, &sesFake{}, "test-bucket", "mail/", "", i18n.Get("de")))
 	if !p["SES-Absender"].Uebergangen {
 		t.Errorf("%+v", p["SES-Absender"])
 	}
@@ -206,7 +208,7 @@ func TestHinweisNenntDasPrefixZuerst(t *testing.T) {
 	f := s3fake.Neu()
 	f.ListErr = errors.New("AccessDenied")
 	p := nach(pruefung.Ausfuehren(context.Background(), f, nil, nil,
-		"test-bucket", "mail/ole/", ""))
+		"test-bucket", "mail/ole/", "", i18n.Get("de")))
 
 	h := p["Bucket lesen"].Hinweis
 	if !strings.Contains(h, "mail/ole/") {
