@@ -178,6 +178,7 @@
   <div class="box">{{t "rules.explain"}}</div>
   <div class="rule box"><span>{{t "rules.contains"}}</span><span>{{t "rules.field"}}</span><span>{{t "rules.folder"}}</span><span>{{t "rules.tags"}}</span><span></span></div>
   <div id="ruleRows" style="display:flex;flex-direction:column;gap:6px"></div>
+  <div id="ruleTips" style="margin-top:10px"></div>
   <div class="bar" style="margin:4px 0 0">
     <button type="button" id="ruleAdd">{{t "rules.add"}}</button>
     <button type="button" id="ruleApply">{{t "rules.applyAll"}}</button>
@@ -858,8 +859,39 @@ $("#rulesBtn").onclick = () => {
   (over.rules || []).forEach(r => box.appendChild(ruleRow(r)));
   if (!over.rules.length) box.appendChild(ruleRow());
   $("#r_err").textContent = "";
+  $("#ruleTips").innerHTML = "";
   $("#dlgRules").showModal();
+  showSuggestions();
 };
+
+/* What somebody already does by hand, offered as a rule. The numbers come along
+   on purpose: "11 of 12" is checkable, "we think you want this" is not. Nothing
+   is applied by itself - a click puts a row in the form, and saving is still a
+   separate step. */
+async function showSuggestions() {
+  let found = [];
+  try {
+    found = (await api("/api/rules/suggest")).suggestions || [];
+  } catch (e) { return; }   // a missing suggestion is not worth an error
+  if (!found.length) return;
+  const tips = $("#ruleTips");
+  tips.innerHTML = `<div class="sec">${T["rules.suggestions"]}</div>`;
+  for (const s of found.slice(0, 5)) {
+    const line = document.createElement("div");
+    line.className = "box";
+    line.style.cssText = "display:flex;align-items:center;gap:8px;margin-bottom:6px";
+    line.innerHTML = `<span style="flex:1">${T["rules.suggestion"]
+      .replace("%d", s.agree).replace("%d", s.count)
+      .replace("%s", esc(s.contains)).replace("%s", esc(folderLabel(s.folder)))}</span>
+      <button type="button">${T["rules.accept"]}</button>`;
+    line.querySelector("button").onclick = () => {
+      $("#ruleRows").appendChild(ruleRow({contains: s.contains, field: "from",
+                                          folder: s.folder, tags: s.tags, enabled: true}));
+      line.remove();
+    };
+    tips.appendChild(line);
+  }
+}
 $("#ruleAdd").onclick = () => $("#ruleRows").appendChild(ruleRow());
 function collectRules() {
   return [...$("#ruleRows").children].map(d => ({

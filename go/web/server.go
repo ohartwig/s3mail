@@ -562,6 +562,20 @@ func (s *Server) routes() {
 		}
 	})
 
+	// Suggestions read the index and propose what somebody is already doing by
+	// hand. A GET, because it changes nothing - the reader decides.
+	s.mux.HandleFunc("GET /api/rules/suggest", func(w http.ResponseWriter, r *http.Request) {
+		acc, ok := s.pick(w, r)
+		if !ok {
+			return
+		}
+		found := core.Suggest(acc.Mailbox.Index(), acc.Mailbox.State.Data().Rules)
+		if found == nil {
+			found = []core.Suggestion{}
+		}
+		s.json(w, http.StatusOK, map[string]any{"suggestions": found})
+	})
+
 	s.post("/api/rules/apply", func(w http.ResponseWriter, r *http.Request, a request, acc *Account) {
 		n, err := acc.Mailbox.ApplyRules(r.Context(), nil, true)
 		if err != nil {

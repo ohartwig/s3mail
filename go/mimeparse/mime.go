@@ -21,9 +21,13 @@ import (
 
 // Summary is what s3mail puts into the index for each message.
 type Summary struct {
-	From        string       `json:"from"`
-	To          string       `json:"to"`
-	Cc          string       `json:"cc"`
+	From string `json:"from"`
+	To   string `json:"to"`
+	Cc   string `json:"cc"`
+	// FromAddr is the bare address out of From: "Anna <anna@x.de>" becomes
+	// "anna@x.de". Everything that groups by sender needs it - a display name
+	// varies between two messages from the same person.
+	FromAddr    string       `json:"from_addr"`
 	Subject     string       `json:"subject"`
 	Date        string       `json:"date"`
 	Preview     string       `json:"preview"`
@@ -75,6 +79,21 @@ func repairLatin(s string) string {
 }
 
 // AddrStr matches addr_str(): "Name <address>, …" as one readable string.
+// BareAddr takes the address out of a header and nothing else: "Anna
+// <anna@x.de>" becomes "anna@x.de", lowercased, because a sender who writes
+// their address in capitals one day is the same sender.
+func BareAddr(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return ""
+	}
+	p := &mail.AddressParser{WordDecoder: &mime.WordDecoder{CharsetReader: charsetReader}}
+	list, err := p.ParseList(value)
+	if err != nil || len(list) == 0 {
+		return ""
+	}
+	return strings.ToLower(list[0].Address)
+}
+
 func AddrStr(value string) string {
 	if strings.TrimSpace(value) == "" {
 		return ""
@@ -168,6 +187,7 @@ func Summarize(raw []byte, fallback time.Time) Summary {
 	_ = err // a header error does not topple the message, the rest is often usable
 	h := msg.Header
 	s.From = AddrStr(h.Get("From"))
+	s.FromAddr = BareAddr(h.Get("From"))
 	s.To = AddrStr(h.Get("To"))
 	s.Cc = AddrStr(h.Get("Cc"))
 	s.Subject = Dec(h.Get("Subject"))

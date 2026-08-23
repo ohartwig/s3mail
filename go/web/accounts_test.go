@@ -191,3 +191,59 @@ func TestQuittingWorksWithoutAMailbox(t *testing.T) {
 		t.Error("OnShutdown was not called")
 	}
 }
+
+// TestSuggestionsComeOutOfTheIndex - the route reads what somebody already did
+// by hand. It changes nothing; the reader decides.
+func TestSuggestionsComeOutOfTheIndex(t *testing.T) {
+	ctx := context.Background()
+	f := s3fake.New()
+	// Eleven from one sender, ten of them already filed into "werbung".
+	for i := 0; i < 11; i++ {
+		key := "mail/n" + string(rune('a'+i))
+		if i < 10 {
+			key = "mail/werbung/n" + string(rune('a'+i))
+		}
+		f.Store(key, rawMail("Shop <news@shop.io>", "Angebot", "Text.",
+			"Mon, 03 Aug 2026 09:00:00 +0000"))
+	}
+	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), true)
+	if _, err := mb.Refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	srv := NewServer(one(mb), testToken, "127.0.0.1", 0, nil)
+	ts := httptest.NewServer(srv)
+	defer ts.Close()
+	srv.Port = portOf(ts.URL)
+
+	r := callServer(t, ts, "GET", "/api/rules/suggest", "", nil)
+	if r.Code != 200 {
+		t.Fatalf("HTTP %d: %s", r.Code, r.Body)
+	}
+	var d struct {
+		Suggestions []struct {
+			Contains, Folder string
+			Count, Agree     int
+		} `json:"suggestions"`
+	}
+	if err := json.Unmarshal(r.Body, &d); err != nil {
+		t.Fatal(err)
+	}
+	if len(d.Suggestions) != 1 {
+		t.Fatalf("%d suggestions: %+v", len(d.Suggestions), d.Suggestions)
+	}
+	s := d.Suggestions[0]
+	if s.Contains != "news@shop.io" || s.Folder != "werbung" || s.Agree != 10 || s.Count != 11 {
+		t.Errorf("%+v", s)
+	}
+}
+
+// TestNoSuggestionsIsAnEmptyListAndNotNull - a nil slice becomes JSON `null`,
+// and `null.map(...)` ends the page's script. The same trap as with the buckets
+// in the wizard.
+func TestNoSuggestionsIsAnEmptyListAndNotNull(t *testing.T) {
+	ts, _ := twoMailboxes(t)
+	r := callServer(t, ts, "GET", "/api/rules/suggest", "", nil)
+	if !strings.Contains(string(r.Body), `"suggestions":[]`) {
+		t.Errorf("empty suggestions are not an empty list: %s", r.Body)
+	}
+}

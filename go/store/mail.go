@@ -259,6 +259,7 @@ func (m *Mailbox) fill(base core.Message, raw []byte, fallback time.Time) core.M
 	s := mimeparse.Summarize(raw, fallback)
 	base.Date = s.Date
 	base.From, base.To, base.Cc = s.From, s.To, s.Cc
+	base.FromAddr = s.FromAddr
 	base.Subject = s.Subject
 	if base.Subject == "" {
 		base.Subject = mimeparse.SubjectNone

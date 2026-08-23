@@ -93,3 +93,32 @@ func attachmentNames(a []Attachment) []string {
 	}
 	return out
 }
+
+// TestBareAddrGroupsTheSameSender - a display name varies between two messages
+// from the same person, and capitals vary too. Anything that groups by sender
+// has to see one sender, not three.
+func TestBareAddrGroupsTheSameSender(t *testing.T) {
+	same := []string{"anna@x.de", "Anna <anna@x.de>", "\"Meier, Anna\" <Anna@X.de>",
+		"=?utf-8?q?Anna_M=C3=BCller?= <anna@x.de>"}
+	for _, header := range same {
+		if got := BareAddr(header); got != "anna@x.de" {
+			t.Errorf("%q -> %q, expected anna@x.de", header, got)
+		}
+	}
+	for _, junk := range []string{"", "   ", "kein-at-zeichen"} {
+		if got := BareAddr(junk); got != "" {
+			t.Errorf("%q -> %q, expected nothing", junk, got)
+		}
+	}
+}
+
+// TestTheIndexCarriesTheSenderAddress - the field existed and nothing filled
+// it. Anything reaching for it silently got "".
+func TestTheIndexCarriesTheSenderAddress(t *testing.T) {
+	raw := []byte("From: \"Shop\" <News@Shop.IO>\r\nTo: a@b.de\r\nSubject: x\r\n" +
+		"Date: Mon, 03 Aug 2026 09:00:00 +0000\r\n\r\nText\r\n")
+	s := Summarize(raw, time.Unix(0, 0).UTC())
+	if s.FromAddr != "news@shop.io" {
+		t.Errorf("FromAddr = %q", s.FromAddr)
+	}
+}

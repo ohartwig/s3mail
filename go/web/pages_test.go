@@ -215,3 +215,13 @@ func TestThePageListensForEvents(t *testing.T) {
 		t.Error("the timer is gone - a broken stream would stop the mailbox for good")
 	}
 }
+
+// TestTheRulesDialogAsksForSuggestions - the way there is a string in a page.
+func TestTheRulesDialogAsksForSuggestions(t *testing.T) {
+	out := page("inbox", PageMailbox, "de", map[string]any{"bucket": "b"})
+	for _, anchor := range []string{"/api/rules/suggest", "ruleTips", "showSuggestions"} {
+		if !strings.Contains(out, anchor) {
+			t.Errorf("%q missing - the suggestions never reach the reader", anchor)
+		}
+	}
+}

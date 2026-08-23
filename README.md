@@ -279,6 +279,21 @@ einsortiert – wenn du sie zurückschiebst, bleibt sie liegen. Über „Auf all
 Mails anwenden“ laufen die Regeln nachträglich übers ganze Postfach. Papierkorb und
 Spam fasst die Automatik nicht an.
 
+**Regelvorschläge**
+
+Im Regeldialog steht, was du ohnehin schon von Hand tust: „Du hast 11 von 12
+Mails von *news@shop.io* nach *Werbung* verschoben." Ein Klick legt die Regel als
+Zeile ins Formular – gespeichert wird erst, wenn du speicherst.
+
+Der Vorschlag stützt sich auf **Belege, nicht auf Geschmack**: mindestens vier
+Mails desselben Absenders und mindestens 80 % davon im selben Ordner. Die Zahlen
+stehen dabei, damit du sie prüfen kannst. Ausgewertet werden Absender, Ordner und
+Tags – **nie der Inhalt einer Mail**, und ohne Netzverbindung oder API-Schlüssel.
+
+Nicht vorgeschlagen wird: der Papierkorb (eine falsche Regel ließe Mail
+verschwinden), der Posteingang (dort landet Mail von selbst, das ist keine
+Entscheidung), und alles, was eine bestehende Regel schon fängt.
+
 **Suche**
 
 Freie Wörter suchen in Von/An/Betreff/Vorschau/Tags. Dazu Filter, kombinierbar:
