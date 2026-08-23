@@ -50,7 +50,7 @@ func TestEverythingOK(t *testing.T) {
 	if !k[label("check.write")].OK || !k[label("check.delete")].OK {
 		t.Errorf("write/delete: %+v %+v", k[label("check.write")], k[label("check.delete")])
 	}
-	// Das Testobjekt muss wieder weg sein
+	// The test object has to be gone again
 	if f.Has("mail/.s3mail-probe") {
 		t.Error("Testobjekt liegen gelassen")
 	}

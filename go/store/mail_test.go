@@ -59,7 +59,7 @@ func TestIndexAndFolders(t *testing.T) {
 	}
 }
 
-// TestStateAndOpsAreNotMail - sonst tauchen sie als Nachricht auf.
+// TestStateAndOpsAreNotMail - otherwise they turn up as messages.
 func TestStateAndOpsAreNotMail(t *testing.T) {
 	ctx := context.Background()
 	_, m := buildMailbox(t)
@@ -230,7 +230,7 @@ func TestEncryptedMeansNoRangeGet(t *testing.T) {
 	if !m.Encrypted() {
 		t.Error("mailbox not remembered as encrypted")
 	}
-	// zweiter Zugriff darf gar keinen Range mehr schicken
+	// the second access must not send a range at all any more
 	f.ClearCalls()
 	if _, err := m.Fetch(ctx, "mail/enc1", store.HeaderChunk); err != nil {
 		t.Fatal(err)

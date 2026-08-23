@@ -162,10 +162,10 @@ func Summarize(raw []byte, fallback time.Time) Summary {
 	s := Summary{Attachments: []Attachment{}}
 	msg, err := message.Read(strings.NewReader(string(raw)))
 	if msg == nil {
-		s.Preview = rawPreview(raw) // gar kein MIME - dann eben der Rohtext
+		s.Preview = rawPreview(raw) // no MIME at all - then the raw text it is
 		return s
 	}
-	_ = err // ein Header-Fehler kippt die Mail nicht, der Rest ist oft brauchbar
+	_ = err // a header error does not topple the message, the rest is often usable
 	h := msg.Header
 	s.From = AddrStr(h.Get("From"))
 	s.To = AddrStr(h.Get("To"))
@@ -209,7 +209,7 @@ func walk(msg *message.Entity, idx *int, text, html *strings.Builder, s *Summary
 		for {
 			part, err := mr.NextPart()
 			if err != nil {
-				return // io.EOF oder kaputter Part - Rest bleibt brauchbar
+				return // io.EOF or a broken part - the rest stays usable
 			}
 			walk(part, idx, text, html, s)
 		}

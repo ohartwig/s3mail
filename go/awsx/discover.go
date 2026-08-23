@@ -54,7 +54,7 @@ func Discover(ctx context.Context, cfg aws.Config) (Finding, error) {
 }
 
 // userFromArn pulls the user name out of arn:aws:iam::123:user/path/name.
-// Bei allem anderen (assumed-role, root, Dienst) kommt "" zurueck.
+// For anything else (assumed role, root, a service) "" comes back.
 func userFromArn(arn string) string {
 	i := strings.Index(arn, ":user/")
 	if i < 0 {
@@ -97,7 +97,7 @@ func policyDocuments(ctx context.Context, c *iam.Client, user string) []string {
 	return out
 }
 
-// BucketRegion sagt, in welcher Region ein Bucket steht.
+// BucketRegion says which region a bucket sits in.
 //
 // S3 tells this even to somebody who may not touch the bucket: the header
 // x-amz-bucket-region comes with a 403 or 301 answer as well. So a HeadBucket

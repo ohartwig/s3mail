@@ -72,7 +72,7 @@ func Load() Config {
 	if err != nil {
 		return k
 	}
-	_ = json.Unmarshal(blob, &k) // kaputte Datei: dann eben die Standardwerte
+	_ = json.Unmarshal(blob, &k) // a broken file: then the defaults it is
 	if k.Port == 0 {
 		k.Port = 8765
 	}
@@ -164,7 +164,7 @@ func Profiles() []string {
 			name := strings.TrimSpace(line[1 : len(line)-1])
 			name = strings.TrimPrefix(name, f.prefix)
 			if strings.HasPrefix(name, "sso-session ") || strings.HasPrefix(name, "services ") {
-				continue // das sind keine Profile
+				continue // these are not profiles
 			}
 			add(name)
 		}

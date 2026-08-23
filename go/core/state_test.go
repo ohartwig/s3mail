@@ -112,7 +112,7 @@ func clone(t *testing.T, d *Data) *Data {
 
 // TestTwoMachines stages the case the op log exists for in the first place:
 // two machines with the same starting state change different messages, then
-// dieselbe. Nichts darf verlorengehen.
+// read each other's. Nothing may get lost.
 func TestTwoMachines(t *testing.T) {
 	out := NewData()
 	Apply(out, Op{T: "tags", Mids: []string{"m1"}, Add: []string{"start"}})

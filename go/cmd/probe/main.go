@@ -1,5 +1,5 @@
-// Kleines Programm, das die MIME-Schicht benutzt - nur um zu sehen, was ein
-// fertiges Binary pro Plattform wiegt und ob die Cross-Kompilierung durchlaeuft.
+// A small program that uses the MIME layer - only to see what a finished
+// binary weighs per platform and whether cross compilation goes through.
 package main
 
 import (

@@ -228,9 +228,9 @@ func TestAccessControl(t *testing.T) {
 	}
 	if r := callServer(t, ts, "POST", "/api/empty-trash", "{}",
 		map[string]string{"Origin": "http://localhost:1234"}); r.Code != 403 {
-		t.Errorf("fremder Port als Origin: HTTP %d", r.Code)
+		t.Errorf("foreign port as origin: HTTP %d", r.Code)
 	}
-	// DNS-Rebinding: fremder Name im Host-Header
+	// DNS rebinding: a foreign name in the Host header
 	if r := callServer(t, ts, "GET", "/api/messages?folder=", "",
 		map[string]string{"Host": "boese.example"}); r.Code != 403 {
 		t.Errorf("fremder Host: HTTP %d", r.Code)
@@ -303,7 +303,7 @@ func TestWithoutMailbox(t *testing.T) {
 	if r := callServer(t, ts, "POST", "/api/refresh", "{}", nil); r.Code != 503 {
 		t.Errorf("refresh: HTTP %d", r.Code)
 	}
-	// Der Assistent muss erreichbar bleiben
+	// The wizard has to stay reachable
 	if r := callServer(t, ts, "POST", "/api/setup/info", "{}", nil); r.Code == 503 {
 		t.Error("wizard blocked although it is what is needed")
 	}
@@ -370,8 +370,8 @@ func TestComposeWithoutATemplate(t *testing.T) {
 			t.Errorf("mailbox page without %s - new message unreachable", part)
 		}
 	}
-	// The key of the open message must not ride along, or the new message hangs
-	// Nachricht am Faden einer fremden.
+	// The key of the open message must not ride along, or a new message would
+	// hang on the thread of somebody else's.
 	if strings.Contains(PageMailbox, `{mode, key: current`) {
 		t.Error("a new message carries the key of the open message")
 	}

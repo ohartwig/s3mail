@@ -20,9 +20,8 @@ const (
 	cseKeyV1 = "x-amz-key"
 )
 
-// KMS is the slice of it s3mail needs. An interface, so the tests get by without
-// an account.
-// ohne AWS auskommen.
+// KMS is the slice of it s3mail needs. An interface, so the tests get by
+// without an account.
 type KMS interface {
 	Decrypt(ciphertext []byte, context map[string]string) ([]byte, error)
 }
@@ -30,8 +29,8 @@ type KMS interface {
 // ErrNoKMS reports that the message is encrypted but no access exists.
 var ErrNoKMS = errors.New("encrypted with KMS, but no KMS access is set up")
 
-// LowerMeta senkt alle Schluessel auf Kleinschreibung - S3 gibt Metadaten je nach
-// Weg unterschiedlich zurueck.
+// LowerMeta lowercases every key - S3 returns metadata differently depending
+// on the path it came through.
 func LowerMeta(meta map[string]string) map[string]string {
 	out := make(map[string]string, len(meta))
 	for k, v := range meta {

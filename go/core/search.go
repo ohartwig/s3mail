@@ -122,7 +122,7 @@ func datePart(iso string) string {
 
 // SearchOpts are the restrictions that do not come from the text query.
 type SearchOpts struct {
-	Folder     *string // nil = alle Ordner
+	Folder     *string // nil = every folder
 	Tag        string
 	OnlyUnread bool
 	OnlyStar   bool

@@ -84,7 +84,7 @@ func TestEnvelopeAgainstPython(t *testing.T) {
 }
 
 // TestEncryptionContext - without the context from x-amz-matdesc store.KMS refuses.
-// Der Fehler waere im Betrieb schwer zu finden, deshalb hier festgenagelt.
+// The bug would be hard to find in daily use, so it is pinned down here.
 func TestEncryptionContext(t *testing.T) {
 	_, cases := loadEnvelopes(t)
 	f := cases["cbc"]

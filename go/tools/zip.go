@@ -7,7 +7,7 @@
 // nothing but Go. The executable bit has to travel, because a file downloaded
 // raw arrives without +x and cannot be started.
 //
-//	go run tools/zippen.go ziel.zip datei [datei…]
+//	go run tools/zip.go ziel.zip datei [datei…]
 package main
 
 import (
