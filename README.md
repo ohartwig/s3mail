@@ -247,6 +247,20 @@ has:anhang has:spam is:ungelesen is:stern tag:wichtig in:archiv
 **Tastatur:** `n` neue Nachricht · `j`/`k` blättern · `x` auswählen · `s` Stern ·
 `e` archivieren · `Entf` Papierkorb · `/` Suche.
 
+**Sprache**
+
+Die Oberfläche spricht Deutsch, Englisch und Spanisch. Die Auswahl steht oben rechts
+im Postfach und im Assistenten; sie wird in der Konfiguration gemerkt
+(`"language": "de"`) und gilt auch für die Meldungen beim Start und die Hilfe zu den
+Optionen.
+
+Ohne getroffene Wahl entscheidet der Browser (`Accept-Language`), ohne den Englisch.
+Die Reihenfolge ist: Auswahl → Konfiguration → Browser → Englisch.
+
+Die Suchbegriffe funktionieren in allen drei Sprachen: `from:` wie `von:` wie `de:`,
+`is:ungelesen` wie `is:unread` wie `is:sinleer`. Ordnernamen sind dagegen echte
+S3-Prefixe (`trash`, `spam`, `archiv`) und werden nur angezeigt, nicht übersetzt.
+
 ## Selbst bauen
 
 Fertige Pakete für macOS (Apple Silicon und Intel), Linux und Windows liegen
