@@ -10,13 +10,13 @@ import (
 	"s3mail/config"
 )
 
-// runningInstance prueft, ob unter der gemerkten Adresse schon ein s3mail
-// antwortet, und gibt sie zurueck.
+// runningInstance checks whether an s3mail already answers at the remembered
+// address, and returns it.
 //
-// Die Adresse steht in adresse.txt, samt Token - dieselbe Datei, die es fuer den
-// Fall gibt, dass jemand das Fenster geschlossen hat. Geprueft wird trotzdem: die
-// Datei ueberlebt einen Absturz, der Port ist dann aber von etwas anderem belegt,
-// und dann waere ein "laeuft schon" schlicht gelogen.
+// The address lives in adresse.txt, token included - the same file that exists
+// for the case where somebody closed the window. It is still verified: the file
+// survives a crash, the port is then taken by something else, and "already
+// running" would simply be a lie.
 func runningInstance() (string, bool) {
 	blob, err := os.ReadFile(filepath.Join(config.Dir(), "adresse.txt"))
 	if err != nil {
@@ -33,8 +33,8 @@ func runningInstance() (string, bool) {
 		return "", false
 	}
 	defer resp.Body.Close()
-	// 200 heisst: das ist unsere Instanz und das Token stimmt noch. Alles andere
-	// - auch ein 403 von einem fremden Dienst auf demselben Port - zaehlt nicht.
+	// 200 means: this is our instance and the token still matches. Anything else
+	// - a 403 from a foreign service on the same port included - does not count.
 	if resp.StatusCode != http.StatusOK {
 		return "", false
 	}

@@ -9,7 +9,7 @@ import (
 	"s3mail/store"
 )
 
-// KMS setzt store.KMS auf das AWS-SDK um.
+// KMS maps store.KMS onto the AWS SDK.
 type KMS struct{ c *kms.Client }
 
 func NewKMS(cfg aws.Config, endpoint string) *KMS {
@@ -20,8 +20,8 @@ func NewKMS(cfg aws.Config, endpoint string) *KMS {
 	})}
 }
 
-// Decrypt entpackt den Datenschluessel. Der Encryption Context muss mit - ohne ihn
-// lehnt KMS ab, und die Fehlermeldung sagt nicht, woran es lag.
+// Decrypt unwraps the data key. The encryption context has to come along -
+// without it KMS refuses, and the error message does not say why.
 func (k *KMS) Decrypt(ciphertext []byte, encContext map[string]string) ([]byte, error) {
 	resp, err := k.c.Decrypt(context.Background(), &kms.DecryptInput{
 		CiphertextBlob:    ciphertext,

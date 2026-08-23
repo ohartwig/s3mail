@@ -10,7 +10,7 @@ import (
 	"s3mail/mailer"
 )
 
-// SES verschickt Antworten und Weiterleitungen.
+// SES sends replies and forwards.
 type SES struct{ c *ses.Client }
 
 func NewSES(cfg aws.Config, endpoint string) *SES {
@@ -21,7 +21,7 @@ func NewSES(cfg aws.Config, endpoint string) *SES {
 	})}
 }
 
-// Senden uebergibt die fertige Mail an SES und liefert deren Message-ID.
+// Send hands the finished message to SES and returns its message ID.
 func (s *SES) Send(ctx context.Context, n mailer.Message) (string, error) {
 	resp, err := s.c.SendRawEmail(ctx, &ses.SendRawEmailInput{
 		Source:       aws.String(n.From),
@@ -34,8 +34,9 @@ func (s *SES) Send(ctx context.Context, n mailer.Message) (string, error) {
 	return aws.ToString(resp.MessageId), nil
 }
 
-// Identities liefert die in SES verifizierten Absenderadressen. Fehlt das Recht,
-// gibt es eine leere Liste statt eines Fehlers - der Assistent laesst dann eintippen.
+// Identities returns the sender addresses verified in SES. Without the right,
+// an empty list comes back instead of an error - the wizard then lets it be
+// typed in.
 func (s *SES) Identities(ctx context.Context) []string {
 	resp, err := s.c.ListIdentities(ctx, &ses.ListIdentitiesInput{
 		IdentityType: types.IdentityTypeEmailAddress})
@@ -57,13 +58,13 @@ func (s *SES) Identities(ctx context.Context) []string {
 	return out
 }
 
-// VerifiedDomains liefert die freigeschalteten Domains.
+// VerifiedDomains returns the domains that are cleared.
 //
-// Getrennt von Identitaeten(), weil beides Verschiedenes bedeutet: eine
-// verifizierte Adresse ist eine Adresse, eine verifizierte Domain erlaubt JEDE
-// Adresse darunter. Wer nur Adress-Identitaeten abfragt - so wie diese Datei es
-// zuerst tat - bekommt bei einem sauber ueber die Domain verifizierten Setup
-// eine leere Liste und haelt sie fuer einen Fehler.
+// Separate from Identities(), because the two mean different things: a verified
+// address is one address, a verified domain allows EVERY address below it.
+// Whoever asks only for address identities - the way this file did at first -
+// gets an empty list from a setup cleanly verified over the domain, and takes
+// it for an error.
 func (s *SES) VerifiedDomains(ctx context.Context) []string {
 	resp, err := s.c.ListIdentities(ctx, &ses.ListIdentitiesInput{
 		IdentityType: types.IdentityTypeDomain})
@@ -85,7 +86,7 @@ func (s *SES) VerifiedDomains(ctx context.Context) []string {
 	return out
 }
 
-// Verified sagt, ob Adresse oder Domain in SES freigeschaltet sind.
+// Verified says whether address or domain are cleared in SES.
 func (s *SES) Verified(ctx context.Context, address, domain string) ([]string, error) {
 	resp, err := s.c.GetIdentityVerificationAttributes(ctx,
 		&ses.GetIdentityVerificationAttributesInput{Identities: []string{address, domain}})

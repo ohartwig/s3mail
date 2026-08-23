@@ -1,6 +1,6 @@
-// Package awsx verbindet s3mail mit dem echten AWS: die Umsetzungen von store.S3
-// und store.KMS, dazu die Uebersetzung der AWS-Fehler in Saetze, mit denen jemand
-// etwas anfangen kann.
+// Package awsx connects s3mail to the real AWS: the implementations of store.S3
+// and store.KMS, plus the translation of AWS errors into sentences somebody can
+// act on.
 package awsx
 
 import (
@@ -15,15 +15,15 @@ import (
 	"github.com/aws/smithy-go"
 )
 
-// SharedDir ist der Ort von credentials und config. Leer heisst: was
-// das SDK von sich aus nimmt (~/.aws).
+// SharedDir is where credentials and config live. Empty means: whatever the SDK
+// takes by itself (~/.aws).
 //
-// Der Assistent schreibt die Zugangsdaten irgendwohin - das SDK muss sie an
-// derselben Stelle suchen, sonst legt jemand ein Profil an, das nie gefunden wird.
+// The wizard writes the credentials somewhere - the SDK has to look for them in
+// the same place, or somebody creates a profile that is never found.
 var SharedDir string
 
-// Session baut die AWS-Konfiguration aus Profil und Region. Beides darf leer sein;
-// dann greift, was in der Umgebung steht.
+// Session builds the AWS configuration from profile and region. Both may be
+// empty; then whatever the environment holds applies.
 func Session(ctx context.Context, profile, region string) (aws.Config, error) {
 	var opts []func(*config.LoadOptions) error
 	if profile != "" {
@@ -46,9 +46,9 @@ func Session(ctx context.Context, profile, region string) (aws.Config, error) {
 	return cfg, nil
 }
 
-// CheckAccess holt die Zugangsdaten einmal ab. config.LoadDefaultConfig meldet
-// naemlich noch keinen Fehler, wenn gar keine hinterlegt sind - das faellt sonst
-// erst beim ersten Aufruf auf, mitten in einer anderen Operation.
+// CheckAccess fetches the credentials once. config.LoadDefaultConfig reports no
+// error yet when none are stored at all - that would otherwise surface at the
+// first call, in the middle of some other operation.
 func CheckAccess(ctx context.Context, cfg aws.Config) error {
 	if cfg.Credentials == nil {
 		return errors.New("keine Zugangsdaten")
@@ -57,11 +57,11 @@ func CheckAccess(ctx context.Context, cfg aws.Config) error {
 	return err
 }
 
-// PlainText uebersetzt eine AWS-Ausnahme in einen Satz, der sagt, was zu tun ist.
+// PlainText translates an AWS exception into a sentence that says what to do.
 //
-// Das AWS-SDK meldet fehlende oder unbrauchbare Zugangsdaten in einem halben
-// Dutzend Formen, alle englisch und alle ohne Hinweis darauf, dass der Assistent
-// zwei Felder weiter oben genau das loesen wuerde.
+// The AWS SDK reports missing or unusable credentials in half a dozen shapes,
+// all of them English and none of them hinting that the wizard two fields
+// further up would solve exactly that.
 func PlainText(err error, profile string, cat i18n.Catalog) string {
 	if err == nil {
 		return ""
@@ -73,13 +73,13 @@ func PlainText(err error, profile string, cat i18n.Catalog) string {
 	keys := cat.T("aws.enterKeys")
 	text := err.Error()
 
-	// Profil gibt es nicht
+	// no such profile
 	var missingProfile config.SharedConfigProfileNotExistError
 	if errors.As(err, &missingProfile) {
 		return cat.Tf("aws.noSuchProfile", profile, keys)
 	}
 
-	// SSO: die Anmeldung fehlt, nicht die Zugangsdaten
+	// SSO: the login is missing, not the credentials
 	if strings.Contains(text, "sso") || strings.Contains(text, "SSO") ||
 		strings.Contains(text, "token") && strings.Contains(text, "expired") {
 		cmd := "aws sso login"
@@ -89,7 +89,7 @@ func PlainText(err error, profile string, cat i18n.Catalog) string {
 		return cat.Tf("aws.ssoLoginNeeded", wo, cmd)
 	}
 
-	// Fehlende Region faellt sonst als kryptischer Endpunktfehler auf
+	// a missing region otherwise surfaces as a cryptic endpoint error
 	if strings.Contains(text, "no region") || strings.Contains(text, "region is required") ||
 		strings.Contains(text, "MissingRegion") {
 		return cat.T("aws.noRegion")
@@ -115,8 +115,8 @@ func PlainText(err error, profile string, cat i18n.Catalog) string {
 		}
 	}
 
-	// Keine Zugangsdaten - im SDK kommt das als CredentialRequiresARNError,
-	// als leerer Provider oder schlicht als Text durch.
+	// No credentials - the SDK lets this through as CredentialRequiresARNError, as
+	// an empty provider or plainly as text.
 	if strings.Contains(text, "failed to refresh cached credentials") ||
 		strings.Contains(text, "no EC2 IMDS role found") ||
 		strings.Contains(text, "failed to retrieve credentials") ||
@@ -125,11 +125,11 @@ func PlainText(err error, profile string, cat i18n.Catalog) string {
 		return cat.Tf("aws.noCredentials", wo, keys)
 	}
 
-	// Netz
+	// network
 	if strings.Contains(text, "no such host") || strings.Contains(text, "dial tcp") ||
 		strings.Contains(text, "connection refused") || strings.Contains(text, "timeout") {
 		return cat.T("aws.noConnection")
 	}
 
-	return text // Unbekanntes nicht verschlucken
+	return text // do not swallow the unknown
 }

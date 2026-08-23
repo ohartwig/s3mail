@@ -8,15 +8,15 @@ import (
 	"time"
 )
 
-// openWindow bringt die Oberflaeche auf den Schirm.
+// openWindow puts the interface on the screen.
 //
-// Ein eigenes Fenster mit nativem WebView haette CGO gebraucht, und damit waere
-// die Cross-Kompilierung weg gewesen - Wails kann nicht einmal nach macOS
-// cross-kompilieren. Stattdessen wird der Browser im App-Modus gestartet: ein
-// Fenster ohne Tableiste und ohne Adresszeile. Das sieht aus wie ein Programm und
-// kostet keine einzige C-Abhaengigkeit.
+// A window of our own with a native WebView would have needed CGO, and cross
+// compilation would have been gone with it - Wails cannot even cross compile to
+// macOS. Instead the browser is started in app mode: a window without a tab bar
+// and without an address bar. That looks like a program and costs not a single
+// C dependency.
 //
-// Findet sich kein passender Browser, geht die Adresse eben in einem Tab auf.
+// If no suitable browser is found, the address simply opens in a tab.
 func openWindow(url string) {
 	time.Sleep(400 * time.Millisecond)
 	if startAppMode(url) {
@@ -25,8 +25,8 @@ func openWindow(url string) {
 	openBrowser(url)
 }
 
-// appModeBrowser nennt die Browser, die --app= koennen, in der Reihenfolge, in
-// der wir sie ausprobieren. Unter macOS der Bundle-Name, sonst der Programmpfad.
+// appModeBrowser names the browsers that can do --app=, in the order we try
+// them. On macOS the bundle name, elsewhere the program path.
 func appModeBrowser() []string {
 	switch runtime.GOOS {
 	case "darwin":
@@ -50,13 +50,13 @@ func appModeBrowser() []string {
 	}
 }
 
-// windowArgs sind die Schalter, die aus einem Browser ein Programmfenster machen.
+// windowArgs are the switches that turn a browser into a program window.
 func windowArgs(url string) []string {
 	return []string{
 		"--app=" + url,
 		"--window-size=1280,860",
-		// Eigenes Profil, damit s3mail nicht die Sitzung eines laufenden
-		// Browserfensters mitbenutzt.
+		// A profile of our own, so s3mail does not share the session of a running
+		// browser window.
 		"--user-data-dir=" + filepath.Join(os.TempDir(), "s3mail-fenster"),
 	}
 }
@@ -83,15 +83,14 @@ func startAppMode(url string) bool {
 	return false
 }
 
-// startAppModeMac geht ueber `open -na`.
+// startAppModeMac goes through `open -na`.
 //
-// Das Browser-Binary direkt aufzurufen funktioniert unter macOS nicht, wenn der
-// Browser schon laeuft: der Aufruf reicht die Adresse nur an die bestehende
-// Instanz weiter ("Wird in einer aktuellen Browsersitzung geoeffnet") und
-// verwirft --app= und --user-data-dir, weil das Startparameter sind. Es entsteht
-// dann bestenfalls ein Tab im Hintergrund - und fuer den, der doppelgeklickt
-// hat, sieht es aus, als passiere nichts. `open -n` erzwingt eine neue Instanz,
-// die die Schalter auch beachtet.
+// Calling the browser binary directly does not work on macOS while the browser
+// is already running: the call only hands the address to the existing instance
+// ("opened in a current browser session") and discards --app= and
+// --user-data-dir, because those are startup parameters. At best a tab appears
+// in the background - and to whoever double clicked, it looks like nothing
+// happens. `open -n` forces a new instance, and that one honours the switches.
 func startAppModeMac(url string) bool {
 	for _, name := range appModeBrowser() {
 		if _, err := os.Stat("/Applications/" + name + ".app"); err != nil {
@@ -105,14 +104,14 @@ func startAppModeMac(url string) bool {
 	return false
 }
 
-// macCommand baut den Aufruf. Eigene Funktion, damit der Test festhalten kann,
-// dass "-n" dabei ist - ohne das reicht macOS die Adresse an eine laufende
-// Browserinstanz weiter, und es geht kein Fenster auf.
+// macCommand builds the call. A function of its own so the test can pin down
+// that "-n" is part of it - without it macOS hands the address to a running
+// browser instance and no window opens.
 func macCommand(name, url string) (string, []string) {
 	return "open", append([]string{"-na", name, "--args"}, windowArgs(url)...)
 }
 
-// openBrowser ist der Rueckfall: normale Adresse im Standardbrowser.
+// openBrowser is the fallback: a normal address in the default browser.
 func openBrowser(url string) {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {

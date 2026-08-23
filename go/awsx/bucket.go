@@ -11,21 +11,21 @@ import (
 	"github.com/aws/smithy-go"
 )
 
-// LifecycleRuleID ist die Kennung unserer Papierkorb-Regel. Alles andere im
-// Bucket bleibt unangetastet.
+// LifecycleRuleID is the identifier of our trash rule. Anything else in the
+// bucket's lifecycle configuration is left alone.
 const LifecycleRuleID = "s3mail-trash"
 
-// Buckets listet alle Buckets des Kontos. Fehlt s3:ListAllMyBuckets, kommt eine
-// leere Liste zurueck - der Assistent laesst den Namen dann eintippen.
+// Buckets lists every bucket of the account. Without s3:ListAllMyBuckets an
+// empty list comes back - the wizard then lets the name be typed in.
 func (a *S3) Buckets(ctx context.Context) ([]string, error) {
 	resp, err := a.c.ListBuckets(ctx, &s3.ListBucketsInput{})
 	if err != nil {
 		var api smithy.APIError
 		if errors.As(err, &api) && (api.ErrorCode() == "AccessDenied" ||
 			api.ErrorCode() == "AccessDeniedException") {
-			// Leeres Slice, nicht nil: ein nil-Slice wird zu JSON `null`, und die
-			// Oberflaeche ruft darauf .map() auf. Fehlendes s3:ListAllMyBuckets ist
-			// der Normalfall - die Postfach-Benutzer bekommen es absichtlich nicht.
+			// An empty slice, not nil: a nil slice becomes JSON `null`, and the
+			// interface calls .map() on it. A missing s3:ListAllMyBuckets is the normal
+			// case - mailbox users deliberately do not get it.
 			return []string{}, nil
 		}
 		return []string{}, err
@@ -37,8 +37,8 @@ func (a *S3) Buckets(ctx context.Context) ([]string, error) {
 	return out, nil
 }
 
-// LifecycleDays liest, nach wievielen Tagen der Papierkorb geleert wird. 0 heisst
-// "keine Regel von uns".
+// LifecycleDays reads after how many days the trash is emptied. 0 means
+// "no rule of ours".
 func (a *S3) LifecycleDays(ctx context.Context, bucket string) int {
 	resp, err := a.c.GetBucketLifecycleConfiguration(ctx,
 		&s3.GetBucketLifecycleConfigurationInput{Bucket: aws.String(bucket)})
@@ -53,7 +53,7 @@ func (a *S3) LifecycleDays(ctx context.Context, bucket string) int {
 	return 0
 }
 
-// SetLifecycle legt die Papierkorb-Regel an, aendert sie oder nimmt sie mit
+// SetLifecycle creates the trash rule, changes it, or takes it out again.
 // tage=0 wieder heraus. Fremde Regeln im Bucket bleiben stehen.
 func (a *S3) SetLifecycle(ctx context.Context, bucket, prefix string, days int) (string, error) {
 	var existing []types.LifecycleRule

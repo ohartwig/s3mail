@@ -10,14 +10,13 @@ import (
 	v2types "github.com/aws/aws-sdk-go-v2/service/sesv2/types"
 )
 
-// Suppressions ist die Unterdrueckungsliste des SES-Kontos: Adressen, an die SES
-// nichts mehr zustellt.
+// Suppressions is the SES account's suppression list: addresses SES no longer
+// accepts mail for.
 //
-// Sie gilt fuer das ganze Konto und nicht fuer ein Postfach. Wer hier eine
-// Adresse eintraegt, sperrt sie fuer alle Kolleginnen und Kollegen und fuer
-// jede andere Software, die ueber dasselbe Konto verschickt. Deshalb gibt es
-// Freigeben() gleich mit: eine Sperre, die man nicht zurueecknehmen kann, ist
-// bei einem Tippfehler eine Falle.
+// It belongs to the whole account, not to one mailbox. Whoever enters an address
+// here blocks it for every colleague and for every other piece of software that
+// sends over the same account. That is why Unblock() comes with it: a block
+// nobody can take back is a trap on a typo.
 type Suppressions struct{ c *sesv2.Client }
 
 func NewSuppressions(cfg aws.Config, endpoint string) *Suppressions {
@@ -28,16 +27,16 @@ func NewSuppressions(cfg aws.Config, endpoint string) *Suppressions {
 	})}
 }
 
-// Entry ist eine gesperrte Adresse mit Grund und Zeitpunkt.
+// Entry is a blocked address with reason and time.
 type Entry struct {
 	Address string `json:"address"`
 	Reason  string `json:"reason"`
 	Since   string `json:"since"`
 }
 
-// Block traegt eine Adresse ein. Grund ist COMPLAINT: der Eintrag entsteht,
-// weil jemand darum gebeten hat, nicht mehr angeschrieben zu werden - genau
-// das, was SES unter einer Beschwerde versteht. BOUNCE traegt SES selbst ein.
+// Block enters an address. The reason is COMPLAINT: the entry comes into being
+// because somebody asked not to be written to any more - exactly what SES means
+// by a complaint. BOUNCE is what SES enters itself.
 func (s *Suppressions) Block(ctx context.Context, address string) error {
 	_, err := s.c.PutSuppressedDestination(ctx, &sesv2.PutSuppressedDestinationInput{
 		EmailAddress: aws.String(address),
@@ -46,7 +45,7 @@ func (s *Suppressions) Block(ctx context.Context, address string) error {
 	return err
 }
 
-// Unblock nimmt eine Adresse wieder heraus.
+// Unblock takes an address out again.
 func (s *Suppressions) Unblock(ctx context.Context, address string) error {
 	_, err := s.c.DeleteSuppressedDestination(ctx, &sesv2.DeleteSuppressedDestinationInput{
 		EmailAddress: aws.String(address),
@@ -54,7 +53,7 @@ func (s *Suppressions) Unblock(ctx context.Context, address string) error {
 	return err
 }
 
-// List liefert die gesperrten Adressen, neueste zuerst.
+// List returns the blocked addresses, newest first.
 func (s *Suppressions) List(ctx context.Context) ([]Entry, error) {
 	out := []Entry{}
 	var weiter *string
@@ -71,8 +70,8 @@ func (s *Suppressions) List(ctx context.Context) ([]Entry, error) {
 			}
 			out = append(out, e)
 		}
-		// Der Zaehler begrenzt, was eine kaputte Antwort anrichten kann: ohne ihn
-		// liefe die Schleife bei einem gleichbleibenden Token endlos.
+		// The counter limits what a broken answer can do: without it the loop would
+		// run forever on a token that never changes.
 		weiter = resp.NextToken
 		if weiter == nil || len(out) > 5000 {
 			break

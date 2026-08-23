@@ -6,24 +6,24 @@ import (
 	"strings"
 )
 
-// Dieses Stueck ist absichtlich frei von AWS-Aufrufen: was in einem
-// Policy-Dokument steht, laesst sich ohne Konto pruefen, und genau daran haengt,
-// ob der Assistent das Richtige vorschlaegt.
+// This piece is deliberately free of AWS calls: what a policy document says can
+// be checked without an account, and whether the wizard suggests the right
+// thing hangs on exactly that.
 
-// fromPolicies liest Bucket, Prefix und Absender aus IAM-Policy-Dokumenten.
+// fromPolicies reads bucket, prefix and sender from IAM policy documents.
 func fromPolicies(documents []string) Finding {
 	var f Finding
 	for _, d := range documents {
 		for _, s := range statements(d) {
 			if !strings.EqualFold(s.Effect, "Allow") {
-				continue // ein Deny sagt nichts darueber, wo das Postfach liegt
+				continue // a Deny says nothing about where the mailbox lies
 			}
 			actions := list(s.Action)
 			switch {
 			case hasPrefix(actions, "s3:"):
 				bucket, prefix := fromS3(actions, list(s.Resource), s.Condition)
-				// Der laengste Prefix gewinnt: eine Policy darf den Bucket
-				// grob und das eigene Postfach genau nennen.
+				// The longest prefix wins: a policy may name the bucket coarsely and the
+				// mailbox itself precisely.
 				if bucket != "" && (f.Bucket == "" || len(prefix) > len(f.Prefix)) {
 					f.Bucket, f.Prefix = bucket, prefix
 				}
@@ -44,8 +44,8 @@ type statement struct {
 	Condition map[string]map[string]json.RawMessage `json:"Condition"`
 }
 
-// statements packt ein Policy-Dokument aus. IAM liefert es url-kodiert, und
-// "Statement" darf ein einzelnes Objekt oder eine Liste sein.
+// statements unpacks a policy document. IAM delivers it url-encoded, and
+// "Statement" may be a single object or a list.
 func statements(dokument string) []statement {
 	if s, err := url.QueryUnescape(dokument); err == nil {
 		dokument = s
@@ -92,8 +92,8 @@ func hasPrefix(values []string, p string) bool {
 	return false
 }
 
-// fromS3 zieht Bucket und Prefix aus den Resource-ARNs einer S3-Erlaubnis.
-// Fehlt der Prefix dort, hilft die Bedingung s3:prefix eines ListBucket weiter.
+// fromS3 pulls bucket and prefix out of the resource ARNs of an S3 permission.
+// If the prefix is missing there, the s3:prefix condition of a ListBucket helps.
 func fromS3(actions, resources []string, cond map[string]map[string]json.RawMessage) (string, string) {
 	var bucket, prefix string
 	for _, r := range resources {
@@ -104,7 +104,7 @@ func fromS3(actions, resources []string, cond map[string]map[string]json.RawMess
 		rest := strings.TrimPrefix(r, header)
 		name, key, shared := strings.Cut(rest, "/")
 		if name == "" || strings.ContainsAny(name, "*?") {
-			continue // ein Platzhalter im Bucket-Namen taugt nicht als Vorschlag
+			continue // a wildcard in the bucket name is no use as a suggestion
 		}
 		if bucket == "" {
 			bucket = name
@@ -123,8 +123,8 @@ func fromS3(actions, resources []string, cond map[string]map[string]json.RawMess
 	return bucket, prefix
 }
 
-// folderOf macht aus einem Schluesselmuster wie "mail/ole/*" den Ordner "mail/ole/".
-// Ein Muster mit Platzhalter mittendrin ("mail/*/posteingang") gibt nichts her.
+// folderOf turns a key pattern like "mail/ole/*" into the folder "mail/ole/".
+// A pattern with a wildcard in the middle ("mail/*/inbox") yields nothing.
 func folderOf(pattern string) string {
 	i := strings.IndexAny(pattern, "*?")
 	if i < 0 {
@@ -136,7 +136,7 @@ func folderOf(pattern string) string {
 	}
 	if !strings.HasSuffix(p, "/") {
 		if j := strings.LastIndex(p, "/"); j >= 0 {
-			p = p[:j+1] // "mail/ole" ist als Prefix nicht dasselbe wie "mail/"
+			p = p[:j+1] // "mail/ole" as a prefix is not the same as "mail/"
 		} else {
 			return ""
 		}
@@ -144,10 +144,10 @@ func folderOf(pattern string) string {
 	return p
 }
 
-// senderFrom liest die Adresse, auf die SES diesen Zugang festnagelt.
+// senderFrom reads the address SES pins this access to.
 func senderFrom(cond map[string]map[string]json.RawMessage) string {
 	for _, w := range condition(cond, "ses:FromAddress") {
-		// Ein Muster wie "*@example.org" nennt keine Adresse, die man eintragen kann.
+		// A pattern like "*@example.org" names no address anybody could enter.
 		if !strings.ContainsAny(w, "*?") && strings.Contains(w, "@") {
 			return w
 		}
@@ -155,8 +155,8 @@ func senderFrom(cond map[string]map[string]json.RawMessage) string {
 	return ""
 }
 
-// condition sammelt die Werte eines Bedingungsschluessels ueber alle Operatoren.
-// IAM behandelt diese Schluessel ohne Ruecksicht auf Gross- und Kleinschreibung.
+// condition collects the values of a condition key across all operators.
+// IAM treats these keys without regard to case.
 func condition(cond map[string]map[string]json.RawMessage, key string) []string {
 	var out []string
 	for _, pairs := range cond {

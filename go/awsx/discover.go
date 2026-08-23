@@ -12,7 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 )
 
-// Finding ist, was s3mail ueber sich selbst herausgefunden hat.
+// Finding is what s3mail has found out about itself.
 type Finding struct {
 	User   string `json:"user"`
 	Bucket string `json:"bucket"`
@@ -21,19 +21,20 @@ type Finding struct {
 	Region string `json:"region"`
 }
 
-// Complete sagt, ob der Assistent damit ohne Rueckfrage weiterkommt.
+// Complete says whether the wizard can go on without asking.
 func (f Finding) Complete() bool { return f.Bucket != "" && f.Prefix != "" }
 
-// Discover liest die Einstellungen aus dem Zugang selbst, statt sie zu erfragen.
+// Discover reads the settings out of the access itself instead of asking for
+// them.
 //
-// Ein Postfach-Zugang traegt alles Noetige in seiner eigenen IAM-Policy: das
-// Recht auf s3:GetObject nennt Bucket und Prefix, die Bedingung ses:FromAddress
-// nennt die Absenderadresse. Das ist keine Rateerei - es ist genau die Angabe,
-// an der AWS den Zugriff spaeter misst. Wer sie von Hand eintippt, kann sich nur
-// unterscheiden, nicht verbessern.
+// A mailbox access carries everything needed in its own IAM policy: the right
+// to s3:GetObject names bucket and prefix, the condition ses:FromAddress names
+// the sender address. This is no guesswork - it is exactly the statement AWS
+// measures the access against later. Whoever types it in by hand can only
+// differ from it, not improve on it.
 //
-// Fehlt das Recht, die eigene Policy zu lesen, kommt ein leerer Fund zurueck und
-// der Assistent fragt wie bisher. Ein Fehler ist das nicht.
+// Without the right to read one's own policy an empty finding comes back and
+// the wizard asks as it did before. That is not an error.
 func Discover(ctx context.Context, cfg aws.Config) (Finding, error) {
 	id, err := sts.NewFromConfig(cfg).GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
 	if err != nil {
@@ -41,7 +42,7 @@ func Discover(ctx context.Context, cfg aws.Config) (Finding, error) {
 	}
 	name := userFromArn(aws.ToString(id.Arn))
 	if name == "" {
-		// Rolle, Root oder ein anderer Identitaetstyp - hat keine Benutzer-Policy.
+		// A role, root or another identity type - has no user policy.
 		return Finding{}, nil
 	}
 	f := fromPolicies(policyDocuments(ctx, iam.NewFromConfig(cfg), name))
@@ -52,7 +53,7 @@ func Discover(ctx context.Context, cfg aws.Config) (Finding, error) {
 	return f, nil
 }
 
-// userFromArn zieht den Benutzernamen aus arn:aws:iam::123:user/pfad/name.
+// userFromArn pulls the user name out of arn:aws:iam::123:user/path/name.
 // Bei allem anderen (assumed-role, root, Dienst) kommt "" zurueck.
 func userFromArn(arn string) string {
 	i := strings.Index(arn, ":user/")
@@ -66,9 +67,9 @@ func userFromArn(arn string) string {
 	return rest
 }
 
-// policyDocuments holt die Policy-Dokumente des Benutzers - erst die eingebetteten,
-// dann die angehaengten. Jeder Schritt darf scheitern, ohne den Rest mitzureissen:
-// die meisten Zugaenge duerfen nur einen Teil davon lesen, manche gar nichts.
+// policyDocuments fetches the user's policy documents - the inline ones first,
+// then the attached ones. Every step may fail without dragging the rest down:
+// most accesses may read only part of this, some nothing at all.
 func policyDocuments(ctx context.Context, c *iam.Client, user string) []string {
 	var out []string
 	if l, err := c.ListUserPolicies(ctx, &iam.ListUserPoliciesInput{UserName: &user}); err == nil {
@@ -98,10 +99,10 @@ func policyDocuments(ctx context.Context, c *iam.Client, user string) []string {
 
 // BucketRegion sagt, in welcher Region ein Bucket steht.
 //
-// S3 verraet das auch dem, der den Bucket nicht anfassen darf: der Header
-// x-amz-bucket-region liegt selbst einer 403- oder 301-Antwort bei. Deshalb
-// genuegt hier ein HeadBucket, obwohl ein Postfach-Zugang den gar nicht
-// ausfuehren darf - wir brauchen nicht die Antwort, sondern den Briefkopf.
+// S3 tells this even to somebody who may not touch the bucket: the header
+// x-amz-bucket-region comes with a 403 or 301 answer as well. So a HeadBucket
+// is enough here, although a mailbox access may not run one at all - we do not
+// need the answer, we need the letterhead.
 func BucketRegion(ctx context.Context, cfg aws.Config, bucket string) string {
 	out, err := s3.NewFromConfig(cfg).HeadBucket(ctx, &s3.HeadBucketInput{Bucket: &bucket})
 	if err == nil {

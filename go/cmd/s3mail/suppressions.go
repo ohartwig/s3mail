@@ -7,9 +7,9 @@ import (
 	"s3mail/web"
 )
 
-// suppressions haengt awsx an die Schnittstelle des Servers. Die beiden Typen
-// getrennt zu halten kostet diese zwanzig Zeilen und spart dem web-Paket eine
-// Abhaengigkeit auf das AWS-SDK - dadurch laufen seine Tests ohne Konto.
+// suppressions attaches awsx to the server's interface. Keeping the two types
+// apart costs these twenty lines and saves the web package a dependency on the
+// AWS SDK - which is what lets its tests run without an account.
 type suppressions struct{ l *awsx.Suppressions }
 
 func (s suppressions) Block(ctx context.Context, a string) error   { return s.l.Block(ctx, a) }

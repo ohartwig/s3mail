@@ -16,20 +16,20 @@ import (
 	"s3mail/store"
 )
 
-// S3 setzt store.S3 auf das AWS-SDK um.
+// S3 maps store.S3 onto the AWS SDK.
 type S3 struct{ c *s3.Client }
 
 func NewS3(cfg aws.Config, endpoint string) *S3 {
 	return &S3{c: s3.NewFromConfig(cfg, func(o *s3.Options) {
-		if endpoint != "" { // fuer Tests und S3-Klone
+		if endpoint != "" { // for tests and S3 clones
 			o.BaseEndpoint = aws.String(endpoint)
 			o.UsePathStyle = true
 		}
 	})}
 }
 
-// List blaettert das Praefix vollstaendig durch - ein Postfach hat leicht mehr
-// als die 1000 Objekte, die eine Seite fasst.
+// List pages through the prefix completely - a mailbox easily holds more than
+// the 1000 objects one page carries.
 func (a *S3) List(ctx context.Context, bucket, prefix string) ([]store.ObjectInfo, error) {
 	var out []store.ObjectInfo
 	p := s3.NewListObjectsV2Paginator(a.c, &s3.ListObjectsV2Input{
@@ -102,8 +102,8 @@ func (a *S3) Delete(ctx context.Context, bucket, key string) error {
 	return translateError(err)
 }
 
-// Copy nimmt Verschluesselung und Speicherklasse des Originals mit - sonst landete
-// die Kopie unter dem Standardschluessel des Buckets.
+// Copy takes encryption and storage class of the original along - otherwise the
+// copy would land under the bucket's default key.
 func (a *S3) Copy(ctx context.Context, bucket, srcKey, dstKey string, o store.CopyOpts) error {
 	in := &s3.CopyObjectInput{
 		Bucket:     aws.String(bucket),
@@ -126,8 +126,8 @@ func (a *S3) Copy(ctx context.Context, bucket, srcKey, dstKey string, o store.Co
 	return translateError(err)
 }
 
-// translateError macht aus einem fehlenden Objekt store.ErrNichtGefunden, damit die
-// Schichten darueber nicht auf AWS-Typen angewiesen sind.
+// translateError turns a missing object into store.ErrNotFound, so the layers
+// above do not depend on AWS types.
 func translateError(err error) error {
 	if err == nil {
 		return nil

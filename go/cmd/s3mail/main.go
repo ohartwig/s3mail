@@ -1,9 +1,8 @@
-// s3mail - Mail-Client fuer E-Mails, die Amazon SES als Rohdaten in einen
-// S3-Bucket schreibt.
+// s3mail - mail client for messages that Amazon SES writes into an S3 bucket
+// as raw MIME.
 //
-// Startet einen lokalen Webserver und oeffnet das Postfach im Browser. Ordner
-// sind echte S3-Prefixe, der Zustand liegt geteilt im Bucket, Antworten laufen
-// ueber SES.
+// Starts a local web server and opens the mailbox in the browser. Folders are
+// real S3 prefixes, the state is shared in the bucket, replies go out over SES.
 package main
 
 import (
@@ -27,24 +26,29 @@ import (
 	"s3mail/wizard"
 )
 
-// version wird beim Bauen gesetzt: -ldflags "-X main.version=v0.2.0".
+// version is set at build time: -ldflags "-X main.version=v0.2.0".
 var version = "dev"
 
 func main() {
+	// The configuration is read before the flags are defined: it carries the
+	// language, and the flag descriptions are the first thing a reader sees.
+	k := config.Load()
+	cat := i18n.Get(k.Language)
+
 	var (
-		bucket      = flag.String("bucket", "", "S3-Bucket mit den Rohmails")
-		prefix      = flag.String("prefix", "", "Wurzel-Prefix, z.B. mail/")
-		region      = flag.String("region", "", "AWS-Region, z.B. eu-central-1")
-		profile     = flag.String("profile", "", "AWS-Profil aus ~/.aws/credentials")
-		sender      = flag.String("from", "", "Absender fuer Antworten (in SES verifiziert)")
-		port        = flag.Int("port", 0, "Standard 8765")
-		host        = flag.String("host", "", "Standard 127.0.0.1")
-		setup       = flag.Bool("setup", false, "Assistent oeffnen, auch wenn schon konfiguriert")
-		noSend      = flag.Bool("no-send", false, "SES-Versand deaktivieren (reiner Lesemodus)")
-		noDelete    = flag.Bool("no-delete", false, "Endgueltiges Loeschen sperren")
-		noBrowser   = flag.Bool("no-browser", false, "Browser nicht automatisch oeffnen")
-		showVersion = flag.Bool("version", false, "Version ausgeben und beenden")
-		refreshSecs = flag.Int("refresh", 60, "Sekunden zwischen automatischen Abgleichen; 0 schaltet ab")
+		bucket      = flag.String("bucket", "", cat.T("cli.bucket"))
+		prefix      = flag.String("prefix", "", cat.T("cli.prefix"))
+		region      = flag.String("region", "", cat.T("cli.region"))
+		profile     = flag.String("profile", "", cat.T("cli.profile"))
+		sender      = flag.String("from", "", cat.T("cli.from"))
+		port        = flag.Int("port", 0, cat.T("cli.port"))
+		host        = flag.String("host", "", cat.T("cli.host"))
+		setup       = flag.Bool("setup", false, cat.T("cli.setup"))
+		noSend      = flag.Bool("no-send", false, cat.T("cli.noSend"))
+		noDelete    = flag.Bool("no-delete", false, cat.T("cli.noDelete"))
+		noBrowser   = flag.Bool("no-browser", false, cat.T("cli.noBrowser"))
+		showVersion = flag.Bool("version", false, cat.T("cli.version"))
+		refreshSecs = flag.Int("refresh", 60, cat.T("cli.refresh"))
 	)
 	flag.Parse()
 
@@ -53,10 +57,9 @@ func main() {
 		return
 	}
 
-	// Das SDK muss die Zugangsdaten dort suchen, wo der Assistent sie hinschreibt.
+	// The SDK has to look for the credentials where the wizard writes them.
 	awsx.SharedDir = config.AWSDir()
 
-	k := config.Load()
 	setIf(&k.Bucket, *bucket)
 	setIf(&k.Region, *region)
 	setIf(&k.Profile, *profile)
@@ -78,8 +81,8 @@ func main() {
 	var startErr string
 	srv := web.NewServer(nil, web.NewToken(), k.Host, k.Port, nil)
 
-	// Der Assistent schaltet das Postfach im laufenden Prozess scharf - nach
-	// "Speichern und starten" soll niemand das Programm neu starten muessen.
+	// The wizard arms the mailbox inside the running process - after "save and
+	// start" nobody should have to restart the program.
 	ass := &wizard.Wizard{}
 	ass.Activate = func(fresh config.Config) error {
 		return activate(ctx, srv, fresh, *noSend, *refreshSecs)
@@ -88,50 +91,50 @@ func main() {
 
 	if k.Bucket != "" && !*setup {
 		if err := activate(ctx, srv, k, *noSend, *refreshSecs); err != nil {
-			// Beim Start gibt es keine Anfrage und damit keine Sprache aus
-			// dem Browser - die aus der Konfiguration muss genuegen.
-			startErr = awsx.PlainText(err, k.Profile, i18n.Get(k.Language))
+			// At startup there is no request and therefore no language from
+			// the browser - the one from the configuration has to do.
+			startErr = awsx.PlainText(err, k.Profile, cat)
 		}
 	}
 
-	// Ohne Konsolenfenster (macOS-Bundle, Windows-GUI-Modus) geht jede Meldung ins
-	// Nichts. Deshalb landet der Start zusaetzlich in einer Datei.
+	// Without a console window (macOS bundle, Windows GUI mode) every message goes
+	// nowhere. So the start is written to a file as well.
 	logFile := startLog()
 	defer logFile.Close()
 
 	address := net.JoinHostPort(k.Host, strconv.Itoa(k.Port))
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
-		// Meistens heisst das: s3mail laeuft schon. Als Bundle ohne Konsole ist
-		// das die unangenehmste Variante - der Doppelklick meldet nur einen
-		// LaunchServices-Timeout (-1712), weil die App als LSUIElement nicht auf
-		// den Start-Request antwortet, und das Fenster steht irgendwo hinten.
-		// Also nicht mit einem Fehler abbrechen, sondern das vorhandene Fenster
-		// nach vorne holen und sich zurueckziehen.
+		// Usually this means s3mail is already running. As a bundle without a
+		// console that is the nastiest variant - the double click only reports a
+		// LaunchServices timeout (-1712), because the app as an LSUIElement does
+		// not answer the launch request, and the window sits somewhere behind.
+		// So do not abort with an error: bring the existing window to the front
+		// and withdraw.
 		if url, ok := runningInstance(); ok {
-			report(logFile, "s3mail laeuft bereits - hole das Fenster nach vorne.")
+			report(logFile, "%s", cat.T("cli.alreadyRunning"))
 			openWindow(url)
 			return
 		}
-		fmt.Fprintf(os.Stderr, "Kann nicht auf %s lauschen: %v\n", address, err)
+		fmt.Fprintln(os.Stderr, cat.Tf("cli.cannotListen", address, err))
 		os.Exit(1)
 	}
 	srv.Port = listener.Addr().(*net.TCPAddr).Port
 	url := fmt.Sprintf("http://%s:%d/?t=%s", k.Host, srv.Port, srv.Token)
 
 	if startErr != "" {
-		report(logFile, "Verbindung fehlgeschlagen: %s", startErr)
+		report(logFile, "%s", cat.Tf("cli.connectFailed", startErr))
 	}
 	if srv.Mailbox == nil {
-		report(logFile, "s3mail ist noch nicht eingerichtet - Assistent: %s", url)
+		report(logFile, "%s", cat.Tf("cli.notConfigured", url))
 	} else {
-		report(logFile, "s3mail laeuft auf %s   (Strg+C zum Beenden)", url)
-		report(logFile, "Bucket: %s/%s", k.Bucket, k.Prefix)
+		report(logFile, "%s", cat.Tf("cli.running", url))
+		report(logFile, "%s", cat.Tf("cli.bucketLine", k.Bucket, k.Prefix))
 	}
-	// Unter Windows startet s3mail per Doppelklick; wer das Konsolenfenster
-	// schliesst, kaeme sonst nicht mehr an die Adresse heran.
+	// On Windows s3mail starts by double click; whoever closes the console window
+	// would otherwise have no way back to the address.
 	if path, err := web.WriteTokenFile(config.Dir(), url); err == nil && path != "" {
-		report(logFile, "Adresse steht auch in: %s", path)
+		report(logFile, "%s", cat.Tf("cli.addressFile", path))
 	}
 	defer web.RemoveTokenFile(config.Dir())
 
@@ -140,8 +143,8 @@ func main() {
 	}
 
 	httpSrv := &http.Server{Handler: srv, ReadHeaderTimeout: 10 * time.Second}
-	// Der Knopf "Beenden" in der Oberflaeche - ohne den liefe der Server nach dem
-	// Schliessen des Fensters weiter, sichtbar fuer niemanden.
+	// The "quit" button in the interface - without it the server would keep
+	// running after the window is closed, visible to nobody.
 	srv.OnShutdown = stop
 	go func() {
 		<-ctx.Done()
@@ -155,7 +158,7 @@ func main() {
 	fmt.Println("\nTschuess.")
 }
 
-// activate baut Postfach und Versand aus einer Konfiguration.
+// activate builds mailbox and sending from a configuration.
 func activate(ctx context.Context, srv *web.Server, k config.Config, noSend bool, refreshSeconds int) error {
 	cfg, err := awsx.Session(ctx, k.Profile, k.Region)
 	if err != nil {
@@ -175,8 +178,8 @@ func activate(ctx context.Context, srv *web.Server, k config.Config, noSend bool
 	}
 	if !noSend {
 		srv.WithSender(awsx.NewSES(cfg, ""), k.From)
-		// Die Sperrliste haengt am Versand: wer nicht senden darf, muss auch
-		// niemanden vom Senden ausschliessen koennen.
+		// The suppression list hangs off sending: whoever may not send need not be
+		// able to exclude anyone from being sent to either.
 		srv.WithSuppressionList(suppressions{awsx.NewSuppressions(cfg, "")})
 	}
 	return nil
