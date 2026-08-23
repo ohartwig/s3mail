@@ -22,10 +22,10 @@ func NewKMS(cfg aws.Config, endpoint string) *KMS {
 
 // Decrypt entpackt den Datenschluessel. Der Encryption Context muss mit - ohne ihn
 // lehnt KMS ab, und die Fehlermeldung sagt nicht, woran es lag.
-func (k *KMS) Decrypt(ciphertext []byte, kontext map[string]string) ([]byte, error) {
+func (k *KMS) Decrypt(ciphertext []byte, encContext map[string]string) ([]byte, error) {
 	resp, err := k.c.Decrypt(context.Background(), &kms.DecryptInput{
 		CiphertextBlob:    ciphertext,
-		EncryptionContext: kontext,
+		EncryptionContext: encContext,
 	})
 	if err != nil {
 		return nil, err

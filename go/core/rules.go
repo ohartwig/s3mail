@@ -2,9 +2,9 @@ package core
 
 import "strings"
 
-// Rule sortiert eingehende Mail automatisch ein: "enthaelt X im Feld Y -> Ordner
-// und Tags". Folder ist ein Zeiger, weil "nicht verschieben" etwas anderes ist
-// als "in den Posteingang verschieben".
+// Rule files incoming mail automatically: "contains X in field Y -> folder and
+// tags". Folder is a pointer because "do not move" is a different thing from
+// "move to the inbox".
 type Rule struct {
 	Name     string   `json:"name"`
 	Field    string   `json:"field"`
@@ -16,16 +16,16 @@ type Rule struct {
 	Enabled  bool     `json:"enabled"`
 }
 
-var rulefelder = map[string]bool{"from": true, "to": true, "subject": true, "any": true}
+var ruleFields = map[string]bool{"from": true, "to": true, "subject": true, "any": true}
 
-// CleanRules validiert und normalisiert, was aus der Oberflaeche kommt. Regeln
-// ohne Suchbegriff fliegen raus, unbekannte Felder werden zu "any".
+// CleanRules validates and normalises what comes from the interface. Rules
+// without a search term are dropped, unknown fields become "any".
 func CleanRules(rules []Rule) ([]Rule, error) {
 	out := make([]Rule, 0, len(rules))
 	for _, r := range rules {
-		feld := strings.ToLower(strings.TrimSpace(r.Field))
-		if !rulefelder[feld] {
-			feld = "any"
+		field := strings.ToLower(strings.TrimSpace(r.Field))
+		if !ruleFields[field] {
+			field = "any"
 		}
 		contains := strings.TrimSpace(r.Contains)
 		if contains == "" {
@@ -52,12 +52,12 @@ func CleanRules(rules []Rule) ([]Rule, error) {
 				tags = append(tags, t)
 			}
 		}
-		out = append(out, Rule{name, feld, contains, folder, tags, r.Star, r.Read, r.Enabled})
+		out = append(out, Rule{name, field, contains, folder, tags, r.Star, r.Read, r.Enabled})
 	}
 	return out, nil
 }
 
-// Hits sagt, ob eine Regel auf eine Mail passt.
+// Hits says whether a rule matches a message.
 func (r Rule) Hits(m Message) bool {
 	needle := strings.ToLower(r.Contains)
 	var hay string
@@ -74,8 +74,8 @@ func (r Rule) Hits(m Message) bool {
 	return strings.Contains(strings.ToLower(hay), needle)
 }
 
-// RuleAction ist, was fuer eine Mail zu tun waere. Das Ausfuehren - Verschieben in
-// S3 - macht die Schicht darueber; hier bleibt die Entscheidung fuer sich testbar.
+// RuleAction is what would have to be done for a message. Carrying it out -
+// moving in S3 - is the layer above; here the decision stays testable on its own.
 type RuleAction struct {
 	Mid       string
 	Key       string
@@ -86,20 +86,20 @@ type RuleAction struct {
 	MoveTo    *string
 }
 
-// PlanRules laeuft die Regeln durch und liefert, was zu tun ist.
+// PlanRules walks the rules and returns what to do.
 //
-// Erste passende Regel gewinnt. Eine Mail wird nur einmal automatisch einsortiert
-// (Ruled-Marke) - schiebt jemand sie zurueck, bleibt sie liegen. Papierkorb und
-// Spam fasst die Automatik nicht an. force laesst beides ausser Kraft, das ist
-// "auf alle bestehenden Mails anwenden".
+// The first matching rule wins. A message is filed automatically only once (the
+// Ruled mark) - if somebody moves it back, it stays where they put it. Trash and
+// spam are left alone. force overrides both; that is "apply to all existing
+// mail".
 func PlanRules(pool []Message, d *Data, force bool) []RuleAction {
-	aktiv := make([]Rule, 0, len(d.Rules))
+	active := make([]Rule, 0, len(d.Rules))
 	for _, r := range d.Rules {
 		if r.Enabled {
-			aktiv = append(aktiv, r)
+			active = append(active, r)
 		}
 	}
-	if len(aktiv) == 0 {
+	if len(active) == 0 {
 		return nil
 	}
 	out := make([]RuleAction, 0, len(pool))
@@ -111,27 +111,27 @@ func PlanRules(pool []Message, d *Data, force bool) []RuleAction {
 			out = append(out, RuleAction{Mid: m.Mid, Key: m.Key, MarkRuled: true})
 			continue
 		}
-		aktion := RuleAction{Mid: m.Mid, Key: m.Key, MarkRuled: true}
-		for _, r := range aktiv {
+		action := RuleAction{Mid: m.Mid, Key: m.Key, MarkRuled: true}
+		for _, r := range active {
 			if !r.Hits(m) {
 				continue
 			}
 			if len(r.Tags) > 0 {
-				aktion.AddTags = r.Tags
+				action.AddTags = r.Tags
 			}
 			if r.Read {
-				aktion.SetRead = Ptr(true)
+				action.SetRead = Ptr(true)
 			}
 			if r.Star {
-				aktion.SetStar = Ptr(true)
+				action.SetStar = Ptr(true)
 			}
 			if r.Folder != nil && *r.Folder != m.Folder {
 				target := *r.Folder
-				aktion.MoveTo = &target
+				action.MoveTo = &target
 			}
 			break // erste passende Regel gewinnt
 		}
-		out = append(out, aktion)
+		out = append(out, action)
 	}
 	return out
 }

@@ -24,9 +24,9 @@ func NewSES(cfg aws.Config, endpoint string) *SES {
 // Senden uebergibt die fertige Mail an SES und liefert deren Message-ID.
 func (s *SES) Send(ctx context.Context, n mailer.Message) (string, error) {
 	resp, err := s.c.SendRawEmail(ctx, &ses.SendRawEmailInput{
-		Source:       aws.String(n.Absender),
-		Destinations: n.Empfaenger,
-		RawMessage:   &types.RawMessage{Data: n.Roh},
+		Source:       aws.String(n.From),
+		Destinations: n.To,
+		RawMessage:   &types.RawMessage{Data: n.Raw},
 	})
 	if err != nil {
 		return "", err
@@ -34,9 +34,9 @@ func (s *SES) Send(ctx context.Context, n mailer.Message) (string, error) {
 	return aws.ToString(resp.MessageId), nil
 }
 
-// Identitaeten liefert die in SES verifizierten Absenderadressen. Fehlt das Recht,
+// Identities liefert die in SES verifizierten Absenderadressen. Fehlt das Recht,
 // gibt es eine leere Liste statt eines Fehlers - der Assistent laesst dann eintippen.
-func (s *SES) Identitaeten(ctx context.Context) []string {
+func (s *SES) Identities(ctx context.Context) []string {
 	resp, err := s.c.ListIdentities(ctx, &ses.ListIdentitiesInput{
 		IdentityType: types.IdentityTypeEmailAddress})
 	if err != nil || len(resp.Identities) == 0 {
@@ -57,14 +57,14 @@ func (s *SES) Identitaeten(ctx context.Context) []string {
 	return out
 }
 
-// VerifizierteDomains liefert die freigeschalteten Domains.
+// VerifiedDomains liefert die freigeschalteten Domains.
 //
 // Getrennt von Identitaeten(), weil beides Verschiedenes bedeutet: eine
 // verifizierte Adresse ist eine Adresse, eine verifizierte Domain erlaubt JEDE
 // Adresse darunter. Wer nur Adress-Identitaeten abfragt - so wie diese Datei es
 // zuerst tat - bekommt bei einem sauber ueber die Domain verifizierten Setup
 // eine leere Liste und haelt sie fuer einen Fehler.
-func (s *SES) VerifizierteDomains(ctx context.Context) []string {
+func (s *SES) VerifiedDomains(ctx context.Context) []string {
 	resp, err := s.c.ListIdentities(ctx, &ses.ListIdentitiesInput{
 		IdentityType: types.IdentityTypeDomain})
 	if err != nil || len(resp.Identities) == 0 {
@@ -85,19 +85,19 @@ func (s *SES) VerifizierteDomains(ctx context.Context) []string {
 	return out
 }
 
-// Verifiziert sagt, ob Adresse oder Domain in SES freigeschaltet sind.
-func (s *SES) Verifiziert(ctx context.Context, address, domain string) ([]string, error) {
+// Verified sagt, ob Adresse oder Domain in SES freigeschaltet sind.
+func (s *SES) Verified(ctx context.Context, address, domain string) ([]string, error) {
 	resp, err := s.c.GetIdentityVerificationAttributes(ctx,
 		&ses.GetIdentityVerificationAttributesInput{Identities: []string{address, domain}})
 	if err != nil {
 		return nil, err
 	}
-	var gut []string
+	var good []string
 	for _, id := range []string{address, domain} {
 		if a, da := resp.VerificationAttributes[id]; da &&
 			a.VerificationStatus == types.VerificationStatusSuccess {
-			gut = append(gut, id)
+			good = append(good, id)
 		}
 	}
-	return gut, nil
+	return good, nil
 }

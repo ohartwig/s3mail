@@ -28,14 +28,14 @@ type s3Server struct {
 	mu       sync.Mutex
 	objs     map[string][]byte
 	meta     map[string]map[string]string
-	kopfe    map[string]http.Header
-	Anfragen []string
-	SeiteMax int // erzwingt Blaettern
+	headers  map[string]http.Header
+	Requests []string
+	pageMax  int // erzwingt Blaettern
 }
 
-func neuerS3Server() *s3Server {
+func newS3Server() *s3Server {
 	return &s3Server{objs: map[string][]byte{}, meta: map[string]map[string]string{},
-		kopfe: map[string]http.Header{}, SeiteMax: 1000}
+		headers: map[string]http.Header{}, pageMax: 1000}
 }
 
 type content struct {
@@ -45,13 +45,13 @@ type content struct {
 	Size         int64  `xml:"Size"`
 }
 
-type listErgebnis struct {
-	XMLName     xml.Name `xml:"ListBucketResult"`
-	Name        string   `xml:"Name"`
-	Prefix      string   `xml:"Prefix"`
-	KeyCount    int      `xml:"KeyCount"`
-	IsTruncated bool     `xml:"IsTruncated"`
-	NextToken   string   `xml:"NextContinuationToken,omitempty"`
+type listResult struct {
+	XMLName     xml.Name  `xml:"ListBucketResult"`
+	Name        string    `xml:"Name"`
+	Prefix      string    `xml:"Prefix"`
+	KeyCount    int       `xml:"KeyCount"`
+	IsTruncated bool      `xml:"IsTruncated"`
+	NextToken   string    `xml:"NextContinuationToken,omitempty"`
 	Contents    []content `xml:"Contents"`
 }
 
@@ -60,20 +60,20 @@ func (s *s3Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer s.mu.Unlock()
 	path := strings.TrimPrefix(r.URL.Path, "/")
 	bucket, key, _ := strings.Cut(path, "/")
-	s.Anfragen = append(s.Anfragen, fmt.Sprintf("%s %s", r.Method, r.URL.RequestURI()))
+	s.Requests = append(s.Requests, fmt.Sprintf("%s %s", r.Method, r.URL.RequestURI()))
 	_ = bucket
 
 	switch {
 	case r.Method == "GET" && r.URL.Query().Has("list-type"):
-		s.listen(w, r)
+		s.handleList(w, r)
 	case r.Method == "GET":
-		s.holen(w, r, key)
+		s.handleGet(w, r, key)
 	case r.Method == "HEAD":
 		s.header(w, key)
 	case r.Method == "PUT" && r.Header.Get("x-amz-copy-source") != "":
-		s.kopieren(w, r, key)
+		s.handleCopy(w, r, key)
 	case r.Method == "PUT":
-		s.legen(w, r, key)
+		s.handlePut(w, r, key)
 	case r.Method == "DELETE":
 		delete(s.objs, key)
 		w.WriteHeader(204)
@@ -90,7 +90,7 @@ func (s *s3Server) etag(key string) string {
 	return fmt.Sprintf("%08x", h&0xffffffff)
 }
 
-func (s *s3Server) listen(w http.ResponseWriter, r *http.Request) {
+func (s *s3Server) handleList(w http.ResponseWriter, r *http.Request) {
 	prefix := r.URL.Query().Get("prefix")
 	var keys []string
 	for k := range s.objs {
@@ -107,26 +107,26 @@ func (s *s3Server) listen(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	erg := listErgebnis{Name: "test-bucket", Prefix: prefix}
+	res := listResult{Name: "test-bucket", Prefix: prefix}
 	for i, k := range keys {
-		if i >= s.SeiteMax {
-			erg.IsTruncated = true
-			erg.NextToken = k
+		if i >= s.pageMax {
+			res.IsTruncated = true
+			res.NextToken = k
 			break
 		}
-		erg.Contents = append(erg.Contents, content{Key: k,
+		res.Contents = append(res.Contents, content{Key: k,
 			LastModified: "2026-08-01T12:00:00.000Z",
 			ETag:         `"` + s.etag(k) + `"`, Size: int64(len(s.objs[k]))})
 	}
-	erg.KeyCount = len(erg.Contents)
+	res.KeyCount = len(res.Contents)
 	w.Header().Set("Content-Type", "application/xml")
-	_ = xml.NewEncoder(w).Encode(erg)
+	_ = xml.NewEncoder(w).Encode(res)
 }
 
-func (s *s3Server) holen(w http.ResponseWriter, r *http.Request, key string) {
+func (s *s3Server) handleGet(w http.ResponseWriter, r *http.Request, key string) {
 	body, da := s.objs[key]
 	if !da {
-		s.fehler(w, 404, "NoSuchKey")
+		s.fail(w, 404, "NoSuchKey")
 		return
 	}
 	if rng := r.Header.Get("Range"); rng != "" {
@@ -139,18 +139,18 @@ func (s *s3Server) holen(w http.ResponseWriter, r *http.Request, key string) {
 			}
 		}
 	}
-	s.metaKopf(w, key)
+	s.metaHeader(w, key)
 	w.Header().Set("ETag", `"`+s.etag(key)+`"`)
 	_, _ = w.Write(body)
 }
 
 func (s *s3Server) header(w http.ResponseWriter, key string) {
 	if _, da := s.objs[key]; !da {
-		s.fehler(w, 404, "NotFound")
+		s.fail(w, 404, "NotFound")
 		return
 	}
-	s.metaKopf(w, key)
-	for k, vs := range s.kopfe[key] {
+	s.metaHeader(w, key)
+	for k, vs := range s.headers[key] {
 		for _, v := range vs {
 			w.Header().Add(k, v)
 		}
@@ -159,13 +159,13 @@ func (s *s3Server) header(w http.ResponseWriter, key string) {
 	w.WriteHeader(200)
 }
 
-func (s *s3Server) metaKopf(w http.ResponseWriter, key string) {
+func (s *s3Server) metaHeader(w http.ResponseWriter, key string) {
 	for k, v := range s.meta[key] {
 		w.Header().Set("x-amz-meta-"+k, v)
 	}
 }
 
-func (s *s3Server) legen(w http.ResponseWriter, r *http.Request, key string) {
+func (s *s3Server) handlePut(w http.ResponseWriter, r *http.Request, key string) {
 	buf := make([]byte, r.ContentLength)
 	if r.ContentLength > 0 {
 		_, _ = r.Body.Read(buf)
@@ -175,7 +175,7 @@ func (s *s3Server) legen(w http.ResponseWriter, r *http.Request, key string) {
 	w.WriteHeader(200)
 }
 
-func (s *s3Server) kopieren(w http.ResponseWriter, r *http.Request, key string) {
+func (s *s3Server) handleCopy(w http.ResponseWriter, r *http.Request, key string) {
 	source := r.Header.Get("x-amz-copy-source")
 	if u, err := url.PathUnescape(source); err == nil {
 		source = u
@@ -183,7 +183,7 @@ func (s *s3Server) kopieren(w http.ResponseWriter, r *http.Request, key string) 
 	_, srcKey, _ := strings.Cut(strings.TrimPrefix(source, "/"), "/")
 	body, da := s.objs[srcKey]
 	if !da {
-		s.fehler(w, 404, "NoSuchKey")
+		s.fail(w, 404, "NoSuchKey")
 		return
 	}
 	s.objs[key] = body
@@ -199,27 +199,27 @@ func (s *s3Server) kopieren(w http.ResponseWriter, r *http.Request, key string) 
 			header.Set(name, v)
 		}
 	}
-	s.kopfe[key] = header
+	s.headers[key] = header
 	w.Header().Set("Content-Type", "application/xml")
 	_, _ = w.Write([]byte(`<CopyObjectResult><ETag>"x"</ETag></CopyObjectResult>`))
 }
 
-func (s *s3Server) fehler(w http.ResponseWriter, code int, kode string) {
+func (s *s3Server) fail(w http.ResponseWriter, awsCode int, code string) {
 	w.Header().Set("Content-Type", "application/xml")
-	w.WriteHeader(code)
-	_, _ = w.Write([]byte("<Error><Code>" + kode + "</Code><Message>weg</Message></Error>"))
+	w.WriteHeader(awsCode)
+	_, _ = w.Write([]byte("<Error><Code>" + code + "</Code><Message>weg</Message></Error>"))
 }
 
-func (s *s3Server) kopfVon(key, name string) string {
+func (s *s3Server) headerOf(key, name string) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.kopfe[key].Get(name)
+	return s.headers[key].Get(name)
 }
 
-func (s *s3Server) mitschnitt() []string {
+func (s *s3Server) calls() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return append([]string(nil), s.Anfragen...)
+	return append([]string(nil), s.Requests...)
 }
 
 func adapter(t *testing.T, srv *s3Server) (*awsx.S3, *httptest.Server) {
@@ -234,8 +234,8 @@ func adapter(t *testing.T, srv *s3Server) (*awsx.S3, *httptest.Server) {
 }
 
 func TestListPaginates(t *testing.T) {
-	srv := neuerS3Server()
-	srv.SeiteMax = 2 // erzwingt drei Seiten
+	srv := newS3Server()
+	srv.pageMax = 2 // erzwingt drei Seiten
 	for i := 0; i < 5; i++ {
 		srv.objs[fmt.Sprintf("mail/m%d", i)] = []byte("inhalt")
 	}
@@ -258,7 +258,7 @@ func TestListPaginates(t *testing.T) {
 		}
 	}
 	pages := 0
-	for _, r := range srv.mitschnitt() {
+	for _, r := range srv.calls() {
 		if strings.Contains(r, "list-type") {
 			pages++
 		}
@@ -271,7 +271,7 @@ func TestListPaginates(t *testing.T) {
 // TestRangeIsSent - der Index holt nur die ersten 64 KB. Faellt der
 // Range-Header weg, laedt s3mail bei jedem Abgleich das ganze Postfach.
 func TestRangeIsSent(t *testing.T) {
-	srv := neuerS3Server()
+	srv := newS3Server()
 	srv.objs["mail/m1"] = []byte("0123456789abcdefghij")
 	a, _ := adapter(t, srv)
 
@@ -294,7 +294,7 @@ func TestRangeIsSent(t *testing.T) {
 // TestMetadataArrives - dort steckt der Krypto-Umschlag. Gehen sie verloren,
 // ist eine verschluesselte Mail nicht mehr zu oeffnen.
 func TestMetadataArrives(t *testing.T) {
-	srv := neuerS3Server()
+	srv := newS3Server()
 	srv.objs["mail/enc"] = []byte("chiffrat")
 	srv.meta["mail/enc"] = map[string]string{
 		"x-amz-key-v2": "AAAA", "x-amz-iv": "BBBB",
@@ -323,7 +323,7 @@ func TestMetadataArrives(t *testing.T) {
 // TestCopyCarriesEncryption - sonst landet die Kopie unter dem
 // Standardschluessel des Buckets statt unter dem des Originals.
 func TestCopyCarriesEncryption(t *testing.T) {
-	srv := neuerS3Server()
+	srv := newS3Server()
 	srv.objs["mail/m1"] = []byte("inhalt")
 	a, _ := adapter(t, srv)
 
@@ -334,14 +334,14 @@ func TestCopyCarriesEncryption(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pruef := map[string]string{
+	wants := map[string]string{
 		"x-amz-server-side-encryption":                    "aws:kms",
 		"x-amz-server-side-encryption-aws-kms-key-id":     "arn:aws:kms:eu-central-1:1:key/abc",
 		"x-amz-server-side-encryption-bucket-key-enabled": "true",
 		"x-amz-storage-class":                             "STANDARD_IA",
 	}
-	for name, want := range pruef {
-		if got := srv.kopfVon("mail/archiv/m1", name); got != want {
+	for name, want := range wants {
+		if got := srv.headerOf("mail/archiv/m1", name); got != want {
 			t.Errorf("%s: %q, erwartet %q", name, got, want)
 		}
 	}
@@ -350,7 +350,7 @@ func TestCopyCarriesEncryption(t *testing.T) {
 // TestCopyWithSpecialCharacters - Schluessel mit Leerzeichen und Umlauten muessen
 // in x-amz-copy-source kodiert werden, sonst schlaegt die Signatur fehl.
 func TestCopyWithSpecialCharacters(t *testing.T) {
-	srv := neuerS3Server()
+	srv := newS3Server()
 	srv.objs["mail/Rechnung Übersicht.eml"] = []byte("inhalt")
 	a, _ := adapter(t, srv)
 
@@ -365,20 +365,20 @@ func TestCopyWithSpecialCharacters(t *testing.T) {
 }
 
 func TestMissingObject(t *testing.T) {
-	srv := neuerS3Server()
+	srv := newS3Server()
 	a, _ := adapter(t, srv)
 	_, err := a.Get(context.Background(), "test-bucket", "mail/gibtsnicht", "")
-	if !errors.Is(err, store.ErrNichtGefunden) {
+	if !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("NoSuchKey nicht uebersetzt: %v", err)
 	}
 	_, err = a.Head(context.Background(), "test-bucket", "mail/gibtsnicht")
-	if !errors.Is(err, store.ErrNichtGefunden) {
+	if !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("NotFound nicht uebersetzt: %v", err)
 	}
 }
 
 func TestPutAndDelete(t *testing.T) {
-	srv := neuerS3Server()
+	srv := newS3Server()
 	a, _ := adapter(t, srv)
 	ctx := context.Background()
 	if err := a.Put(ctx, "test-bucket", "mail/.s3mail-state/x.json",
@@ -400,7 +400,7 @@ func TestPutAndDelete(t *testing.T) {
 // S3-Server: indexieren, verschieben, Zustand schreiben und wieder lesen.
 func TestWholeMailboxThroughTheAdapter(t *testing.T) {
 	ctx := context.Background()
-	srv := neuerS3Server()
+	srv := newS3Server()
 	srv.objs["mail/m1"] = []byte("From: Anna <anna@kunde.de>\r\nTo: post@firma.de\r\n" +
 		"Subject: Rechnung\r\nDate: Mon, 03 Aug 2026 09:00:00 +0000\r\n" +
 		"Content-Type: text/plain; charset=utf-8\r\n\r\nAnbei.\r\n")
@@ -420,12 +420,12 @@ func TestWholeMailboxThroughTheAdapter(t *testing.T) {
 		t.Errorf("nicht verschoben: %v", key(srv))
 	}
 	// Zustand landet im Bucket und wird von einem zweiten Postfach gelesen
-	zweites := store.NewMailbox(ctx, a, nil, "test-bucket", "mail/", t.TempDir(), true)
-	if _, err := zweites.Refresh(ctx); err != nil {
+	other := store.NewMailbox(ctx, a, nil, "test-bucket", "mail/", t.TempDir(), true)
+	if _, err := other.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if zweites.Index()[0].Folder != "archiv" {
-		t.Errorf("zweiter Rechner sieht: %+v", zweites.Index()[0])
+	if other.Index()[0].Folder != "archiv" {
+		t.Errorf("zweiter Rechner sieht: %+v", other.Index()[0])
 	}
 }
 
@@ -449,7 +449,7 @@ func key(s *s3Server) []string {
 // Der Nutzer sah dann nicht "kein Recht zum Auflisten", sondern
 // "Cannot read properties of null (reading 'map')" - und nichts ging mehr.
 func TestBucketsWithoutPermissionYieldEmptyList(t *testing.T) {
-	srv := neuerS3Server()
+	srv := newS3Server()
 	verweigern := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" && r.URL.Path == "/" {
 			w.Header().Set("Content-Type", "application/xml")

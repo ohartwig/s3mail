@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func sandkasten(t *testing.T) string {
+func sandbox(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("S3MAIL_CONFIG_DIR", filepath.Join(dir, "config"))
@@ -18,9 +18,9 @@ func sandkasten(t *testing.T) string {
 }
 
 func TestSaveAndLoad(t *testing.T) {
-	sandkasten(t)
+	sandbox(t)
 	k := Defaults()
-	k.Bucket, k.Prefix, k.Absender = "mein-bucket", "mail", "support@firma.de"
+	k.Bucket, k.Prefix, k.From = "mein-bucket", "mail", "support@firma.de"
 	path, err := Save(k)
 	if err != nil {
 		t.Fatal(err)
@@ -31,12 +31,12 @@ func TestSaveAndLoad(t *testing.T) {
 			t.Errorf("Rechte: %v", info.Mode().Perm())
 		}
 	}
-	zurueck := Load()
-	if zurueck.Bucket != "mein-bucket" || zurueck.Absender != "support@firma.de" {
-		t.Errorf("%+v", zurueck)
+	back := Load()
+	if back.Bucket != "mein-bucket" || back.From != "support@firma.de" {
+		t.Errorf("%+v", back)
 	}
-	if zurueck.Prefix != "mail/" {
-		t.Errorf("Prefix nicht normalisiert: %q", zurueck.Prefix)
+	if back.Prefix != "mail/" {
+		t.Errorf("Prefix nicht normalisiert: %q", back.Prefix)
 	}
 	if _, err := Save(Config{}); err == nil {
 		t.Error("ohne Bucket gespeichert")
@@ -44,12 +44,12 @@ func TestSaveAndLoad(t *testing.T) {
 }
 
 func TestPrefixNormalisieren(t *testing.T) {
-	for rein, raus := range map[string]string{
+	for in, want := range map[string]string{
 		"": "", "mail": "mail/", "mail/": "mail/", "/mail": "mail/",
 		" mail ": "mail/", "/mail/unter": "mail/unter/",
 	} {
-		if got := NormalizePrefix(rein); got != raus {
-			t.Errorf("%q -> %q, erwartet %q", rein, got, raus)
+		if got := NormalizePrefix(in); got != want {
+			t.Errorf("%q -> %q, erwartet %q", in, got, want)
 		}
 	}
 }
@@ -57,14 +57,14 @@ func TestPrefixNormalisieren(t *testing.T) {
 // TestCredentialsAreAdditive - der Assistent darf ein bestehendes Profil, das
 // ganz anders arbeitet, nicht anfassen.
 func TestCredentialsAreAdditive(t *testing.T) {
-	dir := sandkasten(t)
+	dir := sandbox(t)
 	awsDir := filepath.Join(dir, "aws")
 	if err := os.MkdirAll(awsDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	vorher := "[default]\nregion = eu-central-1\nlogin_session = mein-login\n\n" +
+	before := "[default]\nregion = eu-central-1\nlogin_session = mein-login\n\n" +
 		"[profile arbeit]\nregion = eu-west-1\n"
-	if err := os.WriteFile(filepath.Join(awsDir, "config"), []byte(vorher), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(awsDir, "config"), []byte(before), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -98,7 +98,7 @@ func TestCredentialsAreAdditive(t *testing.T) {
 }
 
 func TestCredentialsTwiceOverwriteOnlyThatProfile(t *testing.T) {
-	dir := sandkasten(t)
+	dir := sandbox(t)
 	if _, err := WriteCredentials("s3mail", "AKIAALTALTALTALT12", "alt", "eu-west-1"); err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ func TestCredentialsTwiceOverwriteOnlyThatProfile(t *testing.T) {
 }
 
 func TestCredentialsValidation(t *testing.T) {
-	sandkasten(t)
+	sandbox(t)
 	for name, f := range map[string]func() error{
 		"ohne Secret":   func() error { _, e := WriteCredentials("s3mail", "AKIA1234567890123", "", ""); return e },
 		"ohne Key":      func() error { _, e := WriteCredentials("s3mail", "", "geheim", ""); return e },
@@ -129,7 +129,7 @@ func TestCredentialsValidation(t *testing.T) {
 }
 
 func TestProfileLesen(t *testing.T) {
-	dir := sandkasten(t)
+	dir := sandbox(t)
 	awsDir := filepath.Join(dir, "aws")
 	_ = os.MkdirAll(awsDir, 0o700)
 	_ = os.WriteFile(filepath.Join(awsDir, "credentials"), []byte("[default]\nx=1\n[s3mail]\ny=2\n"), 0o600)
@@ -137,12 +137,12 @@ func TestProfileLesen(t *testing.T) {
 		[]byte("[default]\n[profile arbeit]\n[sso-session firma]\n"), 0o600)
 
 	p := Profiles()
-	for _, muss := range []string{"default", "s3mail", "arbeit"} {
-		if !enthalten(p, muss) {
-			t.Errorf("%q fehlt in %v", muss, p)
+	for _, must := range []string{"default", "s3mail", "arbeit"} {
+		if !contains(p, must) {
+			t.Errorf("%q fehlt in %v", must, p)
 		}
 	}
-	if enthalten(p, "sso-session firma") || enthalten(p, "firma") {
+	if contains(p, "sso-session firma") || contains(p, "firma") {
 		t.Errorf("sso-session als Profil gelesen: %v", p)
 	}
 	if len(p) != 3 {
@@ -167,7 +167,7 @@ func TestPathsSuitThePlatform(t *testing.T) {
 	}
 }
 
-func enthalten(l []string, s string) bool {
+func contains(l []string, s string) bool {
 	for _, x := range l {
 		if x == s {
 			return true

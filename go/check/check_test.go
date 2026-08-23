@@ -17,7 +17,7 @@ import (
 	"s3mail/store"
 )
 
-func nach(items []check.Item) map[string]check.Item {
+func byName(items []check.Item) map[string]check.Item {
 	out := map[string]check.Item{}
 	for _, p := range items {
 		out[p.Name] = p
@@ -32,7 +32,7 @@ func TestEverythingOK(t *testing.T) {
 	if !check.AllOK(p) {
 		t.Errorf("nicht alles gruen: %+v", p)
 	}
-	k := nach(p)
+	k := byName(p)
 	if !strings.Contains(k["Bucket lesen"].Detail, "Objekt") {
 		t.Errorf("%+v", k["Bucket lesen"])
 	}
@@ -58,7 +58,7 @@ func TestMissingPermissionNamesTheAction(t *testing.T) {
 	f.PutErr = errors.New("AccessDenied")
 
 	p := check.Run(context.Background(), f, nil, nil, "test-bucket", "mail/", "", i18n.Get("de"))
-	k := nach(p)
+	k := byName(p)
 	if k["Schreiben"].OK {
 		t.Fatal("Schreibfehler nicht bemerkt")
 	}
@@ -73,7 +73,7 @@ func TestMissingPermissionNamesTheAction(t *testing.T) {
 func TestEmptyMailboxIsNoError(t *testing.T) {
 	f := s3fake.New()
 	p := check.Run(context.Background(), f, nil, nil, "test-bucket", "mail/", "", i18n.Get("de"))
-	k := nach(p)
+	k := byName(p)
 	if !k["Bucket lesen"].OK || !strings.Contains(k["Bucket lesen"].Detail, "noch nichts") {
 		t.Errorf("%+v", k["Bucket lesen"])
 	}
@@ -90,20 +90,20 @@ func TestInternalObjectsAreNotMail(t *testing.T) {
 	f := s3fake.New()
 	f.Store("mail/"+store.StateObject, []byte(`{"messages":{}}`))
 	f.Store("mail/"+store.StateOps+"x.json", []byte(`{"ops":[]}`))
-	p := nach(check.Run(context.Background(), f, nil, nil, "test-bucket", "mail/", "", i18n.Get("de")))
+	p := byName(check.Run(context.Background(), f, nil, nil, "test-bucket", "mail/", "", i18n.Get("de")))
 	if !p["Mail lesen"].Skipped {
 		t.Errorf("Zustandsdatei als Mail geprueft: %+v", p["Mail lesen"])
 	}
 }
 
 type kmsFake struct {
-	key    []byte
-	fehler error
+	key []byte
+	err error
 }
 
 func (k *kmsFake) Decrypt(_ []byte, _ map[string]string) ([]byte, error) {
-	if k.fehler != nil {
-		return nil, k.fehler
+	if k.err != nil {
+		return nil, k.err
 	}
 	return k.key, nil
 }
@@ -115,7 +115,7 @@ func envelope(t *testing.T) ([]byte, map[string]string, []byte) {
 		t.Skip("keine Umschlaege vorhanden")
 	}
 	var d struct {
-		Faelle map[string]struct {
+		Cases map[string]struct {
 			Body string            `json:"body"`
 			Meta map[string]string `json:"meta"`
 			Key  string            `json:"key"`
@@ -124,7 +124,7 @@ func envelope(t *testing.T) ([]byte, map[string]string, []byte) {
 	if err := json.Unmarshal(blob, &d); err != nil {
 		t.Fatal(err)
 	}
-	f := d.Faelle["gcm"]
+	f := d.Cases["gcm"]
 	body, _ := base64.StdEncoding.DecodeString(f.Body)
 	key, _ := base64.StdEncoding.DecodeString(f.Key)
 	return body, f.Meta, key
@@ -138,15 +138,15 @@ func TestEncryptionIsDetected(t *testing.T) {
 	f := s3fake.New()
 	f.Store("mail/enc", body)
 	f.SetMeta("mail/enc", meta)
-	p := nach(check.Run(context.Background(), f, &kmsFake{key: key}, nil,
+	p := byName(check.Run(context.Background(), f, &kmsFake{key: key}, nil,
 		"test-bucket", "mail/", "", i18n.Get("de")))
 	if !p["Verschlüsselung"].OK || !strings.Contains(p["Verschlüsselung"].Detail, "klappt") {
 		t.Errorf("%+v", p["Verschlüsselung"])
 	}
 
 	// ohne kms:Decrypt muss der Punkt rot sein und die Aktion nennen
-	p = nach(check.Run(context.Background(), f,
-		&kmsFake{fehler: errors.New("AccessDenied")}, nil, "test-bucket", "mail/", "", i18n.Get("de")))
+	p = byName(check.Run(context.Background(), f,
+		&kmsFake{err: errors.New("AccessDenied")}, nil, "test-bucket", "mail/", "", i18n.Get("de")))
 	if p["Verschlüsselung"].OK {
 		t.Error("fehlendes kms:Decrypt nicht bemerkt")
 	}
@@ -158,7 +158,7 @@ func TestEncryptionIsDetected(t *testing.T) {
 	g := s3fake.New()
 	g.Store("mail/m1", []byte("From: a@b.de\r\n\r\nText\r\n"))
 	g.SetSSE("mail/m1", store.CopyOpts{ServerSideEncryption: "aws:kms"})
-	p = nach(check.Run(context.Background(), g, nil, nil, "test-bucket", "mail/", "", i18n.Get("de")))
+	p = byName(check.Run(context.Background(), g, nil, nil, "test-bucket", "mail/", "", i18n.Get("de")))
 	if !p["Verschlüsselung"].OK || !strings.Contains(p["Verschlüsselung"].Detail, "serverseitig") {
 		t.Errorf("%+v", p["Verschlüsselung"])
 	}
@@ -168,12 +168,12 @@ func TestEncryptionIsDetected(t *testing.T) {
 }
 
 type sesFake struct {
-	gut    []string
-	fehler error
+	good []string
+	err  error
 }
 
-func (s *sesFake) Verifiziert(_ context.Context, _, _ string) ([]string, error) {
-	return s.gut, s.fehler
+func (s *sesFake) Verified(_ context.Context, _, _ string) ([]string, error) {
+	return s.good, s.err
 }
 
 func TestSESSender(t *testing.T) {
@@ -181,12 +181,12 @@ func TestSESSender(t *testing.T) {
 	f.Store("mail/m1", []byte("From: a@b.de\r\n\r\nText\r\n"))
 	ctx := context.Background()
 
-	p := nach(check.Run(ctx, f, nil, &sesFake{gut: []string{"support@firma.de"}},
+	p := byName(check.Run(ctx, f, nil, &sesFake{good: []string{"support@firma.de"}},
 		"test-bucket", "mail/", "support@firma.de", i18n.Get("de")))
 	if !p["SES-Absender"].OK {
 		t.Errorf("%+v", p["SES-Absender"])
 	}
-	p = nach(check.Run(ctx, f, nil, &sesFake{}, "test-bucket", "mail/", "x@y.de", i18n.Get("de")))
+	p = byName(check.Run(ctx, f, nil, &sesFake{}, "test-bucket", "mail/", "x@y.de", i18n.Get("de")))
 	if p["SES-Absender"].OK {
 		t.Error("unverifizierte Adresse als in Ordnung gemeldet")
 	}
@@ -194,7 +194,7 @@ func TestSESSender(t *testing.T) {
 		t.Errorf("Hinweis: %q", p["SES-Absender"].Hint)
 	}
 	// ohne Absender: uebersprungen, nicht rot
-	p = nach(check.Run(ctx, f, nil, &sesFake{}, "test-bucket", "mail/", "", i18n.Get("de")))
+	p = byName(check.Run(ctx, f, nil, &sesFake{}, "test-bucket", "mail/", "", i18n.Get("de")))
 	if !p["SES-Absender"].Skipped {
 		t.Errorf("%+v", p["SES-Absender"])
 	}
@@ -207,7 +207,7 @@ func TestSESSender(t *testing.T) {
 func TestHintNamesThePrefixFirst(t *testing.T) {
 	f := s3fake.New()
 	f.ListErr = errors.New("AccessDenied")
-	p := nach(check.Run(context.Background(), f, nil, nil,
+	p := byName(check.Run(context.Background(), f, nil, nil,
 		"test-bucket", "mail/ole/", "", i18n.Get("de")))
 
 	h := p["Bucket lesen"].Hint

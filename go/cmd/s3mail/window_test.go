@@ -15,16 +15,16 @@ func TestMacCommandForcesANewInstance(t *testing.T) {
 	if prog != "open" {
 		t.Errorf("Programm: %q", prog)
 	}
-	zusammen := strings.Join(args, " ")
-	if !strings.Contains(zusammen, "-na") {
-		t.Errorf("ohne -n landet die Adresse in der laufenden Instanz: %q", zusammen)
+	joined := strings.Join(args, " ")
+	if !strings.Contains(joined, "-na") {
+		t.Errorf("ohne -n landet die Adresse in der laufenden Instanz: %q", joined)
 	}
 	if args[1] != "Google Chrome" || args[2] != "--args" {
 		t.Errorf("Reihenfolge stimmt nicht: %v", args)
 	}
-	for _, muss := range []string{"--app=http://127.0.0.1:8765/?t=abc", "--user-data-dir="} {
-		if !strings.Contains(zusammen, muss) {
-			t.Errorf("%q fehlt in %q", muss, zusammen)
+	for _, must := range []string{"--app=http://127.0.0.1:8765/?t=abc", "--user-data-dir="} {
+		if !strings.Contains(joined, must) {
+			t.Errorf("%q fehlt in %q", must, joined)
 		}
 	}
 }

@@ -11,9 +11,9 @@ import (
 	"github.com/aws/smithy-go"
 )
 
-// LifecycleRegelID ist die Kennung unserer Papierkorb-Regel. Alles andere im
+// LifecycleRuleID ist die Kennung unserer Papierkorb-Regel. Alles andere im
 // Bucket bleibt unangetastet.
-const LifecycleRegelID = "s3mail-trash"
+const LifecycleRuleID = "s3mail-trash"
 
 // Buckets listet alle Buckets des Kontos. Fehlt s3:ListAllMyBuckets, kommt eine
 // leere Liste zurueck - der Assistent laesst den Namen dann eintippen.
@@ -37,43 +37,43 @@ func (a *S3) Buckets(ctx context.Context) ([]string, error) {
 	return out, nil
 }
 
-// LifecycleTage liest, nach wievielen Tagen der Papierkorb geleert wird. 0 heisst
+// LifecycleDays liest, nach wievielen Tagen der Papierkorb geleert wird. 0 heisst
 // "keine Regel von uns".
-func (a *S3) LifecycleTage(ctx context.Context, bucket string) int {
+func (a *S3) LifecycleDays(ctx context.Context, bucket string) int {
 	resp, err := a.c.GetBucketLifecycleConfiguration(ctx,
 		&s3.GetBucketLifecycleConfigurationInput{Bucket: aws.String(bucket)})
 	if err != nil {
 		return 0
 	}
 	for _, r := range resp.Rules {
-		if aws.ToString(r.ID) == LifecycleRegelID && r.Expiration != nil {
+		if aws.ToString(r.ID) == LifecycleRuleID && r.Expiration != nil {
 			return int(aws.ToInt32(r.Expiration.Days))
 		}
 	}
 	return 0
 }
 
-// LifecycleSetzen legt die Papierkorb-Regel an, aendert sie oder nimmt sie mit
+// SetLifecycle legt die Papierkorb-Regel an, aendert sie oder nimmt sie mit
 // tage=0 wieder heraus. Fremde Regeln im Bucket bleiben stehen.
-func (a *S3) LifecycleSetzen(ctx context.Context, bucket, prefix string, days int) (string, error) {
-	var bestehend []types.LifecycleRule
+func (a *S3) SetLifecycle(ctx context.Context, bucket, prefix string, days int) (string, error) {
+	var existing []types.LifecycleRule
 	if resp, err := a.c.GetBucketLifecycleConfiguration(ctx,
 		&s3.GetBucketLifecycleConfigurationInput{Bucket: aws.String(bucket)}); err == nil {
 		for _, r := range resp.Rules {
-			if aws.ToString(r.ID) != LifecycleRegelID {
-				bestehend = append(bestehend, r)
+			if aws.ToString(r.ID) != LifecycleRuleID {
+				existing = append(existing, r)
 			}
 		}
 	}
 	if days > 0 {
-		bestehend = append(bestehend, types.LifecycleRule{
-			ID:         aws.String(LifecycleRegelID),
+		existing = append(existing, types.LifecycleRule{
+			ID:         aws.String(LifecycleRuleID),
 			Status:     types.ExpirationStatusEnabled,
 			Filter:     &types.LifecycleRuleFilter{Prefix: aws.String(prefix + "trash/")},
 			Expiration: &types.LifecycleExpiration{Days: aws.Int32(int32(days))},
 		})
 	}
-	if len(bestehend) == 0 {
+	if len(existing) == 0 {
 		if _, err := a.c.DeleteBucketLifecycle(ctx,
 			&s3.DeleteBucketLifecycleInput{Bucket: aws.String(bucket)}); err != nil {
 			return "", err
@@ -82,7 +82,7 @@ func (a *S3) LifecycleSetzen(ctx context.Context, bucket, prefix string, days in
 	}
 	_, err := a.c.PutBucketLifecycleConfiguration(ctx, &s3.PutBucketLifecycleConfigurationInput{
 		Bucket:                 aws.String(bucket),
-		LifecycleConfiguration: &types.BucketLifecycleConfiguration{Rules: bestehend},
+		LifecycleConfiguration: &types.BucketLifecycleConfiguration{Rules: existing},
 	})
 	if err != nil {
 		return "", err

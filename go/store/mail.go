@@ -22,10 +22,10 @@ import (
 const HeaderChunk = 65536
 
 var (
-	// ErrNurAusPapierkorb: endgueltig loeschen geht nur von dort aus.
-	ErrNurAusPapierkorb = errors.New("endgueltig loeschen geht nur aus dem Papierkorb")
-	// ErrLoeschenGesperrt: mit --no-delete gar nicht.
-	ErrLoeschenGesperrt = errors.New("endgueltiges loeschen ist deaktiviert")
+	// ErrTrashOnly: endgueltig loeschen geht nur von dort aus.
+	ErrTrashOnly = errors.New("endgueltig loeschen geht nur aus dem Papierkorb")
+	// ErrDeleteBlocked: mit --no-delete gar nicht.
+	ErrDeleteBlocked = errors.New("endgueltiges loeschen ist deaktiviert")
 )
 
 // Mailbox ist der Index ueber den Bucket samt Zustand.
@@ -41,12 +41,12 @@ type Mailbox struct {
 
 	mu    sync.RWMutex
 	index map[string]core.Message
-	// verschluesselt merkt sich, ob im Postfach client-seitig verschluesselte
+	// encrypted merkt sich, ob im Postfach client-seitig verschluesselte
 	// Objekte liegen. Sobald ja, faellt der Range-GET weg - ein halbes Chiffrat
 	// laesst sich nicht entschluesseln.
-	verschluesselt bool
+	encrypted bool
 
-	State  *State
+	State   *State
 	content *bodyCache
 }
 
@@ -66,13 +66,13 @@ func NewMailbox(ctx context.Context, s3 S3, kms KMS, bucket, root, cacheDir stri
 		_ = os.MkdirAll(cacheDir, 0o700)
 		m.CacheFile = filepath.Join(cacheDir, slug+".json")
 		m.readCache()
-		m.content = neuerBodyCache(filepath.Join(cacheDir, slug+".bodies"))
+		m.content = newBodyCache(filepath.Join(cacheDir, slug+".bodies"))
 	}
-	lokal := ""
+	local := ""
 	if cacheDir != "" {
-		lokal = filepath.Join(cacheDir, slug+".state.json")
+		local = filepath.Join(cacheDir, slug+".state.json")
 	}
-	m.State = NewState(ctx, s3, bucket, st.Root, lokal)
+	m.State = NewState(ctx, s3, bucket, st.Root, local)
 	return m
 }
 
@@ -106,18 +106,18 @@ func (m *Mailbox) Folders() []core.FolderInfo {
 // vermissen, ohne es zu merken.
 func (m *Mailbox) Fetch(ctx context.Context, key string, headBytes int) ([]byte, error) {
 	m.mu.RLock()
-	teilweise := headBytes > 0 && !m.verschluesselt
+	partial := headBytes > 0 && !m.encrypted
 	etag := m.index[key].ETag
 	m.mu.RUnlock()
 
-	if !teilweise && headBytes == 0 {
-		if b, da := m.content.lesen(etag); da {
+	if !partial && headBytes == 0 {
+		if b, da := m.content.read(etag); da {
 			return b, nil
 		}
 	}
 
 	byteRange := ""
-	if teilweise {
+	if partial {
 		byteRange = fmt.Sprintf("bytes=0-%d", headBytes-1)
 	}
 	obj, err := m.s3.Get(ctx, m.bucket, key, byteRange)
@@ -126,48 +126,48 @@ func (m *Mailbox) Fetch(ctx context.Context, key string, headBytes int) ([]byte,
 	}
 	if !IsEnvelope(obj.Meta) {
 		if headBytes == 0 {
-			m.content.schreiben(etag, obj.Body)
+			m.content.put(etag, obj.Body)
 		}
 		return obj.Body, nil
 	}
 	// Erste verschluesselte Mail: ab jetzt keine Teilstuecke mehr, und dieses
 	// hier noch einmal ganz holen.
 	m.mu.Lock()
-	erstmalig := !m.verschluesselt
-	m.verschluesselt = true
+	firstTime := !m.encrypted
+	m.encrypted = true
 	m.mu.Unlock()
-	if teilweise || erstmalig {
+	if partial || firstTime {
 		if obj, err = m.s3.Get(ctx, m.bucket, key, ""); err != nil {
 			return nil, err
 		}
 	}
-	klar, err := Decrypt(obj.Body, obj.Meta, m.kms)
+	plain, err := Decrypt(obj.Body, obj.Meta, m.kms)
 	if err == nil && headBytes == 0 {
 		// Entschluesselt zwischenspeichern: das spart beim naechsten Oeffnen den
 		// KMS-Aufruf mit, nicht nur den S3-GET. Der Zwischenspeicher liegt dafuer
 		// im Klartext auf der Platte - genau wie der Index, der Absender und
 		// Vorschautext ohnehin schon dort haelt.
-		m.content.schreiben(etag, klar)
+		m.content.put(etag, plain)
 	}
-	return klar, err
+	return plain, err
 }
 
 // ClearCache wirft die zwischengespeicherten Inhalte weg.
-func (m *Mailbox) ClearCache() { m.content.Leeren() }
+func (m *Mailbox) ClearCache() { m.content.Clear() }
 
 // Encrypted sagt, ob im Postfach client-seitig verschluesselte Objekte liegen.
 func (m *Mailbox) Encrypted() bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return m.verschluesselt
+	return m.encrypted
 }
 
 // -- Indexieren ------------------------------------------------------------- //
 
 type RefreshResult struct {
-	Geprueft int `json:"geprueft"`
-	Neu      int `json:"neu"`
-	Entfernt int `json:"entfernt"`
+	Checked int `json:"checked"`
+	New     int `json:"new"`
+	Removed int `json:"removed"`
 }
 
 // Refresh listet den Bucket, holt zu jeder neuen oder geaenderten Mail den Anfang
@@ -180,25 +180,25 @@ func (m *Mailbox) Refresh(ctx context.Context) (RefreshResult, error) {
 	if err != nil {
 		return RefreshResult{}, err
 	}
-	gelistet := make(map[string]ObjectInfo, len(objs))
+	listed := make(map[string]ObjectInfo, len(objs))
 	for _, o := range objs {
 		if strings.HasSuffix(o.Key, "/") || o.Size == 0 || m.Internal(o.Key) {
 			continue // Snapshot, Ops und Ordnermarkierungen sind keine Mail
 		}
-		gelistet[o.Key] = o
+		listed[o.Key] = o
 	}
 
 	m.mu.Lock()
-	var entfernt int
+	var removed int
 	for key := range m.index {
-		if _, da := gelistet[key]; !da {
+		if _, da := listed[key]; !da {
 			delete(m.index, key)
-			entfernt++
+			removed++
 		}
 	}
 	var todo []ObjectInfo
-	for key, o := range gelistet {
-		if alt, da := m.index[key]; !da || alt.ETag != o.ETag {
+	for key, o := range listed {
+		if old, da := m.index[key]; !da || old.ETag != o.ETag {
 			todo = append(todo, o)
 		}
 	}
@@ -207,53 +207,53 @@ func (m *Mailbox) Refresh(ctx context.Context) (RefreshResult, error) {
 
 	sem := make(chan struct{}, m.Workers)
 	var wg sync.WaitGroup
-	frisch := make([]core.Message, len(todo))
+	fresh := make([]core.Message, len(todo))
 	for i, o := range todo {
 		wg.Add(1)
 		go func(i int, o ObjectInfo) {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			frisch[i] = m.summarize(ctx, o)
+			fresh[i] = m.summarize(ctx, o)
 		}(i, o)
 	}
 	wg.Wait()
 
 	m.mu.Lock()
-	for _, msg := range frisch {
+	for _, msg := range fresh {
 		m.index[msg.Key] = msg
 	}
 	m.mu.Unlock()
 	m.writeCache()
 
-	return RefreshResult{Geprueft: len(gelistet), Neu: len(todo), Entfernt: entfernt}, nil
+	return RefreshResult{Checked: len(listed), New: len(todo), Removed: removed}, nil
 }
 
 // summarize baut den Indexeintrag. Eine kaputte Mail kippt nicht den Lauf -
 // sie landet als Platzhalter im Index, damit sie sichtbar und verschiebbar bleibt.
 func (m *Mailbox) summarize(ctx context.Context, o ObjectInfo) core.Message {
-	basis := core.Message{
+	base := core.Message{
 		Key: o.Key, Mid: m.Mid(o.Key), Folder: m.FolderOf(o.Key),
 		ETag: o.ETag, Size: o.Size,
 		Date: o.LastModified.UTC().Format(time.RFC3339),
 	}
-	roh, err := m.Fetch(ctx, o.Key, HeaderChunk)
+	raw, err := m.Fetch(ctx, o.Key, HeaderChunk)
 	if err != nil {
-		basis.Subject = "(nicht lesbar)"
-		basis.Snippet = err.Error()
-		return basis
+		base.Subject = "(nicht lesbar)"
+		base.Snippet = err.Error()
+		return base
 	}
-	s := mimeparse.Summarize(roh, o.LastModified.UTC())
-	basis.Date = s.Date
-	basis.From, basis.To, basis.Cc = s.From, s.To, s.Cc
-	basis.Subject = s.Subject
-	if basis.Subject == "" {
-		basis.Subject = "(kein Betreff)"
+	s := mimeparse.Summarize(raw, o.LastModified.UTC())
+	base.Date = s.Date
+	base.From, base.To, base.Cc = s.From, s.To, s.Cc
+	base.Subject = s.Subject
+	if base.Subject == "" {
+		base.Subject = "(kein Betreff)"
 	}
-	basis.Snippet = s.Preview
-	basis.HasAttachment = len(s.Attachments) > 0
-	basis.Spam = s.Spam == "FAIL"
-	return basis
+	base.Snippet = s.Preview
+	base.HasAttachment = len(s.Attachments) > 0
+	base.Spam = s.Spam == "FAIL"
+	return base
 }
 
 // -- Verschieben / Loeschen ------------------------------------------------- //
@@ -280,9 +280,9 @@ func (m *Mailbox) Move(ctx context.Context, keys []string, folder string) ([]Mov
 				return err
 			}
 			m.mu.RLock()
-			entry, bekannt := m.index[key]
+			entry, known := m.index[key]
 			m.mu.RUnlock()
-			if !bekannt {
+			if !known {
 				continue
 			}
 			if m.FolderOf(key) == target {
@@ -290,9 +290,9 @@ func (m *Mailbox) Move(ctx context.Context, keys []string, folder string) ([]Mov
 				continue
 			}
 			mid := m.Mid(key)
-			neuerKey, neueMid := m.freeKey(mid, target)
+			newKey, newMid := m.freeKey(mid, target)
 
-			if err := m.s3.Copy(ctx, m.bucket, key, neuerKey, m.copyOpts(ctx, key)); err != nil {
+			if err := m.s3.Copy(ctx, m.bucket, key, newKey, m.copyOpts(ctx, key)); err != nil {
 				return err
 			}
 			if err := m.s3.Delete(ctx, m.bucket, key); err != nil {
@@ -300,16 +300,16 @@ func (m *Mailbox) Move(ctx context.Context, keys []string, folder string) ([]Mov
 			}
 			m.mu.Lock()
 			delete(m.index, key)
-			entry.Key, entry.Mid, entry.Folder = neuerKey, neueMid, target
-			m.index[neuerKey] = entry
+			entry.Key, entry.Mid, entry.Folder = newKey, newMid, target
+			m.index[newKey] = entry
 			m.mu.Unlock()
 
-			if neueMid != mid { // Zustand mitziehen
-				if err := m.State.Mutate(ctx, core.Op{T: "rekey", Old: mid, New: neueMid}); err != nil {
+			if newMid != mid { // Zustand mitziehen
+				if err := m.State.Mutate(ctx, core.Op{T: "rekey", Old: mid, New: newMid}); err != nil {
 					return err
 				}
 			}
-			out = append(out, MoveResult{Key: key, NewKey: neuerKey, Folder: target})
+			out = append(out, MoveResult{Key: key, NewKey: newKey, Folder: target})
 		}
 		return nil
 	})
@@ -321,16 +321,16 @@ func (m *Mailbox) Move(ctx context.Context, keys []string, folder string) ([]Mov
 func (m *Mailbox) freeKey(mid, target string) (string, string) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	kandidat, _ := m.KeyFor(mid, target)
+	candidate, _ := m.KeyFor(mid, target)
 	for n := 1; ; n++ {
-		if _, belegt := m.index[kandidat]; !belegt {
-			return kandidat, m.Mid(kandidat)
+		if _, taken := m.index[candidate]; !taken {
+			return candidate, m.Mid(candidate)
 		}
-		stamm, punkt, endung := mid, "", ""
+		stem, dot, ext := mid, "", ""
 		if i := strings.Index(mid, "."); i >= 0 {
-			stamm, punkt, endung = mid[:i], ".", mid[i+1:]
+			stem, dot, ext = mid[:i], ".", mid[i+1:]
 		}
-		kandidat, _ = m.KeyFor(fmt.Sprintf("%s-%d%s%s", stamm, n, punkt, endung), target)
+		candidate, _ = m.KeyFor(fmt.Sprintf("%s-%d%s%s", stem, n, dot, ext), target)
 	}
 }
 
@@ -355,7 +355,7 @@ func (m *Mailbox) copyOpts(ctx context.Context, key string) CopyOpts {
 // Die Pruefung sitzt hier und nicht in der Oberflaeche.
 func (m *Mailbox) Delete(ctx context.Context, keys []string, force bool) (int, error) {
 	if !m.AllowDelete {
-		return 0, ErrLoeschenGesperrt
+		return 0, ErrDeleteBlocked
 	}
 	n := 0
 	err := m.State.Batch(ctx, func() error {
@@ -364,7 +364,7 @@ func (m *Mailbox) Delete(ctx context.Context, keys []string, force bool) (int, e
 				return err
 			}
 			if !force && m.FolderOf(key) != core.Trash {
-				return ErrNurAusPapierkorb
+				return ErrTrashOnly
 			}
 			if err := m.s3.Delete(ctx, m.bucket, key); err != nil {
 				return err
@@ -405,7 +405,7 @@ func (m *Mailbox) ApplyRules(ctx context.Context, pool []core.Message, force boo
 	if len(plan) == 0 {
 		return 0, nil
 	}
-	verschoben := 0
+	moved := 0
 	err := m.State.Batch(ctx, func() error {
 		for _, a := range plan {
 			if a.MarkRuled {
@@ -428,12 +428,12 @@ func (m *Mailbox) ApplyRules(ctx context.Context, pool []core.Message, force boo
 				if _, err := m.Move(ctx, []string{a.Key}, *a.MoveTo); err != nil {
 					return err
 				}
-				verschoben++
+				moved++
 			}
 		}
 		return nil
 	})
-	return verschoben, err
+	return moved, err
 }
 
 // -- Zwischenspeicher ------------------------------------------------------- //

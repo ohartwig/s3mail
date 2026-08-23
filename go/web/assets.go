@@ -6,10 +6,10 @@ package web
 import _ "embed"
 
 //go:embed assets/inbox.html
-var SeitePostfach string
+var PageMailbox string
 
 //go:embed assets/setup.html
-var SeiteAssistent string
+var PageWizard string
 
 //go:embed assets/token.html
-var SeiteToken string
+var PageToken string

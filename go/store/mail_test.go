@@ -11,20 +11,20 @@ import (
 	"s3mail/store"
 )
 
-func mailBauen(from, to, subject, body, date, mid string) []byte {
+func buildMail(from, to, subject, body, date, mid string) []byte {
 	return []byte("From: " + from + "\r\nTo: " + to + "\r\nSubject: " + subject +
 		"\r\nDate: " + date + "\r\nMessage-ID: " + mid +
 		"\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n" + body + "\r\n")
 }
 
-func postfachBauen(t *testing.T) (*s3fake.Fake, *store.Mailbox) {
+func buildMailbox(t *testing.T) (*s3fake.Fake, *store.Mailbox) {
 	t.Helper()
 	f := s3fake.New()
-	f.Objs["mail/m1"] = mailBauen("Anna <anna@kunde.de>", "post@firma.de",
+	f.Objs["mail/m1"] = buildMail("Anna <anna@kunde.de>", "post@firma.de",
 		"Rechnung 1", "Anbei die Rechnung.", "Mon, 03 Aug 2026 09:00:00 +0000", "<m1@x>")
-	f.Objs["mail/m2"] = mailBauen("Shop <news@shop.io>", "post@firma.de",
+	f.Objs["mail/m2"] = buildMail("Shop <news@shop.io>", "post@firma.de",
 		"Angebot", "Neu im Sortiment.", "Tue, 04 Aug 2026 09:00:00 +0000", "<m2@x>")
-	f.Objs["mail/archiv/alt1"] = mailBauen("Alt <alt@firma.de>", "post@firma.de",
+	f.Objs["mail/archiv/alt1"] = buildMail("Alt <alt@firma.de>", "post@firma.de",
 		"Altes", "Alter Text.", "Wed, 01 Jul 2026 08:00:00 +0000", "<alt1@x>")
 	f.Objs["andere/nicht-meins"] = []byte("ausserhalb")
 	m := store.NewMailbox(context.Background(), f, nil, "test-bucket", "mail/", t.TempDir(), true)
@@ -33,13 +33,13 @@ func postfachBauen(t *testing.T) (*s3fake.Fake, *store.Mailbox) {
 
 func TestIndexAndFolders(t *testing.T) {
 	ctx := context.Background()
-	_, m := postfachBauen(t)
-	erg, err := m.Refresh(ctx)
+	_, m := buildMailbox(t)
+	res, err := m.Refresh(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if erg.Neu != 3 {
-		t.Errorf("%d neue Mails, erwartet 3", erg.Neu)
+	if res.New != 3 {
+		t.Errorf("%d neue Mails, erwartet 3", res.New)
 	}
 	for _, msg := range m.Index() {
 		if strings.HasPrefix(msg.Key, "andere/") {
@@ -49,19 +49,19 @@ func TestIndexAndFolders(t *testing.T) {
 	if got := m.Index()[0].Subject; got != "Altes" {
 		t.Errorf("Betreff nicht geparst: %q", got)
 	}
-	nach := map[string]core.FolderInfo{}
+	to := map[string]core.FolderInfo{}
 	for _, o := range m.Folders() {
-		nach[o.Name] = o
+		to[o.Name] = o
 	}
-	if nach[core.Inbox].Count != 2 || nach[core.Archive].Count != 1 {
-		t.Errorf("Ordnerzaehler: %+v", nach)
+	if to[core.Inbox].Count != 2 || to[core.Archive].Count != 1 {
+		t.Errorf("Ordnerzaehler: %+v", to)
 	}
 }
 
 // TestStateAndOpsAreNotMail - sonst tauchen sie als Nachricht auf.
 func TestStateAndOpsAreNotMail(t *testing.T) {
 	ctx := context.Background()
-	_, m := postfachBauen(t)
+	_, m := buildMailbox(t)
 	if _, err := m.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestStateAndOpsAreNotMail(t *testing.T) {
 
 func TestMoveCarriesTheState(t *testing.T) {
 	ctx := context.Background()
-	f, m := postfachBauen(t)
+	f, m := buildMailbox(t)
 	if _, err := m.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -94,25 +94,25 @@ func TestMoveCarriesTheState(t *testing.T) {
 		core.Op{T: "flags", Mids: []string{"m1"}, Read: core.Ptr(true), Star: core.Ptr(true)}); err != nil {
 		t.Fatal(err)
 	}
-	erg, err := m.Move(ctx, []string{"mail/m1"}, core.Archive)
+	res, err := m.Move(ctx, []string{"mail/m1"}, core.Archive)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(erg) != 1 || erg[0].NewKey != "mail/archiv/m1" {
-		t.Fatalf("%+v", erg)
+	if len(res) != 1 || res[0].NewKey != "mail/archiv/m1" {
+		t.Fatalf("%+v", res)
 	}
 	if _, da := f.Objs["mail/m1"]; da {
 		t.Error("Original nicht geloescht")
 	}
 	e := m.State.Get("m1")
-	if !e.Read || !e.Star || !hat(e.Tags, "wichtig") {
+	if !e.Read || !e.Star || !has(e.Tags, "wichtig") {
 		t.Errorf("Zustand nach dem Verschieben verloren: %+v", e)
 	}
 }
 
 func TestMoveInheritsEncryption(t *testing.T) {
 	ctx := context.Background()
-	f, m := postfachBauen(t)
+	f, m := buildMailbox(t)
 	f.SSE["mail/m1"] = store.CopyOpts{ServerSideEncryption: "aws:kms",
 		SSEKMSKeyID: "arn:aws:kms:eu-central-1:1:key/abc", StorageClass: "STANDARD_IA"}
 	if _, err := m.Refresh(ctx); err != nil {
@@ -121,18 +121,18 @@ func TestMoveInheritsEncryption(t *testing.T) {
 	if _, err := m.Move(ctx, []string{"mail/m1"}, core.Archive); err != nil {
 		t.Fatal(err)
 	}
-	neu := f.SSE["mail/archiv/m1"]
-	if neu.ServerSideEncryption != "aws:kms" || neu.SSEKMSKeyID == "" {
-		t.Errorf("Verschluesselung nicht mitgenommen: %+v", neu)
+	fresh := f.SSE["mail/archiv/m1"]
+	if fresh.ServerSideEncryption != "aws:kms" || fresh.SSEKMSKeyID == "" {
+		t.Errorf("Verschluesselung nicht mitgenommen: %+v", fresh)
 	}
-	if neu.StorageClass != "STANDARD_IA" {
-		t.Errorf("Speicherklasse nicht mitgenommen: %+v", neu)
+	if fresh.StorageClass != "STANDARD_IA" {
+		t.Errorf("Speicherklasse nicht mitgenommen: %+v", fresh)
 	}
 }
 
 func TestMoveChecks(t *testing.T) {
 	ctx := context.Background()
-	_, m := postfachBauen(t)
+	_, m := buildMailbox(t)
 	if _, err := m.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -146,26 +146,26 @@ func TestMoveChecks(t *testing.T) {
 		t.Error("Snapshot verschiebbar")
 	}
 	// in denselben Ordner: uebersprungen, nicht kopiert
-	erg, err := m.Move(ctx, []string{"mail/m1"}, core.Inbox)
-	if err != nil || len(erg) != 1 || !erg[0].Skipped {
-		t.Errorf("Verschieben in denselben Ordner: %+v %v", erg, err)
+	res, err := m.Move(ctx, []string{"mail/m1"}, core.Inbox)
+	if err != nil || len(res) != 1 || !res[0].Skipped {
+		t.Errorf("Verschieben in denselben Ordner: %+v %v", res, err)
 	}
 }
 
 func TestNameCollision(t *testing.T) {
 	ctx := context.Background()
-	f, m := postfachBauen(t)
-	f.Objs["mail/archiv/m1"] = mailBauen("X <x@y.de>", "post@firma.de", "Kollision",
+	f, m := buildMailbox(t)
+	f.Objs["mail/archiv/m1"] = buildMail("X <x@y.de>", "post@firma.de", "Kollision",
 		"Text", "Thu, 05 Aug 2026 09:00:00 +0000", "<k@x>")
 	if _, err := m.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
-	erg, err := m.Move(ctx, []string{"mail/m1"}, core.Archive)
+	res, err := m.Move(ctx, []string{"mail/m1"}, core.Archive)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if erg[0].NewKey != "mail/archiv/m1-1" {
-		t.Errorf("Kollision nicht entschaerft: %q", erg[0].NewKey)
+	if res[0].NewKey != "mail/archiv/m1-1" {
+		t.Errorf("Kollision nicht entschaerft: %q", res[0].NewKey)
 	}
 	if _, da := f.Objs["mail/archiv/m1"]; !da {
 		t.Error("bestehende Mail ueberschrieben")
@@ -175,11 +175,11 @@ func TestNameCollision(t *testing.T) {
 // TestDeleteOnlyFromTrash - die Pruefung sitzt im Store, nicht in der UI.
 func TestDeleteOnlyFromTrash(t *testing.T) {
 	ctx := context.Background()
-	_, m := postfachBauen(t)
+	_, m := buildMailbox(t)
 	if _, err := m.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := m.Delete(ctx, []string{"mail/m1"}, false); !errors.Is(err, store.ErrNurAusPapierkorb) {
+	if _, err := m.Delete(ctx, []string{"mail/m1"}, false); !errors.Is(err, store.ErrTrashOnly) {
 		t.Errorf("Loeschen ausserhalb des Papierkorbs: %v", err)
 	}
 	if _, err := m.Move(ctx, []string{"mail/m1"}, core.Trash); err != nil {
@@ -197,13 +197,13 @@ func TestDeleteOnlyFromTrash(t *testing.T) {
 func TestDeleteBlocked(t *testing.T) {
 	ctx := context.Background()
 	f := s3fake.New()
-	f.Objs["mail/trash/m1"] = mailBauen("a@b.de", "c@d.de", "x", "y",
+	f.Objs["mail/trash/m1"] = buildMail("a@b.de", "c@d.de", "x", "y",
 		"Mon, 03 Aug 2026 09:00:00 +0000", "<m1@x>")
 	m := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), false)
 	if _, err := m.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := m.Delete(ctx, []string{"mail/trash/m1"}, false); !errors.Is(err, store.ErrLoeschenGesperrt) {
+	if _, err := m.Delete(ctx, []string{"mail/trash/m1"}, false); !errors.Is(err, store.ErrDeleteBlocked) {
 		t.Errorf("--no-delete nicht durchgesetzt: %v", err)
 	}
 }
@@ -212,18 +212,18 @@ func TestDeleteBlocked(t *testing.T) {
 // entschluesseln, also muss der Range-GET wegfallen, sobald so ein Objekt auftaucht.
 func TestEncryptedMeansNoRangeGet(t *testing.T) {
 	ctx := context.Background()
-	plain, faelle := umschlaegeLaden(t)
+	plain, cases := loadEnvelopes(t)
 	f := s3fake.New()
-	body, key := entpacken(t, faelle["gcm"])
+	body, key := unpack(t, cases["gcm"])
 	f.Objs["mail/enc1"] = body
-	f.Meta["mail/enc1"] = faelle["gcm"].Meta
+	f.Meta["mail/enc1"] = cases["gcm"].Meta
 
 	m := store.NewMailbox(ctx, f, &fakeKMS{key: key}, "test-bucket", "mail/", t.TempDir(), true)
-	roh, err := m.Fetch(ctx, "mail/enc1", store.HeaderChunk)
+	raw, err := m.Fetch(ctx, "mail/enc1", store.HeaderChunk)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(roh) != string(plain) {
+	if string(raw) != string(plain) {
 		t.Error("Klartext weicht ab")
 	}
 	if !m.Encrypted() {
@@ -234,7 +234,7 @@ func TestEncryptedMeansNoRangeGet(t *testing.T) {
 	if _, err := m.Fetch(ctx, "mail/enc1", store.HeaderChunk); err != nil {
 		t.Fatal(err)
 	}
-	for _, a := range f.Aufrufe {
+	for _, a := range f.CallLog {
 		if strings.Contains(a, "bytes=") {
 			t.Errorf("Teilstueck trotz Verschluesselung angefordert: %s", a)
 		}
@@ -243,34 +243,34 @@ func TestEncryptedMeansNoRangeGet(t *testing.T) {
 
 func TestEncryptedWithoutPermissionFailsOnlyThatMail(t *testing.T) {
 	ctx := context.Background()
-	_, faelle := umschlaegeLaden(t)
+	_, cases := loadEnvelopes(t)
 	f := s3fake.New()
-	body, _ := entpacken(t, faelle["gcm"])
+	body, _ := unpack(t, cases["gcm"])
 	f.Objs["mail/enc1"] = body
-	f.Meta["mail/enc1"] = faelle["gcm"].Meta
-	f.Objs["mail/klar"] = mailBauen("a@b.de", "c@d.de", "Lesbar", "Text",
+	f.Meta["mail/enc1"] = cases["gcm"].Meta
+	f.Objs["mail/klar"] = buildMail("a@b.de", "c@d.de", "Lesbar", "Text",
 		"Mon, 03 Aug 2026 09:00:00 +0000", "<k@x>")
 
-	m := store.NewMailbox(ctx, f, &fakeKMS{fehler: errors.New("AccessDenied")},
+	m := store.NewMailbox(ctx, f, &fakeKMS{err: errors.New("AccessDenied")},
 		"test-bucket", "mail/", t.TempDir(), true)
 	if _, err := m.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
-	nach := map[string]core.Message{}
+	to := map[string]core.Message{}
 	for _, msg := range m.Index() {
-		nach[msg.Mid] = msg
+		to[msg.Mid] = msg
 	}
-	if nach["klar"].Subject != "Lesbar" {
-		t.Errorf("lesbare Mail mitgerissen: %+v", nach["klar"])
+	if to["klar"].Subject != "Lesbar" {
+		t.Errorf("lesbare Mail mitgerissen: %+v", to["klar"])
 	}
-	if nach["enc1"].Subject != "(nicht lesbar)" {
-		t.Errorf("unlesbare Mail nicht markiert: %+v", nach["enc1"])
+	if to["enc1"].Subject != "(nicht lesbar)" {
+		t.Errorf("unlesbare Mail nicht markiert: %+v", to["enc1"])
 	}
 }
 
 func TestRulesWhileIndexing(t *testing.T) {
 	ctx := context.Background()
-	_, m := postfachBauen(t)
+	_, m := buildMailbox(t)
 	archiv := core.Archive
 	rules, err := core.CleanRules([]core.Rule{{Contains: "shop.io", Field: "from",
 		Folder: &archiv, Tags: []string{"Werbung"}, Enabled: true}})
@@ -286,36 +286,36 @@ func TestRulesWhileIndexing(t *testing.T) {
 	if _, err := m.ApplyRules(ctx, nil, false); err != nil {
 		t.Fatal(err)
 	}
-	nach := map[string]core.Message{}
+	to := map[string]core.Message{}
 	for _, msg := range m.Index() {
-		nach[msg.Mid] = msg
+		to[msg.Mid] = msg
 	}
-	if nach["m2"].Folder != core.Archive {
-		t.Errorf("Regel hat nicht verschoben: %+v", nach["m2"])
+	if to["m2"].Folder != core.Archive {
+		t.Errorf("Regel hat nicht verschoben: %+v", to["m2"])
 	}
-	if !hat(m.State.Get("m2").Tags, "Werbung") {
+	if !has(m.State.Get("m2").Tags, "Werbung") {
 		t.Error("Regel-Tag fehlt")
 	}
-	if nach["m1"].Folder != core.Inbox {
+	if to["m1"].Folder != core.Inbox {
 		t.Error("Regel hat eine unbeteiligte Mail angefasst")
 	}
 }
 
 func TestCacheSavesRequests(t *testing.T) {
 	ctx := context.Background()
-	f, m := postfachBauen(t)
+	f, m := buildMailbox(t)
 	if _, err := m.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
 	f.ClearCalls()
-	erg, err := m.Refresh(ctx) // nichts hat sich geaendert
+	res, err := m.Refresh(ctx) // nichts hat sich geaendert
 	if err != nil {
 		t.Fatal(err)
 	}
-	if erg.Neu != 0 {
-		t.Errorf("%d Mails erneut geholt, erwartet 0", erg.Neu)
+	if res.New != 0 {
+		t.Errorf("%d Mails erneut geholt, erwartet 0", res.New)
 	}
-	for _, a := range f.Aufrufe {
+	for _, a := range f.CallLog {
 		if strings.HasPrefix(a, "get mail/m") {
 			t.Errorf("Mail trotz gleichem ETag erneut geholt: %s", a)
 		}
@@ -327,7 +327,7 @@ func TestCacheSavesRequests(t *testing.T) {
 // nicht: bisher wurde jede geoeffnete Mail samt Anhaengen erneut geholt.
 func TestBodyFromTheCache(t *testing.T) {
 	ctx := context.Background()
-	f, m := postfachBauen(t)
+	f, m := buildMailbox(t)
 	if _, err := m.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -355,23 +355,23 @@ func TestBodyFromTheCache(t *testing.T) {
 // verfallen. Sonst zeigt s3mail nach einem Wechsel des Inhalts die alte Fassung.
 func TestCacheHangsOnTheETag(t *testing.T) {
 	ctx := context.Background()
-	f, m := postfachBauen(t)
+	f, m := buildMailbox(t)
 	if _, err := m.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := m.Fetch(ctx, "mail/m1", 0); err != nil {
 		t.Fatal(err)
 	}
-	f.Store("mail/m1", mailBauen("Neu <neu@x.de>", "post@firma.de", "Anderer Inhalt",
+	f.Store("mail/m1", buildMail("Neu <neu@x.de>", "post@firma.de", "Anderer Inhalt",
 		"Voellig andere Mail.", "Fri, 07 Aug 2026 09:00:00 +0000", "<neu@x>"))
 	if _, err := m.Refresh(ctx); err != nil { // neues ETag landet im Index
 		t.Fatal(err)
 	}
-	roh, err := m.Fetch(ctx, "mail/m1", 0)
+	raw, err := m.Fetch(ctx, "mail/m1", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(roh), "Anderer Inhalt") {
+	if !strings.Contains(string(raw), "Anderer Inhalt") {
 		t.Error("alte Fassung aus dem Zwischenspeicher geliefert")
 	}
 }
@@ -380,7 +380,7 @@ func TestCacheHangsOnTheETag(t *testing.T) {
 // waere beim naechsten Oeffnen eine abgeschnittene Mail, ohne dass es auffaellt.
 func TestPartialFetchesAreNotCached(t *testing.T) {
 	ctx := context.Background()
-	f, m := postfachBauen(t)
+	f, m := buildMailbox(t)
 	if _, err := m.Refresh(ctx); err != nil { // holt nur HeaderChunk
 		t.Fatal(err)
 	}
@@ -388,13 +388,13 @@ func TestPartialFetchesAreNotCached(t *testing.T) {
 	if _, err := m.Fetch(ctx, "mail/m1", 0); err != nil {
 		t.Fatal(err)
 	}
-	geholt := false
+	fetched := false
 	for _, a := range f.Calls() {
 		if strings.HasPrefix(a, "get mail/m1") {
-			geholt = true
+			fetched = true
 		}
 	}
-	if !geholt {
+	if !fetched {
 		t.Error("ganze Mail kam aus einem Teilstueck im Zwischenspeicher")
 	}
 }

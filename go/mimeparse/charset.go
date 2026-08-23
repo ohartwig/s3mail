@@ -6,9 +6,9 @@ import (
 	"github.com/emersion/go-message/charset"
 )
 
-// charsetReader reicht an go-message/charset durch und gibt bei unbekannter
-// Kodierung den Rohstrom zurueck, statt die Mail platzen zu lassen - genauso wie
-// part_text() in Python auf utf-8 mit errors="replace" zurueckfaellt.
+// charsetReader passes through to go-message/charset and, for an unknown
+// encoding, returns the raw stream instead of blowing the message up - the same
+// way part_text() in Python falls back to utf-8 with errors="replace".
 func charsetReader(name string, input io.Reader) (io.Reader, error) {
 	r, err := charset.Reader(name, input)
 	if err != nil {

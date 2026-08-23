@@ -1,20 +1,20 @@
-// Package core traegt den Zustand von s3mail: Tags, gelesen/ungelesen, Stern und
-// Regeln - dazu Ordnerlogik, Regel-Engine und Suche. Nichts hier spricht mit S3
-// oder mit HTTP; das haelt die Schicht testbar und ist der Grund, warum sie sich
-// eins zu eins gegen die Python-Fassung pruefen laesst.
+// Package core carries s3mail's state: tags, read/unread, star and rules -
+// plus folder logic, the rule engine and search. Nothing here talks to S3 or to
+// HTTP; that keeps the layer testable and is the reason it can be checked one
+// to one against the Python version.
 package core
 
 import "sort"
 
-// TagColors wird der Reihe nach vergeben, wenn ein neuer Tag auftaucht.
+// TagColors are handed out in order as new tags appear.
 var TagColors = []string{
 	"#4c8dff", "#38b48b", "#e0a33e", "#d9534f",
 	"#a06ee1", "#3ea8c4", "#e07a5f", "#7f9c3a",
 }
 
-// Entry ist der Zustand einer einzelnen Mail. Schluessel im Zustand ist der
-// Basename des S3-Objekts, nicht der volle Key - deshalb ueberlebt der Eintrag
-// das Verschieben zwischen Ordnern.
+// Entry is the state of a single message. The key in the state is the base name
+// of the S3 object, not the full key - which is why the entry survives a move
+// between folders.
 type Entry struct {
 	Read  bool     `json:"read"`
 	Star  bool     `json:"star"`
@@ -22,8 +22,8 @@ type Entry struct {
 	Ruled bool     `json:"ruled"`
 }
 
-// Data ist das, was als Snapshot im Bucket liegt. Upto ist der Wasserstand: bis
-// zu diesem Op-Namen steckt alles bereits im Snapshot.
+// Data is what lies in the bucket as a snapshot. Upto is the watermark: up to
+// this op name, everything is already in the snapshot.
 type Data struct {
 	Messages map[string]*Entry `json:"messages"`
 	Tags     map[string]string `json:"tags"`
@@ -35,8 +35,8 @@ func NewData() *Data {
 	return &Data{Messages: map[string]*Entry{}, Tags: map[string]string{}, Rules: []Rule{}}
 }
 
-// Normalize fuellt fehlende Felder auf - ein Snapshot aus einer aelteren Fassung
-// oder eine von Hand editierte Datei kippt uns sonst.
+// Normalize fills in missing fields - a snapshot from an older version, or a
+// hand-edited file, would otherwise topple us.
 func (d *Data) Normalize() *Data {
 	if d.Messages == nil {
 		d.Messages = map[string]*Entry{}
@@ -66,9 +66,9 @@ func (d *Data) entry(mid string) *Entry {
 	return e
 }
 
-// Op ist eine einzelne Zustandsaenderung. Genau diese Objekte landen einzeln im
-// Bucket - nie ein Abzug des ganzen Dokuments. Read und Star sind Zeiger, weil
-// "nicht anfassen" etwas anderes ist als "auf false setzen".
+// Op is a single state change. These objects are what lands in the bucket, one
+// at a time - never a copy of the whole document. Read and Star are pointers
+// because "do not touch" is a different thing from "set to false".
 type Op struct {
 	T      string   `json:"t"`
 	Mids   []string `json:"mids,omitempty"`
@@ -83,10 +83,10 @@ type Op struct {
 	Rules  []Rule   `json:"rules,omitempty"`
 }
 
-// Apply wendet eine Aenderung auf ein Zustands-Dokument an - rein, ohne I/O.
+// Apply applies one change to a state document - pure, without I/O.
 //
-// Jede Operation muss idempotent bleiben: darauf beruht, dass ein Op-Objekt, das
-// beim Aufraeumen liegengeblieben ist, nichts kaputtmacht.
+// Every operation has to stay idempotent: that is what makes an op object left
+// behind by an incomplete cleanup harmless.
 func Apply(d *Data, op Op) {
 	d.Normalize()
 	switch op.T {
@@ -110,12 +110,12 @@ func Apply(d *Data, op Op) {
 			e := d.entry(mid)
 			cur := make([]string, 0, len(e.Tags)+len(op.Add))
 			for _, t := range e.Tags {
-				if !enthaelt(op.Remove, t) {
+				if !contains(op.Remove, t) {
 					cur = append(cur, t)
 				}
 			}
 			for _, t := range op.Add {
-				if !enthaelt(cur, t) {
+				if !contains(cur, t) {
 					cur = append(cur, t)
 				}
 			}
@@ -131,14 +131,14 @@ func Apply(d *Data, op Op) {
 		}
 	case "rekey":
 		if e, ok := d.Messages[op.Old]; ok && e != nil {
-			kopie := *e
-			kopie.Tags = append([]string{}, e.Tags...)
-			d.Messages[op.New] = &kopie
+			clone := *e
+			clone.Tags = append([]string{}, e.Tags...)
+			d.Messages[op.New] = &clone
 		}
 	case "tagdel":
 		delete(d.Tags, op.Name)
 		for _, e := range d.Messages {
-			if enthaelt(e.Tags, op.Name) {
+			if contains(e.Tags, op.Name) {
 				rest := make([]string, 0, len(e.Tags))
 				for _, t := range e.Tags {
 					if t != op.Name {
@@ -149,36 +149,36 @@ func Apply(d *Data, op Op) {
 			}
 		}
 	case "tagren":
-		alt, neu, farbe := op.Old, op.New, op.Color
-		if alt != neu {
-			if present, ok := d.Tags[alt]; ok {
-				delete(d.Tags, alt)
-				if farbe != "" {
-					d.Tags[neu] = farbe
+		old, fresh, color := op.Old, op.New, op.Color
+		if old != fresh {
+			if present, ok := d.Tags[old]; ok {
+				delete(d.Tags, old)
+				if color != "" {
+					d.Tags[fresh] = color
 				} else {
-					d.Tags[neu] = present
+					d.Tags[fresh] = present
 				}
 			} else {
-				d.Tags[neu] = farbeOder(d, neu, farbe)
+				d.Tags[fresh] = colorOr(d, fresh, color)
 			}
 			for _, e := range d.Messages {
 				for i, t := range e.Tags {
-					if t == alt {
-						e.Tags[i] = neu
+					if t == old {
+						e.Tags[i] = fresh
 					}
 				}
 			}
-		} else if _, ok := d.Tags[neu]; !ok || farbe != "" {
-			d.Tags[neu] = farbeOder(d, neu, farbe)
+		} else if _, ok := d.Tags[fresh]; !ok || color != "" {
+			d.Tags[fresh] = colorOr(d, fresh, color)
 		}
 	case "rules":
 		d.Rules = op.Rules
 	}
 }
 
-func farbeOder(d *Data, tag, farbe string) string {
-	if farbe != "" {
-		return farbe
+func colorOr(d *Data, tag, color string) string {
+	if color != "" {
+		return color
 	}
 	if present, ok := d.Tags[tag]; ok {
 		return present
@@ -186,8 +186,8 @@ func farbeOder(d *Data, tag, farbe string) string {
 	return TagColors[len(d.Tags)%len(TagColors)]
 }
 
-// MergeMissing uebernimmt Eintraege aus other, die base gar nicht kennt - so geht
-// nichts verloren, was offline entstanden ist.
+// MergeMissing takes over entries from other that base does not know at all -
+// so nothing created offline gets lost.
 func MergeMissing(base, other *Data) *Data {
 	if other == nil {
 		return base
@@ -195,13 +195,13 @@ func MergeMissing(base, other *Data) *Data {
 	base.Normalize()
 	for mid, e := range other.Messages {
 		if _, da := base.Messages[mid]; !da {
-			kopie := *e
-			base.Messages[mid] = &kopie
+			clone := *e
+			base.Messages[mid] = &clone
 		}
 	}
-	for tag, farbe := range other.Tags {
+	for tag, color := range other.Tags {
 		if _, da := base.Tags[tag]; !da {
-			base.Tags[tag] = farbe
+			base.Tags[tag] = color
 		}
 	}
 	if len(base.Rules) == 0 && len(other.Rules) > 0 {
@@ -210,7 +210,7 @@ func MergeMissing(base, other *Data) *Data {
 	return base
 }
 
-// TagNamen liefert die Tags in stabiler Reihenfolge - Go-Maps haben keine.
+// TagNames returns the tags in a stable order - Go maps have none.
 func (d *Data) TagNamen() []string {
 	out := make([]string, 0, len(d.Tags))
 	for t := range d.Tags {
@@ -220,7 +220,7 @@ func (d *Data) TagNamen() []string {
 	return out
 }
 
-func enthaelt(list []string, s string) bool {
+func contains(list []string, s string) bool {
 	for _, x := range list {
 		if x == s {
 			return true

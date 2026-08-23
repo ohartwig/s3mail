@@ -16,11 +16,11 @@ import (
 )
 
 // jede Testinstanz bekommt eine eigene Kennung - so wie zwei echte Rechner.
-var instanzZaehler atomic.Uint64
+var instanceCounter atomic.Uint64
 
-// zustandBauen liefert einen store.State mit fester Uhr - sonst waeren die Op-Namen
+// buildState liefert einen store.State mit fester Uhr - sonst waeren die Op-Namen
 // nicht reproduzierbar.
-func zustandBauen(t *testing.T, f *s3fake.Fake) *store.State {
+func buildState(t *testing.T, f *s3fake.Fake) *store.State {
 	t.Helper()
 	ctx := context.Background()
 	s := store.NewState(ctx, f, "test-bucket", "mail/", filepath.Join(t.TempDir(), "state.json"))
@@ -29,7 +29,7 @@ func zustandBauen(t *testing.T, f *s3fake.Fake) *store.State {
 		n++
 		return time.Date(2026, 8, 21, 10, 0, n, 0, time.UTC)
 	}
-	s.SetInstance(fmt.Sprintf("%012x", instanzZaehler.Add(1)))
+	s.SetInstance(fmt.Sprintf("%012x", instanceCounter.Add(1)))
 	return s
 }
 
@@ -53,16 +53,16 @@ func snapshot(t *testing.T, f *s3fake.Fake) *core.Data {
 func TestOneChangeOneSmallOp(t *testing.T) {
 	ctx := context.Background()
 	f := s3fake.New()
-	s := zustandBauen(t, f)
+	s := buildState(t, f)
 
 	if err := s.Mutate(ctx, core.Op{T: "flags", Mids: []string{"m1"}, Read: core.Ptr(true)}); err != nil {
 		t.Fatal(err)
 	}
-	geschrieben := ops(f)
-	if len(geschrieben) != 1 {
-		t.Fatalf("%d Objekte fuer eine Aenderung: %v", len(geschrieben), geschrieben)
+	written := ops(f)
+	if len(written) != 1 {
+		t.Fatalf("%d Objekte fuer eine Aenderung: %v", len(written), written)
 	}
-	if n := len(f.Objs[geschrieben[0]]); n > 200 {
+	if n := len(f.Objs[written[0]]); n > 200 {
 		t.Errorf("%d Byte - das sieht nach dem ganzen Dokument aus", n)
 	}
 	if _, da := f.Objs["mail/"+store.StateObject]; da {
@@ -77,7 +77,7 @@ func TestOneChangeOneSmallOp(t *testing.T) {
 func TestTwoMachinesNoConflict(t *testing.T) {
 	ctx := context.Background()
 	f := s3fake.New()
-	a, b := zustandBauen(t, f), zustandBauen(t, f)
+	a, b := buildState(t, f), buildState(t, f)
 
 	if err := a.Mutate(ctx, core.Op{T: "tags", Mids: []string{"m1"}, Add: []string{"von-A"}}); err != nil {
 		t.Fatal(err)
@@ -89,11 +89,11 @@ func TestTwoMachinesNoConflict(t *testing.T) {
 	if len(ops(f)) != 2 {
 		t.Fatalf("%d Op-Objekte - schreiben die beiden auf denselben Schluessel?", len(ops(f)))
 	}
-	c := zustandBauen(t, f) // dritter Rechner liest nach
-	if !hat(c.Get("m1").Tags, "von-A") {
+	c := buildState(t, f) // dritter Rechner liest nach
+	if !has(c.Get("m1").Tags, "von-A") {
 		t.Error("Aenderung von A verloren")
 	}
-	if !hat(c.Get("m2").Tags, "von-B") {
+	if !has(c.Get("m2").Tags, "von-B") {
 		t.Error("Aenderung von B verloren")
 	}
 }
@@ -101,7 +101,7 @@ func TestTwoMachinesNoConflict(t *testing.T) {
 func TestZusammenfassen(t *testing.T) {
 	ctx := context.Background()
 	f := s3fake.New()
-	s := zustandBauen(t, f)
+	s := buildState(t, f)
 	for i := 0; i < store.CompactAfter+2; i++ {
 		if err := s.Mutate(ctx, core.Op{T: "tags", Mids: []string{"m1"},
 			Add: []string{fmt.Sprintf("t%02d", i)}}); err != nil {
@@ -115,8 +115,8 @@ func TestZusammenfassen(t *testing.T) {
 	if n := len(ops(f)); n > 3 {
 		t.Errorf("%d Ops nach dem Zusammenfassen uebrig", n)
 	}
-	frisch := zustandBauen(t, f)
-	if n := len(frisch.Get("m1").Tags); n != store.CompactAfter+2 {
+	fresh := buildState(t, f)
+	if n := len(fresh.Get("m1").Tags); n != store.CompactAfter+2 {
 		t.Errorf("frischer Rechner sieht %d Tags, erwartet %d", n, store.CompactAfter+2)
 	}
 }
@@ -126,7 +126,7 @@ func TestZusammenfassen(t *testing.T) {
 func TestWatermarkSkipsWhatIsAlreadyIn(t *testing.T) {
 	ctx := context.Background()
 	f := s3fake.New()
-	s := zustandBauen(t, f)
+	s := buildState(t, f)
 
 	if err := s.Mutate(ctx, core.Op{T: "flags", Mids: []string{"m1"}, Read: core.Ptr(true)}); err != nil {
 		t.Fatal(err)
@@ -143,8 +143,8 @@ func TestWatermarkSkipsWhatIsAlreadyIn(t *testing.T) {
 	}
 	f.Objs[altKey] = altBody // Loeschen war gescheitert: altes Op ist wieder da
 
-	frisch := zustandBauen(t, f)
-	if frisch.Get("m1").Read {
+	fresh := buildState(t, f)
+	if fresh.Get("m1").Read {
 		t.Error("liegengebliebenes Op wurde erneut angewandt - der Wasserstand traegt nicht")
 	}
 }
@@ -152,7 +152,7 @@ func TestWatermarkSkipsWhatIsAlreadyIn(t *testing.T) {
 func TestBatchWritesOnce(t *testing.T) {
 	ctx := context.Background()
 	f := s3fake.New()
-	s := zustandBauen(t, f)
+	s := buildState(t, f)
 
 	err := s.Batch(ctx, func() error {
 		for i := 0; i < 10; i++ {
@@ -169,9 +169,9 @@ func TestBatchWritesOnce(t *testing.T) {
 	if n := len(ops(f)); n != 1 {
 		t.Errorf("%d Op-Objekte fuer einen Batch, erwartet 1", n)
 	}
-	frisch := zustandBauen(t, f)
+	fresh := buildState(t, f)
 	for i := 0; i < 10; i++ {
-		if !hat(frisch.Get(fmt.Sprintf("m%d", i)).Tags, "stapel") {
+		if !has(fresh.Get(fmt.Sprintf("m%d", i)).Tags, "stapel") {
 			t.Fatalf("m%d fehlt nach dem Batch", i)
 		}
 	}
@@ -180,7 +180,7 @@ func TestBatchWritesOnce(t *testing.T) {
 func TestSchreibfehlerBehaeltAenderung(t *testing.T) {
 	ctx := context.Background()
 	f := s3fake.New()
-	s := zustandBauen(t, f)
+	s := buildState(t, f)
 	f.PutErr = errors.New("AccessDenied")
 
 	err := s.Mutate(ctx, core.Op{T: "flags", Mids: []string{"m1"}, Star: core.Ptr(true)})
@@ -201,7 +201,7 @@ func TestSchreibfehlerBehaeltAenderung(t *testing.T) {
 	if !s.RemoteOK() || len(ops(f)) != 1 {
 		t.Errorf("Nachholen misslungen: remoteOK=%v ops=%v", s.RemoteOK(), ops(f))
 	}
-	if !zustandBauen(t, f).Get("m1").Star {
+	if !buildState(t, f).Get("m1").Star {
 		t.Error("nachgeholte Aenderung fehlt im Bucket")
 	}
 }
@@ -209,19 +209,19 @@ func TestSchreibfehlerBehaeltAenderung(t *testing.T) {
 func TestLocalFallback(t *testing.T) {
 	ctx := context.Background()
 	f := s3fake.New()
-	lokal := filepath.Join(t.TempDir(), "state.json")
-	s := store.NewState(ctx, f, "test-bucket", "mail/", lokal)
+	local := filepath.Join(t.TempDir(), "state.json")
+	s := store.NewState(ctx, f, "test-bucket", "mail/", local)
 	f.PutErr = errors.New("AccessDenied")
 	_ = s.Mutate(ctx, core.Op{T: "tags", Mids: []string{"m1"}, Add: []string{"offline"}})
 
 	// neuer Prozess, immer noch kein Schreibrecht: der lokale Stand traegt
-	zweiter := store.NewState(ctx, f, "test-bucket", "mail/", lokal)
-	if !hat(zweiter.Get("m1").Tags, "offline") {
+	second := store.NewState(ctx, f, "test-bucket", "mail/", local)
+	if !has(second.Get("m1").Tags, "offline") {
 		t.Error("lokaler Rueckfall greift nicht")
 	}
 }
 
-func hat(list []string, s string) bool {
+func has(list []string, s string) bool {
 	for _, x := range list {
 		if x == s {
 			return true

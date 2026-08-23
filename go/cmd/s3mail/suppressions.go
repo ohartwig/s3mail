@@ -7,22 +7,22 @@ import (
 	"s3mail/web"
 )
 
-// sperrliste haengt awsx an die Schnittstelle des Servers. Die beiden Typen
+// suppressions haengt awsx an die Schnittstelle des Servers. Die beiden Typen
 // getrennt zu halten kostet diese zwanzig Zeilen und spart dem web-Paket eine
 // Abhaengigkeit auf das AWS-SDK - dadurch laufen seine Tests ohne Konto.
-type sperrliste struct{ l *awsx.Suppressions }
+type suppressions struct{ l *awsx.Suppressions }
 
-func (s sperrliste) Sperren(ctx context.Context, a string) error   { return s.l.Block(ctx, a) }
-func (s sperrliste) Freigeben(ctx context.Context, a string) error { return s.l.Unblock(ctx, a) }
+func (s suppressions) Block(ctx context.Context, a string) error   { return s.l.Block(ctx, a) }
+func (s suppressions) Unblock(ctx context.Context, a string) error { return s.l.Unblock(ctx, a) }
 
-func (s sperrliste) Lesen(ctx context.Context) ([]web.Sperreintrag, error) {
-	roh, err := s.l.List(ctx)
+func (s suppressions) List(ctx context.Context) ([]web.SuppressionEntry, error) {
+	raw, err := s.l.List(ctx)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]web.Sperreintrag, 0, len(roh))
-	for _, e := range roh {
-		out = append(out, web.Sperreintrag{Adresse: e.Adresse, Grund: e.Grund, Seit: e.Seit})
+	out := make([]web.SuppressionEntry, 0, len(raw))
+	for _, e := range raw {
+		out = append(out, web.SuppressionEntry{Address: e.Address, Reason: e.Reason, Since: e.Since})
 	}
 	return out, nil
 }

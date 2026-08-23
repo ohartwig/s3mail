@@ -12,9 +12,9 @@ import (
 	"s3mail/store"
 )
 
-// serverMitSperrliste baut einen Server mit Postfach - ohne das antworten alle
+// serverWithSuppressions baut einen Server mit Postfach - ohne das antworten alle
 // /api/-Routen mit 503 ("noch nicht eingerichtet"), auch diese hier.
-func serverMitSperrliste(t *testing.T, l Sperrliste) (*httptest.Server, *Server) {
+func serverWithSuppressions(t *testing.T, l SuppressionList) (*httptest.Server, *Server) {
 	t.Helper()
 	ctx := context.Background()
 	f := s3fake.New()
@@ -22,36 +22,36 @@ func serverMitSperrliste(t *testing.T, l Sperrliste) (*httptest.Server, *Server)
 	srv := NewServer(mb, testToken, "127.0.0.1", 0,
 		map[string]any{"bucket": "test-bucket", "root": "mail/", "can_send": true})
 	if l != nil {
-		srv.MitSperrliste(l)
+		srv.WithSuppressionList(l)
 	}
 	ts := httptest.NewServer(srv)
 	t.Cleanup(ts.Close)
-	srv.Port = portVon(ts.URL) // sonst schlaegt die Host-Pruefung zu
+	srv.Port = portOf(ts.URL) // sonst schlaegt die Host-Pruefung zu
 	return ts, srv
 }
 
-type fakeSperrliste struct {
-	drin    map[string]bool
-	fehler  error
-	gelesen int
+type fakeSuppressions struct {
+	blocked map[string]bool
+	err     error
+	reads   int
 }
 
-func (f *fakeSperrliste) Sperren(_ context.Context, a string) error {
-	if f.fehler != nil {
-		return f.fehler
+func (f *fakeSuppressions) Block(_ context.Context, a string) error {
+	if f.err != nil {
+		return f.err
 	}
-	f.drin[a] = true
+	f.blocked[a] = true
 	return nil
 }
-func (f *fakeSperrliste) Freigeben(_ context.Context, a string) error {
-	delete(f.drin, a)
+func (f *fakeSuppressions) Unblock(_ context.Context, a string) error {
+	delete(f.blocked, a)
 	return nil
 }
-func (f *fakeSperrliste) Lesen(context.Context) ([]Sperreintrag, error) {
-	f.gelesen++
-	out := []Sperreintrag{}
-	for a := range f.drin {
-		out = append(out, Sperreintrag{Adresse: a, Grund: "COMPLAINT"})
+func (f *fakeSuppressions) List(context.Context) ([]SuppressionEntry, error) {
+	f.reads++
+	out := []SuppressionEntry{}
+	for a := range f.blocked {
+		out = append(out, SuppressionEntry{Address: a, Reason: "COMPLAINT"})
 	}
 	return out, nil
 }
@@ -60,7 +60,7 @@ func (f *fakeSperrliste) Lesen(context.Context) ([]Sperreintrag, error) {
 // die Adresse als `Name <a@x.de>`. Ginge das ungefiltert an SES, landete der
 // Anzeigename auf der Sperrliste oder SES lehnte ab.
 func TestAddressFromHeader(t *testing.T) {
-	faelle := map[string]string{
+	cases := map[string]string{
 		`Vorname Nachname <a@x.de>`:    "a@x.de",
 		`"Nachname, Vorname" <b@y.de>`: "b@y.de",
 		`  c@z.de  `:                   "c@z.de",
@@ -69,18 +69,18 @@ func TestAddressFromHeader(t *testing.T) {
 		`kein-at-zeichen`:              "",
 		``:                             "",
 	}
-	for ein, will := range faelle {
-		if got := adresseAus(ein); got != will {
-			t.Errorf("%q -> %q, erwartet %q", ein, got, will)
+	for in, want := range cases {
+		if got := addressFrom(in); got != want {
+			t.Errorf("%q -> %q, erwartet %q", in, got, want)
 		}
 	}
 }
 
 func TestBlockAndUnblock(t *testing.T) {
-	f := &fakeSperrliste{drin: map[string]bool{}}
-	ts, _ := serverMitSperrliste(t, f)
+	f := &fakeSuppressions{blocked: map[string]bool{}}
+	ts, _ := serverWithSuppressions(t, f)
 
-	ruf := func(path, body string) *http.Response {
+	call1 := func(path, body string) *http.Response {
 		req, _ := http.NewRequest("POST", ts.URL+path, strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-S3mail-Token", testToken)
@@ -91,16 +91,16 @@ func TestBlockAndUnblock(t *testing.T) {
 		return resp
 	}
 
-	resp := ruf("/api/block", `{"address":"Kunde <weg@x.de>"}`)
+	resp := call1("/api/block", `{"address":"Kunde <weg@x.de>"}`)
 	if resp.StatusCode != 200 {
 		t.Fatalf("block: %d", resp.StatusCode)
 	}
 	var d struct {
-		Adresse  string         `json:"address"`
-		Gesperrt []Sperreintrag `json:"blocked"`
+		Address  string             `json:"address"`
+		Gesperrt []SuppressionEntry `json:"blocked"`
 	}
 	json.NewDecoder(resp.Body).Decode(&d)
-	if d.Adresse != "weg@x.de" || !f.drin["weg@x.de"] {
+	if d.Address != "weg@x.de" || !f.blocked["weg@x.de"] {
 		t.Fatalf("nicht gesperrt: %+v", d)
 	}
 	// Die Antwort traegt die neue Liste, damit der Dialog ohne zweiten Aufruf stimmt.
@@ -108,15 +108,15 @@ func TestBlockAndUnblock(t *testing.T) {
 		t.Errorf("Liste in der Antwort: %+v", d.Gesperrt)
 	}
 
-	if resp := ruf("/api/unblock", `{"address":"weg@x.de"}`); resp.StatusCode != 200 {
+	if resp := call1("/api/unblock", `{"address":"weg@x.de"}`); resp.StatusCode != 200 {
 		t.Fatalf("unblock: %d", resp.StatusCode)
 	}
-	if f.drin["weg@x.de"] {
+	if f.blocked["weg@x.de"] {
 		t.Error("nach dem Freigeben immer noch gesperrt")
 	}
 
 	// Ohne brauchbare Adresse: 400, und nichts passiert.
-	if resp := ruf("/api/block", `{"address":"quatsch"}`); resp.StatusCode != 400 {
+	if resp := call1("/api/block", `{"address":"quatsch"}`); resp.StatusCode != 400 {
 		t.Errorf("kaputte Adresse -> %d, erwartet 400", resp.StatusCode)
 	}
 }
@@ -125,7 +125,7 @@ func TestBlockAndUnblock(t *testing.T) {
 // niemanden vom Senden ausschliessen koennen. Ohne die Pruefung liefe die Route
 // in einen Nil-Zeiger.
 func TestNoSendingNoSuppressionList(t *testing.T) {
-	ts, _ := serverMitSperrliste(t, nil)
+	ts, _ := serverWithSuppressions(t, nil)
 	req, _ := http.NewRequest("GET", ts.URL+"/api/blocked", nil)
 	req.Header.Set("X-S3mail-Token", testToken)
 	resp, err := ts.Client().Do(req)
@@ -140,7 +140,7 @@ func TestNoSendingNoSuppressionList(t *testing.T) {
 // TestSuppressionListInTheInterface - der Knopf ist der einzige Weg dorthin.
 func TestSuppressionListInTheInterface(t *testing.T) {
 	for _, part := range []string{`id="vBlock"`, `id="blockedBtn"`, "/api/unblock"} {
-		if !strings.Contains(SeitePostfach, part) {
+		if !strings.Contains(PageMailbox, part) {
 			t.Errorf("Postfachseite ohne %s", part)
 		}
 	}

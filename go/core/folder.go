@@ -7,8 +7,8 @@ import (
 	"strings"
 )
 
-// Ordner sind echte S3-Prefixe unter der Wurzel. Was direkt darunter liegt, ist
-// der Posteingang; alles mit einem Schraegstrich ist ein Unterordner.
+// Folders are real S3 prefixes below the root. What sits directly under it is
+// the inbox; anything with a slash is a subfolder.
 const (
 	Inbox   = ""
 	Trash   = "trash"
@@ -36,7 +36,7 @@ var SystemFolders = []SystemFolder{
 
 var folderRe = regexp.MustCompile(`^[\p{L}][\p{L}\p{N}_ .-]{0,39}$`)
 
-// ValidFolder prueft einen Ordnernamen. Der Posteingang ist der leere Name.
+// ValidFolder checks a folder name. The inbox is the empty name.
 func ValidFolder(name string) (string, error) {
 	name = strings.Trim(strings.TrimSpace(name), "/")
 	if name == "" {
@@ -48,8 +48,8 @@ func ValidFolder(name string) (string, error) {
 	return name, nil
 }
 
-// Store haelt die Ordner- und Schluessellogik. Root endet immer auf "/", ausser
-// er ist leer.
+// Store holds the folder and key logic. Root always ends in "/", unless it is
+// empty.
 type Store struct {
 	Root string
 }
@@ -62,7 +62,7 @@ func NewStore(root string) *Store {
 	return &Store{Root: root}
 }
 
-// Mid ist der Basename - der Schluessel, unter dem der Zustand haengt.
+// Mid is the base name - the key the state hangs on.
 func (s *Store) Mid(key string) string {
 	if i := strings.LastIndex(key, "/"); i >= 0 {
 		return key[i+1:]
@@ -70,7 +70,7 @@ func (s *Store) Mid(key string) string {
 	return key
 }
 
-// FolderOf liest den Ordner aus dem Key.
+// FolderOf reads the folder out of a key.
 func (s *Store) FolderOf(key string) string {
 	rest := strings.TrimPrefix(key, s.Root)
 	if i := strings.LastIndex(rest, "/"); i >= 0 {
@@ -79,7 +79,7 @@ func (s *Store) FolderOf(key string) string {
 	return Inbox
 }
 
-// KeyFor baut den Key aus Basename und Ordner.
+// KeyFor builds the key from base name and folder.
 func (s *Store) KeyFor(mid, folder string) (string, error) {
 	f, err := ValidFolder(folder)
 	if err != nil {
@@ -91,9 +91,9 @@ func (s *Store) KeyFor(mid, folder string) (string, error) {
 	return s.Root + f + "/" + mid, nil
 }
 
-// Internal ist wahr fuer alles, was s3mail selbst im Bucket ablegt: den Snapshot
-// und den Ops-Ordner darunter. Beginnt irgendein Pfadsegment unter der Wurzel mit
-// einem Punkt, gehoert es uns - nicht dem Postfach.
+// Internal is true for everything s3mail itself stores in the bucket: the
+// snapshot and the ops folder below it. If any path segment under the root
+// starts with a dot, it is ours - not the mailbox's.
 func (s *Store) Internal(key string) bool {
 	for _, part := range strings.Split(strings.TrimPrefix(key, s.Root), "/") {
 		if strings.HasPrefix(part, ".") {
@@ -103,7 +103,7 @@ func (s *Store) Internal(key string) bool {
 	return false
 }
 
-// Own ist die Sicherheitsgrenze: kein Key ausserhalb des Prefix, nichts Internes.
+// Own is the security boundary: no key outside the prefix, nothing internal.
 func (s *Store) Own(key string) error {
 	if !strings.HasPrefix(key, s.Root) {
 		return fmt.Errorf("Key liegt ausserhalb des Prefix")
@@ -125,15 +125,15 @@ type FolderInfo struct {
 	Unread int    `json:"unread"`
 }
 
-// Folders zaehlt pro Ordner - Systemordner zuerst und immer sichtbar, danach die
-// selbst angelegten in alphabetischer Reihenfolge.
+// Folders counts per folder - system folders first and always visible, then
+// the ones somebody created, in alphabetical order.
 func Folders(index []Message, d *Data) []FolderInfo {
-	type zaehler struct{ count, unread int }
-	counts := map[string]*zaehler{}
+	type counter struct{ count, unread int }
+	counts := map[string]*counter{}
 	for _, m := range index {
 		c, ok := counts[m.Folder]
 		if !ok {
-			c = &zaehler{}
+			c = &counter{}
 			counts[m.Folder] = c
 		}
 		c.count++
@@ -147,18 +147,18 @@ func Folders(index []Message, d *Data) []FolderInfo {
 		system[sf.Name] = true
 		c := counts[sf.Name]
 		if c == nil {
-			c = &zaehler{}
+			c = &counter{}
 		}
 		out = append(out, FolderInfo{sf.Name, sf.LabelKey, sf.Icon, true, c.count, c.unread})
 	}
-	eigene := make([]string, 0, len(counts))
+	own := make([]string, 0, len(counts))
 	for name := range counts {
 		if !system[name] {
-			eigene = append(eigene, name)
+			own = append(own, name)
 		}
 	}
-	sort.Strings(eigene)
-	for _, name := range eigene {
+	sort.Strings(own)
+	for _, name := range own {
 		c := counts[name]
 		out = append(out, FolderInfo{name, name, "\U0001F4C1", false, c.count, c.unread})
 	}

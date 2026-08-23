@@ -55,5 +55,5 @@ type S3 interface {
 	Copy(ctx context.Context, bucket, srcKey, dstKey string, o CopyOpts) error
 }
 
-// ErrNichtGefunden ist das, was eine Umsetzung fuer NoSuchKey liefern soll.
-var ErrNichtGefunden = errors.New("objekt nicht gefunden")
+// ErrNotFound ist das, was eine Umsetzung fuer NoSuchKey liefern soll.
+var ErrNotFound = errors.New("objekt nicht gefunden")

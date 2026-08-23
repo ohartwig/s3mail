@@ -34,8 +34,8 @@ func TestNeverNullToTheInterface(t *testing.T) {
 // TestNilReallyBecomesNull dokumentiert, warum es nichtNil ueberhaupt braucht -
 // damit niemand die Funktion als ueberfluessig wegraeumt.
 func TestNilReallyBecomesNull(t *testing.T) {
-	var leer []string
-	blob, _ := json.Marshal(map[string]any{"buckets": leer})
+	var empty []string
+	blob, _ := json.Marshal(map[string]any{"buckets": empty})
 	if string(blob) != `{"buckets":null}` {
 		t.Skip("Go marshalt nil-Slices nicht mehr als null - nichtNil kann weg")
 	}

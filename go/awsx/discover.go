@@ -14,11 +14,11 @@ import (
 
 // Finding ist, was s3mail ueber sich selbst herausgefunden hat.
 type Finding struct {
-	Benutzer string `json:"user"`
-	Bucket   string `json:"bucket"`
-	Prefix   string `json:"prefix"`
-	Absender string `json:"from"`
-	Region   string `json:"region"`
+	User   string `json:"user"`
+	Bucket string `json:"bucket"`
+	Prefix string `json:"prefix"`
+	From   string `json:"from"`
+	Region string `json:"region"`
 }
 
 // Complete sagt, ob der Assistent damit ohne Rueckfrage weiterkommt.
@@ -44,8 +44,8 @@ func Discover(ctx context.Context, cfg aws.Config) (Finding, error) {
 		// Rolle, Root oder ein anderer Identitaetstyp - hat keine Benutzer-Policy.
 		return Finding{}, nil
 	}
-	f := ausPolicies(policyDocuments(ctx, iam.NewFromConfig(cfg), name))
-	f.Benutzer = name
+	f := fromPolicies(policyDocuments(ctx, iam.NewFromConfig(cfg), name))
+	f.User = name
 	if f.Bucket != "" {
 		f.Region = BucketRegion(ctx, cfg, f.Bucket)
 	}

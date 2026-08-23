@@ -10,30 +10,30 @@ import (
 
 // TestRegeltrefferGegenPython: dieselbe Regel, dieselben Mails, dieselben Treffer.
 func TestRegeltrefferGegenPython(t *testing.T) {
-	index, _ := laden(t)
+	index, _ := load(t)
 	blob, err := os.ReadFile(filepath.Join("testdata", "rulehits.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	var faelle []struct {
-		Regel struct {
+	var cases []struct {
+		Rule struct {
 			Contains string `json:"contains"`
 			Field    string `json:"field"`
 		} `json:"regel"`
-		Trifft []string `json:"trifft"`
+		Hits []string `json:"trifft"`
 	}
-	if err := json.Unmarshal(blob, &faelle); err != nil {
+	if err := json.Unmarshal(blob, &cases); err != nil {
 		t.Fatal(err)
 	}
-	for _, f := range faelle {
-		r := Rule{Contains: f.Regel.Contains, Field: f.Regel.Field}
+	for _, f := range cases {
+		r := Rule{Contains: f.Rule.Contains, Field: f.Rule.Field}
 		got := []string{}
 		for _, m := range index {
 			if r.Hits(m) {
 				got = append(got, m.Mid)
 			}
 		}
-		want := f.Trifft
+		want := f.Hits
 		if len(want) == 0 {
 			want = []string{}
 		}
@@ -113,14 +113,14 @@ func TestRulesSwitchedOff(t *testing.T) {
 }
 
 func TestCleanRules(t *testing.T) {
-	strich, boese, archiv := "-", "../boese", "archiv"
-	rein := []Rule{
+	dash, hostile, archiv := "-", "../boese", "archiv"
+	in := []Rule{
 		{Contains: "  a  ", Field: "FROM", Folder: &archiv, Enabled: true},
-		{Contains: "", Field: "any"},                       // fliegt raus
-		{Contains: "b", Field: "quatsch", Folder: &strich}, // Feld -> any, kein Ordner
+		{Contains: "", Field: "any"},                     // fliegt raus
+		{Contains: "b", Field: "quatsch", Folder: &dash}, // Feld -> any, kein Ordner
 		{Contains: "c", Field: "to", Tags: []string{"1", "", "2", "3", "4", "5", "6"}},
 	}
-	got, err := CleanRules(rein)
+	got, err := CleanRules(in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +136,7 @@ func TestCleanRules(t *testing.T) {
 	if len(got[2].Tags) != 5 {
 		t.Errorf("Tags nicht auf 5 begrenzt: %v", got[2].Tags)
 	}
-	if _, err := CleanRules([]Rule{{Contains: "x", Field: "any", Folder: &boese}}); err == nil {
+	if _, err := CleanRules([]Rule{{Contains: "x", Field: "any", Folder: &hostile}}); err == nil {
 		t.Error("ungueltiger Ordner in einer Regel wurde durchgelassen")
 	}
 }

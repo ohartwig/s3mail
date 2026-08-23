@@ -36,16 +36,16 @@ func TestAgainstPython(t *testing.T) {
 		got := Summarize(raw, fallback)
 		w := want[name]
 
-		cmp := func(feld, a, b string) {
+		cmp := func(field, a, b string) {
 			if a == b {
 				return
 			}
-			if grund, gewollt := abweichungen[name+"/"+feld]; gewollt {
+			if reason, wanted := deviations[name+"/"+field]; wanted {
 				t.Logf("%s / %s: bewusst anders (%s)\n  python: %q\n  go:     %q",
-					name, feld, grund, b, a)
+					name, field, reason, b, a)
 				return
 			}
-			t.Errorf("%s / %s:\n  python: %q\n  go:     %q", name, feld, b, a)
+			t.Errorf("%s / %s:\n  python: %q\n  go:     %q", name, field, b, a)
 		}
 		cmp("subject", got.Subject, w.Subject)
 		cmp("from", got.From, w.From)
@@ -57,14 +57,14 @@ func TestAgainstPython(t *testing.T) {
 			t.Errorf("%s / has_html: python=%v go=%v", name, w.HasHTML, got.HasHTML)
 		}
 		if len(got.Attachments) != len(w.Attachments) {
-			if grund, gewollt := abweichungen[name+"/anhaenge"]; gewollt {
+			if reason, wanted := deviations[name+"/anhaenge"]; wanted {
 				t.Logf("%s / anhaenge: bewusst anders (%s) python=%v go=%v",
-					name, grund, namen(w.Attachments), namen(got.Attachments))
+					name, reason, attachmentNames(w.Attachments), attachmentNames(got.Attachments))
 				continue
 			}
 			t.Errorf("%s / anhaenge: python=%d %v, go=%d %v",
-				name, len(w.Attachments), namen(w.Attachments),
-				len(got.Attachments), namen(got.Attachments))
+				name, len(w.Attachments), attachmentNames(w.Attachments),
+				len(got.Attachments), attachmentNames(got.Attachments))
 			continue
 		}
 		for i := range got.Attachments {
@@ -74,10 +74,10 @@ func TestAgainstPython(t *testing.T) {
 	}
 }
 
-// abweichungen sind die Stellen, an denen der Go-Parser bewusst etwas anderes
+// deviations sind die Stellen, an denen der Go-Parser bewusst etwas anderes
 // liefert als der Python-Parser - allesamt, weil Python dort Daten verliert.
 // Jede Zeile hier ist eine Entscheidung, keine Nachlaessigkeit.
-var abweichungen = map[string]string{
+var deviations = map[string]string{
 	"03-cp1252-8bit/subject": "roher 8-Bit-Header wird als windows-1252 gerettet; " +
 		"Python setzt Ersatzzeichen, der Text ist dort verloren",
 	"08-inline-cid/anhaenge": "Bild, auf das das HTML per cid: zeigt, ist kein Anhang; " +
@@ -86,7 +86,7 @@ var abweichungen = map[string]string{
 		"Go erkennt das, Python zerlegt die Umlaute",
 }
 
-func namen(a []Attachment) []string {
+func attachmentNames(a []Attachment) []string {
 	out := make([]string, len(a))
 	for i, x := range a {
 		out[i] = x.Name

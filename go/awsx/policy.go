@@ -10,26 +10,26 @@ import (
 // Policy-Dokument steht, laesst sich ohne Konto pruefen, und genau daran haengt,
 // ob der Assistent das Richtige vorschlaegt.
 
-// ausPolicies liest Bucket, Prefix und Absender aus IAM-Policy-Dokumenten.
-func ausPolicies(dokumente []string) Finding {
+// fromPolicies liest Bucket, Prefix und Absender aus IAM-Policy-Dokumenten.
+func fromPolicies(documents []string) Finding {
 	var f Finding
-	for _, d := range dokumente {
+	for _, d := range documents {
 		for _, s := range statements(d) {
 			if !strings.EqualFold(s.Effect, "Allow") {
 				continue // ein Deny sagt nichts darueber, wo das Postfach liegt
 			}
-			aktionen := list(s.Action)
+			actions := list(s.Action)
 			switch {
-			case hatPraefix(aktionen, "s3:"):
-				bucket, prefix := ausS3(aktionen, list(s.Resource), s.Condition)
+			case hasPrefix(actions, "s3:"):
+				bucket, prefix := fromS3(actions, list(s.Resource), s.Condition)
 				// Der laengste Prefix gewinnt: eine Policy darf den Bucket
 				// grob und das eigene Postfach genau nennen.
 				if bucket != "" && (f.Bucket == "" || len(prefix) > len(f.Prefix)) {
 					f.Bucket, f.Prefix = bucket, prefix
 				}
-			case hatPraefix(aktionen, "ses:"):
+			case hasPrefix(actions, "ses:"):
 				if a := senderFrom(s.Condition); a != "" {
-					f.Absender = a
+					f.From = a
 				}
 			}
 		}
@@ -56,13 +56,13 @@ func statements(dokument string) []statement {
 	if json.Unmarshal([]byte(dokument), &d) != nil {
 		return nil
 	}
-	var viele []statement
-	if json.Unmarshal(d.Statement, &viele) == nil {
-		return viele
+	var many []statement
+	if json.Unmarshal(d.Statement, &many) == nil {
+		return many
 	}
-	var eins statement
-	if json.Unmarshal(d.Statement, &eins) == nil {
-		return []statement{eins}
+	var first statement
+	if json.Unmarshal(d.Statement, &first) == nil {
+		return []statement{first}
 	}
 	return nil
 }
@@ -72,18 +72,18 @@ func list(r json.RawMessage) []string {
 	if len(r) == 0 {
 		return nil
 	}
-	var viele []string
-	if json.Unmarshal(r, &viele) == nil {
-		return viele
+	var many []string
+	if json.Unmarshal(r, &many) == nil {
+		return many
 	}
-	var eins string
-	if json.Unmarshal(r, &eins) == nil {
-		return []string{eins}
+	var first string
+	if json.Unmarshal(r, &first) == nil {
+		return []string{first}
 	}
 	return nil
 }
 
-func hatPraefix(values []string, p string) bool {
+func hasPrefix(values []string, p string) bool {
 	for _, w := range values {
 		if strings.HasPrefix(strings.ToLower(w), p) {
 			return true
@@ -92,24 +92,24 @@ func hatPraefix(values []string, p string) bool {
 	return false
 }
 
-// ausS3 zieht Bucket und Prefix aus den Resource-ARNs einer S3-Erlaubnis.
+// fromS3 zieht Bucket und Prefix aus den Resource-ARNs einer S3-Erlaubnis.
 // Fehlt der Prefix dort, hilft die Bedingung s3:prefix eines ListBucket weiter.
-func ausS3(aktionen, ressourcen []string, cond map[string]map[string]json.RawMessage) (string, string) {
+func fromS3(actions, resources []string, cond map[string]map[string]json.RawMessage) (string, string) {
 	var bucket, prefix string
-	for _, r := range ressourcen {
+	for _, r := range resources {
 		const header = "arn:aws:s3:::"
 		if !strings.HasPrefix(r, header) {
 			continue
 		}
 		rest := strings.TrimPrefix(r, header)
-		name, key, geteilt := strings.Cut(rest, "/")
+		name, key, shared := strings.Cut(rest, "/")
 		if name == "" || strings.ContainsAny(name, "*?") {
 			continue // ein Platzhalter im Bucket-Namen taugt nicht als Vorschlag
 		}
 		if bucket == "" {
 			bucket = name
 		}
-		if geteilt && len(folderOf(key)) > len(prefix) {
+		if shared && len(folderOf(key)) > len(prefix) {
 			prefix = folderOf(key)
 		}
 	}
@@ -159,8 +159,8 @@ func senderFrom(cond map[string]map[string]json.RawMessage) string {
 // IAM behandelt diese Schluessel ohne Ruecksicht auf Gross- und Kleinschreibung.
 func condition(cond map[string]map[string]json.RawMessage, key string) []string {
 	var out []string
-	for _, paare := range cond {
-		for k, v := range paare {
+	for _, pairs := range cond {
+		for k, v := range pairs {
 			if strings.EqualFold(k, key) {
 				out = append(out, list(v)...)
 			}

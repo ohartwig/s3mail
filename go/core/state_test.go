@@ -8,13 +8,13 @@ import (
 	"testing"
 )
 
-func opsLaden(t *testing.T) ([]Op, *Data) {
+func loadOps(t *testing.T) ([]Op, *Data) {
 	t.Helper()
 	var ops []Op
 	var want Data
 	for _, p := range []struct {
-		file string
-		target  any
+		file   string
+		target any
 	}{{"ops.json", &ops}, {"ops_result.json", &want}} {
 		blob, err := os.ReadFile(filepath.Join("testdata", p.file))
 		if err != nil {
@@ -27,10 +27,10 @@ func opsLaden(t *testing.T) ([]Op, *Data) {
 	return ops, want.Normalize()
 }
 
-func lauf(ops []Op, wiederholungen int) *Data {
+func run(ops []Op, repeats int) *Data {
 	d := NewData()
 	for _, op := range ops {
-		for i := 0; i < wiederholungen; i++ {
+		for i := 0; i < repeats; i++ {
 			Apply(d, op)
 		}
 	}
@@ -39,8 +39,8 @@ func lauf(ops []Op, wiederholungen int) *Data {
 
 // TestOpsAgainstPython: dieselbe Op-Folge, dasselbe Ergebnis wie in Python.
 func TestOpsAgainstPython(t *testing.T) {
-	ops, want := opsLaden(t)
-	got := lauf(ops, 1)
+	ops, want := loadOps(t)
+	got := run(ops, 1)
 
 	if !reflect.DeepEqual(got.Tags, want.Tags) {
 		t.Errorf("Tags:\n  python: %v\n  go:     %v", want.Tags, got.Tags)
@@ -73,31 +73,31 @@ func TestOpsAgainstPython(t *testing.T) {
 // darf nichts veraendern. Faellt dieser Test, ist das Op-Log-Design kaputt - nicht
 // nur dieser Test.
 func TestOpsAreIdempotent(t *testing.T) {
-	ops, _ := opsLaden(t)
-	einmal, zweimal := lauf(ops, 1), lauf(ops, 2)
-	if !reflect.DeepEqual(einmal, zweimal) {
-		a, _ := json.MarshalIndent(einmal, "", " ")
-		b, _ := json.MarshalIndent(zweimal, "", " ")
+	ops, _ := loadOps(t)
+	once, twice := run(ops, 1), run(ops, 2)
+	if !reflect.DeepEqual(once, twice) {
+		a, _ := json.MarshalIndent(once, "", " ")
+		b, _ := json.MarshalIndent(twice, "", " ")
 		t.Fatalf("doppelt angewandt ist nicht dasselbe:\n einmal:\n%s\n zweimal:\n%s", a, b)
 	}
 }
 
 // TestOpsAreIdempotentIndividually zeigt genauer, welche Operation es waere.
 func TestOpsAreIdempotentIndividually(t *testing.T) {
-	ops, _ := opsLaden(t)
+	ops, _ := loadOps(t)
 	for i, op := range ops {
-		basis := lauf(ops[:i], 1)
-		einmal := klon(t, basis)
-		Apply(einmal, op)
-		zweimal := klon(t, einmal)
-		Apply(zweimal, op)
-		if !reflect.DeepEqual(einmal, zweimal) {
+		base := run(ops[:i], 1)
+		once := clone(t, base)
+		Apply(once, op)
+		twice := clone(t, once)
+		Apply(twice, op)
+		if !reflect.DeepEqual(once, twice) {
 			t.Errorf("Op %d (%s) ist nicht idempotent", i, op.T)
 		}
 	}
 }
 
-func klon(t *testing.T, d *Data) *Data {
+func clone(t *testing.T, d *Data) *Data {
 	t.Helper()
 	blob, err := json.Marshal(d)
 	if err != nil {
@@ -114,8 +114,8 @@ func klon(t *testing.T, d *Data) *Data {
 // zwei Rechner mit demselben Ausgangsstand aendern verschiedene Mails, danach
 // dieselbe. Nichts darf verlorengehen.
 func TestTwoMachines(t *testing.T) {
-	ausgang := NewData()
-	Apply(ausgang, Op{T: "tags", Mids: []string{"m1"}, Add: []string{"start"}})
+	out := NewData()
+	Apply(out, Op{T: "tags", Mids: []string{"m1"}, Add: []string{"start"}})
 
 	a := []Op{{T: "tags", Mids: []string{"m1"}, Add: []string{"von-A"}},
 		{T: "flags", Mids: []string{"m1"}, Star: Ptr(true)}}
@@ -123,21 +123,21 @@ func TestTwoMachines(t *testing.T) {
 		{T: "tags", Mids: []string{"m1"}, Add: []string{"von-B"}}}
 
 	// beide Reihenfolgen muessen dasselbe ergeben - keiner ueberschreibt den anderen
-	for _, folge := range [][]Op{append(append([]Op{}, a...), b...), append(append([]Op{}, b...), a...)} {
-		d := klon(t, ausgang)
-		for _, op := range folge {
+	for _, seq := range [][]Op{append(append([]Op{}, a...), b...), append(append([]Op{}, b...), a...)} {
+		d := clone(t, out)
+		for _, op := range seq {
 			Apply(d, op)
 		}
 		e := d.Get("m1")
 		for _, tag := range []string{"start", "von-A", "von-B"} {
-			if !enthaelt(e.Tags, tag) {
+			if !contains(e.Tags, tag) {
 				t.Errorf("Tag %q verloren, m1 hat %v", tag, e.Tags)
 			}
 		}
 		if !e.Star {
 			t.Error("fremdes Stern-Flag verloren")
 		}
-		if !enthaelt(d.Get("m2").Tags, "von-B") {
+		if !contains(d.Get("m2").Tags, "von-B") {
 			t.Error("Aenderung an m2 verloren")
 		}
 	}
@@ -159,17 +159,17 @@ func TestTagFarbenDerReihenach(t *testing.T) {
 }
 
 func TestMergeMissing(t *testing.T) {
-	basis := NewData()
-	Apply(basis, Op{T: "tags", Mids: []string{"m1"}, Add: []string{"remote"}})
-	lokal := NewData()
-	Apply(lokal, Op{T: "tags", Mids: []string{"m1"}, Add: []string{"lokal"}})
-	Apply(lokal, Op{T: "tags", Mids: []string{"m9"}, Add: []string{"nur-lokal"}})
+	base := NewData()
+	Apply(base, Op{T: "tags", Mids: []string{"m1"}, Add: []string{"remote"}})
+	local := NewData()
+	Apply(local, Op{T: "tags", Mids: []string{"m1"}, Add: []string{"lokal"}})
+	Apply(local, Op{T: "tags", Mids: []string{"m9"}, Add: []string{"nur-lokal"}})
 
-	MergeMissing(basis, lokal)
-	if enthaelt(basis.Get("m1").Tags, "lokal") {
+	MergeMissing(base, local)
+	if contains(base.Get("m1").Tags, "lokal") {
 		t.Error("bekannter Eintrag wurde ueberschrieben statt stehengelassen")
 	}
-	if !enthaelt(basis.Get("m9").Tags, "nur-lokal") {
+	if !contains(base.Get("m9").Tags, "nur-lokal") {
 		t.Error("unbekannter Eintrag wurde nicht uebernommen")
 	}
 }

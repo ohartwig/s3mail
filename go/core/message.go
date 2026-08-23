@@ -1,7 +1,7 @@
 package core
 
-// Message ist ein Indexeintrag - das, was s3mail pro Mail zwischenspeichert,
-// ohne die Mail selbst noch einmal zu holen.
+// Message is an index entry - what s3mail keeps per message so it does not
+// have to fetch the message itself again.
 type Message struct {
 	Key           string `json:"key"`
 	Mid           string `json:"mid"`
@@ -20,13 +20,13 @@ type Message struct {
 	Spam          bool   `json:"spam"`
 	Virus         bool   `json:"virus"`
 
-	// Aus dem Zustand dazugelegt, nicht Teil des Index.
+	// Added from the state, not part of the index.
 	Read bool     `json:"read"`
 	Star bool     `json:"star"`
 	Tags []string `json:"tags"`
 }
 
-// Decorate haengt den Zustand an einen Indexeintrag.
+// Decorate attaches the state to an index entry.
 func Decorate(m Message, d *Data) Message {
 	e := d.Get(m.Mid)
 	m.Read, m.Star = e.Read, e.Star

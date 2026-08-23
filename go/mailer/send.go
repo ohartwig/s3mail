@@ -34,50 +34,50 @@ type Original struct {
 	MessageID  string
 	References string
 	Subject    string
-	Roh        []byte // fuer das Weiterleiten als .eml
+	Raw        []byte // fuer das Weiterleiten als .eml
 }
 
 // Message is the finished mail together with its recipient list.
 type Message struct {
-	Roh        []byte
-	Absender   string
-	Empfaenger []string
+	Raw  []byte
+	From string
+	To   []string
 }
 
 var (
-	ErrKeinAbsender   = errors.New("kein Absender gesetzt")
-	ErrKeinEmpfaenger = errors.New("kein Empfaenger angegeben")
+	ErrNoSender    = errors.New("kein Absender gesetzt")
+	ErrNoRecipient = errors.New("kein Empfaenger angegeben")
 )
 
 // Build assembles the message.
-func Build(e Draft, standardAbsender string, o Original, jetzt time.Time) (Message, error) {
+func Build(e Draft, defaultFrom string, o Original, now time.Time) (Message, error) {
 	sender := strings.TrimSpace(e.From)
 	if sender == "" {
-		sender = strings.TrimSpace(standardAbsender)
+		sender = strings.TrimSpace(defaultFrom)
 	}
 	if sender == "" {
-		return Message{}, ErrKeinAbsender
+		return Message{}, ErrNoSender
 	}
 	an, err := addresses(e.To)
 	if err != nil {
 		return Message{}, err
 	}
-	kopie, err := addresses(e.Cc)
+	clone, err := addresses(e.Cc)
 	if err != nil {
 		return Message{}, err
 	}
-	if len(an) == 0 && len(kopie) == 0 {
-		return Message{}, ErrKeinEmpfaenger
+	if len(an) == 0 && len(clone) == 0 {
+		return Message{}, ErrNoRecipient
 	}
 
 	header := textproto.MIMEHeader{}
 	header.Set("From", sender)
 	header.Set("To", strings.Join(an, ", "))
-	if len(kopie) > 0 {
-		header.Set("Cc", strings.Join(kopie, ", "))
+	if len(clone) > 0 {
+		header.Set("Cc", strings.Join(clone, ", "))
 	}
 	header.Set("Subject", encodeWord(e.Subject))
-	header.Set("Date", jetzt.Format(time.RFC1123Z))
+	header.Set("Date", now.Format(time.RFC1123Z))
 	header.Set("Message-Id", newMessageID(sender))
 	header.Set("MIME-Version", "1.0")
 
@@ -90,7 +90,7 @@ func Build(e Draft, standardAbsender string, o Original, jetzt time.Time) (Messa
 	}
 
 	var body bytes.Buffer
-	if e.Mode == "forward" && len(o.Roh) > 0 {
+	if e.Mode == "forward" && len(o.Raw) > 0 {
 		if err := withAttachment(&body, header, e.Body, o); err != nil {
 			return Message{}, err
 		}
@@ -100,13 +100,13 @@ func Build(e Draft, standardAbsender string, o Original, jetzt time.Time) (Messa
 		body.WriteString(e.Body)
 	}
 
-	var roh bytes.Buffer
-	writeHeader(&roh, header)
-	roh.WriteString("\r\n")
-	roh.Write(body.Bytes())
+	var raw bytes.Buffer
+	writeHeader(&raw, header)
+	raw.WriteString("\r\n")
+	raw.Write(body.Bytes())
 
-	return Message{Roh: roh.Bytes(), Absender: sender,
-		Empfaenger: append(append([]string{}, an...), kopie...)}, nil
+	return Message{Raw: raw.Bytes(), From: sender,
+		To: append(append([]string{}, an...), clone...)}, nil
 }
 
 // withAttachment attaches the forwarded message as an .eml file.
@@ -139,7 +139,7 @@ func withAttachment(body *bytes.Buffer, header textproto.MIMEHeader, text string
 	if err != nil {
 		return err
 	}
-	if _, err := attachment.Write(o.Roh); err != nil {
+	if _, err := attachment.Write(o.Raw); err != nil {
 		return err
 	}
 	return mw.Close()

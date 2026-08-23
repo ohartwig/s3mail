@@ -7,7 +7,7 @@ import (
 
 // Die echte Postfach-Policy, wie IAM sie ausliefert: url-kodiert, Aktionen mal
 // als Liste, mal einzeln. Aendert sich der Zuschnitt in koh-infra, faellt es hier auf.
-const postfachPolicy = `{
+const mailboxPolicy = `{
   "Version": "2012-10-17",
   "Statement": [
     {"Sid":"ListOwnPrefixOnly","Effect":"Allow","Action":"s3:ListBucket",
@@ -23,15 +23,15 @@ const postfachPolicy = `{
   ]}`
 
 func TestMailboxPolicyYieldsEverything(t *testing.T) {
-	f := ausPolicies([]string{url.QueryEscape(postfachPolicy)})
+	f := fromPolicies([]string{url.QueryEscape(mailboxPolicy)})
 	if f.Bucket != "koh-findready-mail" {
 		t.Errorf("Bucket = %q", f.Bucket)
 	}
 	if f.Prefix != "mail/ole/" {
 		t.Errorf("Prefix = %q, erwartet mail/ole/", f.Prefix)
 	}
-	if f.Absender != "ole@findready.ai" {
-		t.Errorf("Absender = %q", f.Absender)
+	if f.From != "ole@findready.ai" {
+		t.Errorf("Absender = %q", f.From)
 	}
 	if !f.Complete() {
 		t.Error("Fund gilt als unvollstaendig, obwohl Bucket und Prefix da sind")
@@ -40,7 +40,7 @@ func TestMailboxPolicyYieldsEverything(t *testing.T) {
 
 func TestUnencodedDocumentWorksToo(t *testing.T) {
 	// GetPolicyVersion liefert je nach Weg kodiert oder nicht.
-	if f := ausPolicies([]string{postfachPolicy}); f.Prefix != "mail/ole/" {
+	if f := fromPolicies([]string{mailboxPolicy}); f.Prefix != "mail/ole/" {
 		t.Errorf("Prefix = %q", f.Prefix)
 	}
 }
@@ -50,7 +50,7 @@ func TestTheMoreSpecificPrefixWins(t *testing.T) {
 	doc := `{"Statement":[
 	 {"Effect":"Allow","Action":"s3:GetObject","Resource":"arn:aws:s3:::b/*"},
 	 {"Effect":"Allow","Action":"s3:GetObject","Resource":"arn:aws:s3:::b/mail/tim/*"}]}`
-	f := ausPolicies([]string{doc})
+	f := fromPolicies([]string{doc})
 	if f.Prefix != "mail/tim/" {
 		t.Errorf("Prefix = %q, erwartet den genaueren", f.Prefix)
 	}
@@ -61,7 +61,7 @@ func TestDenyIsNotReadAsGuidance(t *testing.T) {
 	// Vorschlag durch - der Zugang landete im Postfach eines anderen.
 	doc := `{"Statement":[{"Effect":"Deny","Action":"s3:GetObject",
 	 "Resource":"arn:aws:s3:::b/mail/marc/*"}]}`
-	if f := ausPolicies([]string{doc}); f.Bucket != "" || f.Prefix != "" {
+	if f := fromPolicies([]string{doc}); f.Bucket != "" || f.Prefix != "" {
 		t.Errorf("Deny ausgewertet: %+v", f)
 	}
 }
@@ -71,12 +71,12 @@ func TestPlaceholdersAreNoSuggestion(t *testing.T) {
 	 {"Effect":"Allow","Action":"s3:GetObject","Resource":"arn:aws:s3:::*/mail/*"},
 	 {"Effect":"Allow","Action":"ses:SendEmail","Resource":"*",
 	  "Condition":{"StringLike":{"ses:FromAddress":"*@findready.ai"}}}]}`
-	f := ausPolicies([]string{doc})
+	f := fromPolicies([]string{doc})
 	if f.Bucket != "" {
 		t.Errorf("Bucket aus Platzhalter-ARN: %q", f.Bucket)
 	}
-	if f.Absender != "" {
-		t.Errorf("Absender aus Muster: %q", f.Absender)
+	if f.From != "" {
+		t.Errorf("Absender aus Muster: %q", f.From)
 	}
 }
 
@@ -85,7 +85,7 @@ func TestPrefixWithoutSlashIsCutToTheFolder(t *testing.T) {
 	// "mail/ole/" - und genau daran scheiterte das Auflisten im ersten Versuch.
 	doc := `{"Statement":[{"Effect":"Allow","Action":"s3:GetObject",
 	 "Resource":"arn:aws:s3:::b/mail/ole"}]}`
-	if f := ausPolicies([]string{doc}); f.Prefix != "mail/" {
+	if f := fromPolicies([]string{doc}); f.Prefix != "mail/" {
 		t.Errorf("Prefix = %q, erwartet mail/", f.Prefix)
 	}
 }
@@ -93,30 +93,30 @@ func TestPrefixWithoutSlashIsCutToTheFolder(t *testing.T) {
 func TestSingleStatementWithoutList(t *testing.T) {
 	doc := `{"Statement":{"Effect":"Allow","Action":"s3:GetObject",
 	 "Resource":"arn:aws:s3:::b/mail/ole/*"}}`
-	if f := ausPolicies([]string{doc}); f.Bucket != "b" || f.Prefix != "mail/ole/" {
+	if f := fromPolicies([]string{doc}); f.Bucket != "b" || f.Prefix != "mail/ole/" {
 		t.Errorf("%+v", f)
 	}
 }
 
 func TestGarbageYieldsAnEmptyFinding(t *testing.T) {
 	for _, d := range []string{"", "kein json", "{}", `{"Statement":42}`} {
-		if f := ausPolicies([]string{d}); f.Bucket != "" || f.Absender != "" {
+		if f := fromPolicies([]string{d}); f.Bucket != "" || f.From != "" {
 			t.Errorf("%q ergab %+v", d, f)
 		}
 	}
 }
 
 func TestUserFromArn(t *testing.T) {
-	faelle := map[string]string{
+	cases := map[string]string{
 		"arn:aws:iam::1:user/koh-mail-ole":          "koh-mail-ole",
 		"arn:aws:iam::1:user/team/mail/ole":         "ole",
 		"arn:aws:iam::1:root":                       "",
 		"arn:aws:sts::1:assumed-role/admin/sitzung": "",
 		"": "",
 	}
-	for arn, will := range faelle {
-		if got := userFromArn(arn); got != will {
-			t.Errorf("%q -> %q, erwartet %q", arn, got, will)
+	for arn, want := range cases {
+		if got := userFromArn(arn); got != want {
+			t.Errorf("%q -> %q, erwartet %q", arn, got, want)
 		}
 	}
 }

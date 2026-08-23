@@ -27,8 +27,8 @@ type KMS interface {
 	Decrypt(ciphertext []byte, context map[string]string) ([]byte, error)
 }
 
-// ErrKeinKMS meldet, dass die Mail verschluesselt ist, aber kein Zugriff besteht.
-var ErrKeinKMS = errors.New("diese Mail ist mit KMS verschluesselt, aber es ist kein KMS-Zugriff eingerichtet")
+// ErrNoKMS meldet, dass die Mail verschluesselt ist, aber kein Zugriff besteht.
+var ErrNoKMS = errors.New("diese Mail ist mit KMS verschluesselt, aber es ist kein KMS-Zugriff eingerichtet")
 
 // LowerMeta senkt alle Schluessel auf Kleinschreibung - S3 gibt Metadaten je nach
 // Weg unterschiedlich zurueck.
@@ -53,26 +53,26 @@ func IsEnvelope(meta map[string]string) bool {
 // Der Encryption Context aus x-amz-matdesc muss an KMS mit, sonst lehnt KMS ab.
 func Decrypt(body []byte, meta map[string]string, kms KMS) ([]byte, error) {
 	m := LowerMeta(meta)
-	verpackt := m[cseKeyV2]
-	if verpackt == "" {
-		verpackt = m[cseKeyV1]
+	wrapped := m[cseKeyV2]
+	if wrapped == "" {
+		wrapped = m[cseKeyV1]
 	}
-	if verpackt == "" {
+	if wrapped == "" {
 		return body, nil // nicht verschluesselt
 	}
 	if kms == nil {
-		return nil, ErrKeinKMS
+		return nil, ErrNoKMS
 	}
-	roh, err := base64.StdEncoding.DecodeString(verpackt)
+	raw, err := base64.StdEncoding.DecodeString(wrapped)
 	if err != nil {
 		return nil, fmt.Errorf("verpackter Schluessel ist kein base64: %w", err)
 	}
 
-	kontext := map[string]string{}
+	encContext := map[string]string{}
 	if md := m["x-amz-matdesc"]; md != "" {
-		_ = json.Unmarshal([]byte(md), &kontext) // kaputter Context: dann eben leer
+		_ = json.Unmarshal([]byte(md), &encContext) // kaputter Context: dann eben leer
 	}
-	key, err := kms.Decrypt(roh, kontext)
+	key, err := kms.Decrypt(raw, encContext)
 	if err != nil {
 		return nil, err
 	}
@@ -90,13 +90,13 @@ func Decrypt(body []byte, meta map[string]string, kms KMS) ([]byte, error) {
 		return nil, err
 	}
 
-	var klar []byte
+	var plain []byte
 	if strings.Contains(alg, "GCM") {
 		gcm, err := cipher.NewGCMWithNonceSize(block, len(iv))
 		if err != nil {
 			return nil, err
 		}
-		klar, err = gcm.Open(nil, iv, body, nil) // Tag haengt hinten am Chiffrat
+		plain, err = gcm.Open(nil, iv, body, nil) // Tag haengt hinten am Chiffrat
 		if err != nil {
 			return nil, fmt.Errorf("AES-GCM laesst sich nicht oeffnen: %w", err)
 		}
@@ -104,20 +104,20 @@ func Decrypt(body []byte, meta map[string]string, kms KMS) ([]byte, error) {
 		if len(body)%aes.BlockSize != 0 || len(body) == 0 {
 			return nil, errors.New("AES-CBC: Laenge ist kein Vielfaches der Blockgroesse")
 		}
-		klar = make([]byte, len(body))
-		cipher.NewCBCDecrypter(block, iv).CryptBlocks(klar, body)
-		klar, err = unpad(klar)
+		plain = make([]byte, len(body))
+		cipher.NewCBCDecrypter(block, iv).CryptBlocks(plain, body)
+		plain, err = unpad(plain)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	if want := m["x-amz-unencrypted-content-length"]; want != "" {
-		if n, err := strconv.Atoi(want); err == nil && n != len(klar) {
-			return nil, fmt.Errorf("entschluesselte Laenge passt nicht (%d != %d)", len(klar), n)
+		if n, err := strconv.Atoi(want); err == nil && n != len(plain) {
+			return nil, fmt.Errorf("entschluesselte Laenge passt nicht (%d != %d)", len(plain), n)
 		}
 	}
-	return klar, nil
+	return plain, nil
 }
 
 // unpad entfernt die PKCS#7-Polsterung, ohne bei Murks durchzudrehen.

@@ -19,7 +19,7 @@ import (
 // The names are English and are not translated: that is what they are called at
 // AWS, and somebody looking for a region in the console searches for exactly
 // that word.
-var Regionen = [][2]string{
+var Regions = [][2]string{
 	{"eu-central-1", "Europe (Frankfurt)"}, {"eu-west-1", "Europe (Ireland)"},
 	{"eu-west-2", "Europe (London)"}, {"eu-west-3", "Europe (Paris)"},
 	{"eu-north-1", "Europe (Stockholm)"}, {"eu-south-1", "Europe (Milan)"},
@@ -34,8 +34,8 @@ var Regionen = [][2]string{
 
 // Data is what the wizard page sends.
 type Data struct {
-	Profil      string `json:"profile"`
-	NeuesProfil string `json:"new_profile"`
+	Profile     string `json:"profile"`
+	NewProfile  string `json:"new_profile"`
 	KeyID       string `json:"key_id"`
 	Secret      string `json:"secret"`
 	Region      string `json:"region"`
@@ -48,7 +48,7 @@ type Data struct {
 	// Language is set by the HTTP layer from the request, not by the browser
 	// from the form: it is already in the cookie there, and two sources for
 	// the same fact drift apart eventually.
-	Sprache string `json:"-"`
+	Language string `json:"-"`
 }
 
 // Activator is called after saving, so the running process switches into the
@@ -56,7 +56,7 @@ type Data struct {
 type Activator func(k config.Config) error
 
 type Wizard struct {
-	Aktivieren Activator
+	Activate Activator
 }
 
 // InputError is a fault the user can fix themselves - the HTTP layer turns it
@@ -71,21 +71,21 @@ func inputError(format string, a ...any) error {
 
 // Info returns everything the page needs while loading.
 func (a *Wizard) Info(_ context.Context, _ Data) (map[string]any, error) {
-	regionen := make([]map[string]string, 0, len(Regionen))
-	for _, r := range Regionen {
-		regionen = append(regionen, map[string]string{"id": r[0], "label": r[1] + " · " + r[0]})
+	regions := make([]map[string]string, 0, len(Regions))
+	for _, r := range Regions {
+		regions = append(regions, map[string]string{"id": r[0], "label": r[1] + " · " + r[0]})
 	}
 	return map[string]any{
 		"config":      config.Load(),
 		"profiles":    config.Profiles(),
-		"regions":     regionen,
+		"regions":     regions,
 		"config_file": config.File(),
 	}, nil
 }
 
 // Credentials writes access key and secret as a named AWS profile.
 func (a *Wizard) Credentials(_ context.Context, d Data) (map[string]any, error) {
-	name, err := config.WriteCredentials(d.NeuesProfil, d.KeyID, d.Secret, d.Region)
+	name, err := config.WriteCredentials(d.NewProfile, d.KeyID, d.Secret, d.Region)
 	if err != nil {
 		return nil, InputError{err.Error()}
 	}
@@ -94,17 +94,17 @@ func (a *Wizard) Credentials(_ context.Context, d Data) (map[string]any, error) 
 
 // Buckets fills the two picker lists.
 func (a *Wizard) Buckets(ctx context.Context, d Data) (map[string]any, error) {
-	cfg, err := awsx.Session(ctx, d.Profil, d.Region)
+	cfg, err := awsx.Session(ctx, d.Profile, d.Region)
 	if err == nil {
 		err = awsx.CheckAccess(ctx, cfg)
 	}
 	if err != nil {
-		return nil, InputError{awsx.PlainText(err, d.Profil, i18n.Get(d.Sprache))}
+		return nil, InputError{awsx.PlainText(err, d.Profile, i18n.Get(d.Language))}
 	}
 	s3 := awsx.NewS3(cfg, "")
 	buckets, err := s3.Buckets(ctx)
 	if err != nil {
-		return nil, InputError{awsx.PlainText(err, d.Profil, i18n.Get(d.Sprache))}
+		return nil, InputError{awsx.PlainText(err, d.Profile, i18n.Get(d.Language))}
 	}
 	// Never hand nil to the interface: a nil slice marshals to JSON `null`, and
 	// `null.map(...)` ends the page's script - the user then does not see "not
@@ -112,13 +112,13 @@ func (a *Wizard) Buckets(ctx context.Context, d Data) (map[string]any, error) {
 	ses := awsx.NewSES(cfg, "")
 	out := map[string]any{
 		"buckets":    notNil(buckets),
-		"identities": notNil(ses.Identitaeten(ctx)),
-		"domains":    notNil(ses.VerifizierteDomains(ctx)),
+		"identities": notNil(ses.Identities(ctx)),
+		"domains":    notNil(ses.VerifiedDomains(ctx)),
 	}
 	// What the access reveals about itself, nobody has to retype. If that fails
 	// (older mailboxes may not read their own policy), the wizard falls back to
 	// typing - hence no error surfaces here.
-	if f, err := awsx.Discover(ctx, cfg); err == nil && (f.Bucket != "" || f.Absender != "") {
+	if f, err := awsx.Discover(ctx, cfg); err == nil && (f.Bucket != "" || f.From != "") {
 		out["found"] = f
 	}
 	if len(buckets) == 0 {
@@ -126,7 +126,7 @@ func (a *Wizard) Buckets(ctx context.Context, d Data) (map[string]any, error) {
 		// policy deliberately withholds s3:ListAllMyBuckets, or everyone would
 		// see every bucket in the account. The text therefore leads with what to
 		// do, not with what is missing.
-		out["note"] = i18n.Get(d.Sprache).T("setup.note.noListBuckets")
+		out["note"] = i18n.Get(d.Language).T("setup.note.noListBuckets")
 	}
 	return out, nil
 }
@@ -134,36 +134,36 @@ func (a *Wizard) Buckets(ctx context.Context, d Data) (map[string]any, error) {
 // Test is step 3: the checklist.
 func (a *Wizard) Test(ctx context.Context, d Data) (map[string]any, error) {
 	if strings.TrimSpace(d.Bucket) == "" {
-		return nil, inputError("%s", i18n.Get(d.Sprache).T("setup.error.noBucket"))
+		return nil, inputError("%s", i18n.Get(d.Language).T("setup.error.noBucket"))
 	}
-	cfg, err := awsx.Session(ctx, d.Profil, d.Region)
+	cfg, err := awsx.Session(ctx, d.Profile, d.Region)
 	if err == nil {
 		err = awsx.CheckAccess(ctx, cfg)
 	}
 	if err != nil {
-		return nil, InputError{awsx.PlainText(err, d.Profil, i18n.Get(d.Sprache))}
+		return nil, InputError{awsx.PlainText(err, d.Profile, i18n.Get(d.Language))}
 	}
 	s3 := awsx.NewS3(cfg, "")
 	prefix := config.NormalizePrefix(d.Prefix)
 	items := check.Run(ctx, s3, awsx.NewKMS(cfg, ""), awsx.NewSES(cfg, ""),
-		d.Bucket, prefix, strings.TrimSpace(d.Absender), i18n.Get(d.Sprache))
+		d.Bucket, prefix, strings.TrimSpace(d.Absender), i18n.Get(d.Language))
 	return map[string]any{
 		"checks":         items,
 		"ok":             check.AllOK(items),
-		"lifecycle_days": s3.LifecycleTage(ctx, d.Bucket),
+		"lifecycle_days": s3.LifecycleDays(ctx, d.Bucket),
 	}, nil
 }
 
 // Lifecycle sets or removes the automatic emptying of the trash.
 func (a *Wizard) Lifecycle(ctx context.Context, d Data) (map[string]any, error) {
-	cfg, err := awsx.Session(ctx, d.Profil, d.Region)
+	cfg, err := awsx.Session(ctx, d.Profile, d.Region)
 	if err != nil {
-		return nil, InputError{awsx.PlainText(err, d.Profil, i18n.Get(d.Sprache))}
+		return nil, InputError{awsx.PlainText(err, d.Profile, i18n.Get(d.Language))}
 	}
-	msg, err := awsx.NewS3(cfg, "").LifecycleSetzen(ctx, d.Bucket,
+	msg, err := awsx.NewS3(cfg, "").SetLifecycle(ctx, d.Bucket,
 		config.NormalizePrefix(d.Prefix), d.Tage)
 	if err != nil {
-		return nil, InputError{awsx.PlainText(err, d.Profil, i18n.Get(d.Sprache))}
+		return nil, InputError{awsx.PlainText(err, d.Profile, i18n.Get(d.Language))}
 	}
 	return map[string]any{"message": msg}, nil
 }
@@ -171,19 +171,19 @@ func (a *Wizard) Lifecycle(ctx context.Context, d Data) (map[string]any, error) 
 // Save writes the configuration and arms the mailbox.
 func (a *Wizard) Save(_ context.Context, d Data) (map[string]any, error) {
 	k := config.Load()
-	k.Profil, k.Region = d.Profil, d.Region
+	k.Profile, k.Region = d.Profile, d.Region
 	k.Bucket = strings.TrimSpace(d.Bucket)
 	k.Prefix = config.NormalizePrefix(d.Prefix)
-	k.Absender = strings.TrimSpace(d.Absender)
+	k.From = strings.TrimSpace(d.Absender)
 	k.AllowDelete = d.AllowDelete == nil || *d.AllowDelete
 
 	path, err := config.Save(k)
 	if err != nil {
 		return nil, InputError{err.Error()}
 	}
-	if a.Aktivieren != nil {
-		if err := a.Aktivieren(k); err != nil {
-			return nil, InputError{awsx.PlainText(err, k.Profil, i18n.Get(d.Sprache))}
+	if a.Activate != nil {
+		if err := a.Activate(k); err != nil {
+			return nil, InputError{awsx.PlainText(err, k.Profile, i18n.Get(d.Language))}
 		}
 	}
 	return map[string]any{"config": k, "path": path}, nil

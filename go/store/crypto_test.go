@@ -14,33 +14,33 @@ import (
 
 type fakeKMS struct {
 	key      []byte
-	kontexte []map[string]string
-	fehler   error
+	contexts []map[string]string
+	err      error
 }
 
-func (f *fakeKMS) Decrypt(ct []byte, kontext map[string]string) ([]byte, error) {
-	f.kontexte = append(f.kontexte, kontext)
-	if f.fehler != nil {
-		return nil, f.fehler
+func (f *fakeKMS) Decrypt(ct []byte, encContext map[string]string) ([]byte, error) {
+	f.contexts = append(f.contexts, encContext)
+	if f.err != nil {
+		return nil, f.err
 	}
 	return f.key, nil
 }
 
-type umschlagFall struct {
+type envelopeCase struct {
 	Body string            `json:"body"`
 	Meta map[string]string `json:"meta"`
 	Key  string            `json:"key"`
 }
 
-func umschlaegeLaden(t *testing.T) ([]byte, map[string]umschlagFall) {
+func loadEnvelopes(t *testing.T) ([]byte, map[string]envelopeCase) {
 	t.Helper()
 	blob, err := os.ReadFile(filepath.Join("testdata", "envelopes.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	var d struct {
-		Plain  string                  `json:"plain"`
-		Faelle map[string]umschlagFall `json:"faelle"`
+		Plain string                  `json:"plain"`
+		Cases map[string]envelopeCase `json:"faelle"`
 	}
 	if err := json.Unmarshal(blob, &d); err != nil {
 		t.Fatal(err)
@@ -49,10 +49,10 @@ func umschlaegeLaden(t *testing.T) ([]byte, map[string]umschlagFall) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return plain, d.Faelle
+	return plain, d.Cases
 }
 
-func entpacken(t *testing.T, f umschlagFall) ([]byte, []byte) {
+func unpack(t *testing.T, f envelopeCase) ([]byte, []byte) {
 	t.Helper()
 	body, err := base64.StdEncoding.DecodeString(f.Body)
 	if err != nil {
@@ -68,9 +68,9 @@ func entpacken(t *testing.T, f umschlagFall) ([]byte, []byte) {
 // TestEnvelopeAgainstPython entschluesselt Chiffrate, die die Python-Testsuite
 // erzeugt hat - GCM (aktuelles Format) und CBC (aelteres).
 func TestEnvelopeAgainstPython(t *testing.T) {
-	plain, faelle := umschlaegeLaden(t)
-	for name, f := range faelle {
-		body, key := entpacken(t, f)
+	plain, cases := loadEnvelopes(t)
+	for name, f := range cases {
+		body, key := unpack(t, f)
 		got, err := store.Decrypt(body, f.Meta, &fakeKMS{key: key})
 		if err != nil {
 			t.Errorf("%s: %v", name, err)
@@ -86,39 +86,39 @@ func TestEnvelopeAgainstPython(t *testing.T) {
 // TestEncryptionContext - fehlt der Context aus x-amz-matdesc, lehnt store.KMS ab.
 // Der Fehler waere im Betrieb schwer zu finden, deshalb hier festgenagelt.
 func TestEncryptionContext(t *testing.T) {
-	_, faelle := umschlaegeLaden(t)
-	f := faelle["cbc"]
-	body, key := entpacken(t, f)
+	_, cases := loadEnvelopes(t)
+	f := cases["cbc"]
+	body, key := unpack(t, f)
 	kms := &fakeKMS{key: key}
 	if _, err := store.Decrypt(body, f.Meta, kms); err != nil {
 		t.Fatal(err)
 	}
-	if len(kms.kontexte) != 1 {
-		t.Fatalf("%d store.KMS-Aufrufe", len(kms.kontexte))
+	if len(kms.contexts) != 1 {
+		t.Fatalf("%d store.KMS-Aufrufe", len(kms.contexts))
 	}
-	if kms.kontexte[0]["kms_cmk_id"] == "" {
-		t.Errorf("Encryption Context nicht durchgereicht: %v", kms.kontexte[0])
+	if kms.contexts[0]["kms_cmk_id"] == "" {
+		t.Errorf("Encryption Context nicht durchgereicht: %v", kms.contexts[0])
 	}
 }
 
 func TestWithoutKMSPermissions(t *testing.T) {
-	_, faelle := umschlaegeLaden(t)
-	f := faelle["gcm"]
-	body, _ := entpacken(t, f)
+	_, cases := loadEnvelopes(t)
+	f := cases["gcm"]
+	body, _ := unpack(t, f)
 
-	if _, err := store.Decrypt(body, f.Meta, nil); !errors.Is(err, store.ErrKeinKMS) {
+	if _, err := store.Decrypt(body, f.Meta, nil); !errors.Is(err, store.ErrNoKMS) {
 		t.Errorf("ohne store.KMS-Client: %v", err)
 	}
-	_, err := store.Decrypt(body, f.Meta, &fakeKMS{fehler: errors.New("AccessDenied")})
+	_, err := store.Decrypt(body, f.Meta, &fakeKMS{err: errors.New("AccessDenied")})
 	if err == nil {
 		t.Error("fehlendes kms:Decrypt wurde verschluckt")
 	}
 }
 
 func TestUnencryptedPassesThrough(t *testing.T) {
-	roh := []byte("From: a@b.de\r\n\r\nKlartext")
-	got, err := store.Decrypt(roh, map[string]string{"foo": "bar"}, nil)
-	if err != nil || !bytes.Equal(got, roh) {
+	raw := []byte("From: a@b.de\r\n\r\nKlartext")
+	got, err := store.Decrypt(raw, map[string]string{"foo": "bar"}, nil)
+	if err != nil || !bytes.Equal(got, raw) {
 		t.Errorf("unverschluesseltes Objekt wurde angefasst: %q, %v", got, err)
 	}
 	if store.IsEnvelope(map[string]string{"foo": "bar"}) {
@@ -127,17 +127,17 @@ func TestUnencryptedPassesThrough(t *testing.T) {
 }
 
 func TestMetadataCaseInsensitive(t *testing.T) {
-	_, faelle := umschlaegeLaden(t)
-	f := faelle["gcm"]
-	body, key := entpacken(t, f)
-	gross := map[string]string{}
+	_, cases := loadEnvelopes(t)
+	f := cases["gcm"]
+	body, key := unpack(t, f)
+	big := map[string]string{}
 	for k, v := range f.Meta {
-		gross[toUpperFirst(k)] = v
+		big[toUpperFirst(k)] = v
 	}
-	if !store.IsEnvelope(gross) {
+	if !store.IsEnvelope(big) {
 		t.Fatal("Umschlag mit anders geschriebenen Metadaten nicht erkannt")
 	}
-	if _, err := store.Decrypt(body, gross, &fakeKMS{key: key}); err != nil {
+	if _, err := store.Decrypt(body, big, &fakeKMS{key: key}); err != nil {
 		t.Errorf("Metadaten mit Grossbuchstaben: %v", err)
 	}
 }

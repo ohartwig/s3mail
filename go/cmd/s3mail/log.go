@@ -10,13 +10,13 @@ import (
 	"s3mail/config"
 )
 
-// starteProtokoll oeffnet die Datei, in der der Start festgehalten wird.
+// startLog oeffnet die Datei, in der der Start festgehalten wird.
 //
 // Startet s3mail ohne Konsole - als macOS-Bundle oder unter Windows im
 // GUI-Modus -, geht jede Meldung ins Nichts. Wenn dann etwas schiefgeht, steht
 // der Nutzer vor einem Programm, das scheinbar nichts tut. Die Datei ist die
 // einzige Spur, die er uns schicken kann.
-func starteProtokoll() io.WriteCloser {
+func startLog() io.WriteCloser {
 	dir := config.Dir()
 	if os.MkdirAll(dir, 0o700) != nil {
 		return nopCloser{io.Discard}
@@ -31,8 +31,8 @@ func starteProtokoll() io.WriteCloser {
 	return f
 }
 
-// melde schreibt auf die Konsole und ins Protokoll.
-func melde(w io.Writer, format string, a ...any) {
+// report schreibt auf die Konsole und ins Protokoll.
+func report(w io.Writer, format string, a ...any) {
 	fmt.Printf(format+"\n", a...)
 	fmt.Fprintf(w, format+"\n", a...)
 }

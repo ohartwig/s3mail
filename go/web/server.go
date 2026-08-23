@@ -28,14 +28,14 @@ type Server struct {
 	Port    int
 	Config  map[string]any
 
-	versender        Sender
-	sperrliste       Sperrliste
-	standardAbsender string
-	wizard           *wizard.Wizard
+	sender       Sender
+	suppressions SuppressionList
+	defaultFrom  string
+	wizard       *wizard.Wizard
 
-	// BeimBeenden wird von /api/quit gerufen. Ohne das laeuft der Server nach
+	// OnShutdown wird von /api/quit gerufen. Ohne das laeuft der Server nach
 	// dem Schliessen des Fensters weiter, und niemand sieht, dass er noch da ist.
-	BeimBeenden func()
+	OnShutdown func()
 
 	mux *http.ServeMux
 }
@@ -43,9 +43,9 @@ type Server struct {
 func NewServer(mb *store.Mailbox, token, bind string, port int, config map[string]any) *Server {
 	s := &Server{Mailbox: mb, Token: token, Bind: bind, Port: port, Config: config}
 	s.mux = http.NewServeMux()
-	s.routen()
-	s.sendenRoute()
-	s.sperrlistenRouten()
+	s.routes()
+	s.sendRoute()
+	s.suppressionRoutes()
 	s.wizardRoutes()
 	return s
 }
@@ -130,7 +130,7 @@ func (s *Server) checkAccess(w http.ResponseWriter, r *http.Request) bool {
 		} else {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.WriteHeader(http.StatusForbidden)
-			_, _ = w.Write([]byte(page("token", SeiteToken, s.language(r), nil)))
+			_, _ = w.Write([]byte(page("token", PageToken, s.language(r), nil)))
 		}
 		return false
 	}
@@ -154,16 +154,16 @@ func (s *Server) writeError(w http.ResponseWriter, code int, text string) {
 	s.json(w, code, map[string]string{"error": text})
 }
 
-// uebersetzen bildet Fehler aus der Logik auf Statuscodes ab - damit die Schichten
+// translate bildet Fehler aus der Logik auf Statuscodes ab - damit die Schichten
 // darunter passende Fehler werfen koennen statt Statuscodes zu bauen.
-func (s *Server) uebersetzen(w http.ResponseWriter, err error) {
+func (s *Server) translate(w http.ResponseWriter, err error) {
 	switch {
 	case err == nil:
 		return
-	case errors.Is(err, store.ErrNurAusPapierkorb), errors.Is(err, store.ErrLoeschenGesperrt),
-		errors.Is(err, store.ErrKeinKMS):
+	case errors.Is(err, store.ErrTrashOnly), errors.Is(err, store.ErrDeleteBlocked),
+		errors.Is(err, store.ErrNoKMS):
 		s.writeError(w, http.StatusForbidden, err.Error())
-	case errors.Is(err, store.ErrNichtGefunden):
+	case errors.Is(err, store.ErrNotFound):
 		s.writeError(w, http.StatusNotFound, err.Error())
 	case strings.Contains(err.Error(), "ungueltig"), strings.Contains(err.Error(), "ausserhalb"),
 		strings.Contains(err.Error(), "interne Datei"):
@@ -199,9 +199,9 @@ func (s *Server) overview(r *http.Request) map[string]any {
 	}
 }
 
-func with(basis map[string]any, extra map[string]any) map[string]any {
-	out := make(map[string]any, len(basis)+len(extra))
-	for k, v := range basis {
+func with(base map[string]any, extra map[string]any) map[string]any {
+	out := make(map[string]any, len(base)+len(extra))
+	for k, v := range base {
 		out[k] = v
 	}
 	for k, v := range extra {
@@ -228,7 +228,7 @@ type request struct {
 	Address string      `json:"address"`
 }
 
-func (a request) alleKeys() []string {
+func (a request) allKeys() []string {
 	if len(a.Keys) > 0 {
 		return a.Keys
 	}
@@ -238,16 +238,16 @@ func (a request) alleKeys() []string {
 	return nil
 }
 
-func (s *Server) routen() {
+func (s *Server) routes() {
 	s.mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		if s.Mailbox == nil {
-			s.writePage(w, page("setup", SeiteAssistent, s.language(r), nil)) // noch nicht eingerichtet
+			s.writePage(w, page("setup", PageWizard, s.language(r), nil)) // noch nicht eingerichtet
 			return
 		}
-		s.writePage(w, page("inbox", SeitePostfach, s.language(r), s.Config))
+		s.writePage(w, page("inbox", PageMailbox, s.language(r), s.Config))
 	})
 	s.mux.HandleFunc("GET /setup", func(w http.ResponseWriter, r *http.Request) {
-		s.writePage(w, page("setup", SeiteAssistent, s.language(r), nil))
+		s.writePage(w, page("setup", PageWizard, s.language(r), nil))
 	})
 
 	// Picking a language is a GET that changes something, which is normally the
@@ -290,9 +290,9 @@ func (s *Server) routen() {
 
 	s.mux.HandleFunc("GET /api/message", func(w http.ResponseWriter, r *http.Request) {
 		key := r.URL.Query().Get("key")
-		voll, err := s.mailLesen(r, key, true)
+		obj, err := s.readMail(r, key, true)
 		if err != nil {
-			s.uebersetzen(w, err)
+			s.translate(w, err)
 			return
 		}
 		e := s.Mailbox.State.Get(s.Mailbox.Mid(key))
@@ -303,18 +303,18 @@ func (s *Server) routen() {
 		s.json(w, http.StatusOK, with(map[string]any{
 			"key": key, "mid": s.Mailbox.Mid(key), "folder": s.Mailbox.FolderOf(key),
 			"read": true, "star": e.Star, "tags": tags,
-		}, alsMap(voll)))
+		}, alsMap(obj)))
 	})
 
 	s.mux.HandleFunc("GET /api/attachment", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		idx, _ := strconv.Atoi(q.Get("index"))
-		voll, err := s.mailLesen(r, q.Get("key"), false)
+		obj, err := s.readMail(r, q.Get("key"), false)
 		if err != nil {
-			s.uebersetzen(w, err)
+			s.translate(w, err)
 			return
 		}
-		for _, a := range voll.Anhaenge {
+		for _, a := range obj.Attachments {
 			if a.Index != idx {
 				continue
 			}
@@ -324,8 +324,8 @@ func (s *Server) routen() {
 			}
 			w.Header().Set("Content-Type", ct)
 			w.Header().Set("Content-Disposition",
-				fmt.Sprintf(`attachment; filename="%s"`, sauberName(a.Filename)))
-			_, _ = w.Write(a.Inhalt)
+				fmt.Sprintf(`attachment; filename="%s"`, cleanName(a.Filename)))
+			_, _ = w.Write(a.Content)
 			return
 		}
 		s.writeError(w, http.StatusNotFound, "Anhang nicht gefunden")
@@ -334,47 +334,47 @@ func (s *Server) routen() {
 	s.mux.HandleFunc("GET /api/raw", func(w http.ResponseWriter, r *http.Request) {
 		key := r.URL.Query().Get("key")
 		if err := s.Mailbox.Own(key); err != nil {
-			s.uebersetzen(w, err)
+			s.translate(w, err)
 			return
 		}
-		roh, err := s.Mailbox.Fetch(r.Context(), key, 0)
+		raw, err := s.Mailbox.Fetch(r.Context(), key, 0)
 		if err != nil {
-			s.uebersetzen(w, err)
+			s.translate(w, err)
 			return
 		}
 		w.Header().Set("Content-Type", "message/rfc822")
 		w.Header().Set("Content-Disposition",
-			fmt.Sprintf(`attachment; filename="%s.eml"`, sauberName(s.Mailbox.Mid(key))))
-		_, _ = w.Write(roh)
+			fmt.Sprintf(`attachment; filename="%s.eml"`, cleanName(s.Mailbox.Mid(key))))
+		_, _ = w.Write(raw)
 	})
 
 	s.post("/api/refresh", func(w http.ResponseWriter, r *http.Request, a request) {
-		erg, err := s.Mailbox.Refresh(r.Context())
+		res, err := s.Mailbox.Refresh(r.Context())
 		if err != nil {
-			s.uebersetzen(w, err)
+			s.translate(w, err)
 			return
 		}
 		if _, err := s.Mailbox.ApplyRules(r.Context(), nil, false); err != nil {
-			s.uebersetzen(w, err)
+			s.translate(w, err)
 			return
 		}
 		s.json(w, http.StatusOK, with(s.overview(r), map[string]any{
-			"geprueft": erg.Geprueft, "neu": erg.Neu, "entfernt": erg.Entfernt}))
+			"geprueft": res.Checked, "neu": res.New, "entfernt": res.Removed}))
 	})
 
 	s.post("/api/move", func(w http.ResponseWriter, r *http.Request, a request) {
-		erg, err := s.Mailbox.Move(r.Context(), a.alleKeys(), a.Folder)
+		res, err := s.Mailbox.Move(r.Context(), a.allKeys(), a.Folder)
 		if err != nil {
-			s.uebersetzen(w, err)
+			s.translate(w, err)
 			return
 		}
-		s.json(w, http.StatusOK, with(s.overview(r), map[string]any{"moved": erg}))
+		s.json(w, http.StatusOK, with(s.overview(r), map[string]any{"moved": res}))
 	})
 
 	s.post("/api/delete", func(w http.ResponseWriter, r *http.Request, a request) {
-		n, err := s.Mailbox.Delete(r.Context(), a.alleKeys(), false)
+		n, err := s.Mailbox.Delete(r.Context(), a.allKeys(), false)
 		if err != nil {
-			s.uebersetzen(w, err)
+			s.translate(w, err)
 			return
 		}
 		s.json(w, http.StatusOK, with(s.overview(r), map[string]any{"deleted": n}))
@@ -383,7 +383,7 @@ func (s *Server) routen() {
 	s.post("/api/empty-trash", func(w http.ResponseWriter, r *http.Request, a request) {
 		n, err := s.Mailbox.EmptyTrash(r.Context())
 		if err != nil {
-			s.uebersetzen(w, err)
+			s.translate(w, err)
 			return
 		}
 		s.json(w, http.StatusOK, with(s.overview(r), map[string]any{"deleted": n}))
@@ -402,37 +402,37 @@ func (s *Server) routen() {
 		case "delete":
 			s.mutate(w, r, core.Op{T: "tagdel", Name: a.Name})
 		case "rename", "create":
-			alt := a.Old
-			if alt == "" {
-				alt = a.Name
+			old := a.Old
+			if old == "" {
+				old = a.Name
 			}
-			s.mutate(w, r, core.Op{T: "tagren", Old: alt, New: a.Name, Color: a.Color})
+			s.mutate(w, r, core.Op{T: "tagren", Old: old, New: a.Name, Color: a.Color})
 		default:
 			s.writeError(w, http.StatusBadRequest, s.text(r, "error.unknownTagAction"))
 		}
 	})
 
 	s.post("/api/rules", func(w http.ResponseWriter, r *http.Request, a request) {
-		sauber, err := core.CleanRules(a.Rules)
+		clean, err := core.CleanRules(a.Rules)
 		if err != nil {
 			s.writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		if err := s.Mailbox.State.Mutate(r.Context(), core.Op{T: "rules", Rules: sauber}); err != nil {
-			s.uebersetzen(w, err)
+		if err := s.Mailbox.State.Mutate(r.Context(), core.Op{T: "rules", Rules: clean}); err != nil {
+			s.translate(w, err)
 			return
 		}
-		s.json(w, http.StatusOK, with(s.overview(r), map[string]any{"rules": sauber}))
+		s.json(w, http.StatusOK, with(s.overview(r), map[string]any{"rules": clean}))
 	})
 
 	s.post("/api/quit", func(w http.ResponseWriter, r *http.Request, a request) {
 		s.json(w, http.StatusOK, map[string]any{"ok": true})
-		if s.BeimBeenden != nil {
+		if s.OnShutdown != nil {
 			// Erst antworten, dann herunterfahren - sonst sieht die Oberflaeche
 			// einen Verbindungsabbruch statt einer Bestaetigung.
 			go func() {
 				time.Sleep(150 * time.Millisecond)
-				s.BeimBeenden()
+				s.OnShutdown()
 			}()
 		}
 	})
@@ -440,7 +440,7 @@ func (s *Server) routen() {
 	s.post("/api/rules/apply", func(w http.ResponseWriter, r *http.Request, a request) {
 		n, err := s.Mailbox.ApplyRules(r.Context(), nil, true)
 		if err != nil {
-			s.uebersetzen(w, err)
+			s.translate(w, err)
 			return
 		}
 		s.json(w, http.StatusOK, with(s.overview(r), map[string]any{"moved": n}))
@@ -461,7 +461,7 @@ func (s *Server) post(path string, fn func(http.ResponseWriter, *http.Request, r
 }
 
 func (s *Server) midsOf(a request) []string {
-	keys := a.alleKeys()
+	keys := a.allKeys()
 	out := make([]string, 0, len(keys))
 	for _, k := range keys {
 		out = append(out, s.Mailbox.Mid(k))
@@ -471,27 +471,27 @@ func (s *Server) midsOf(a request) []string {
 
 func (s *Server) mutate(w http.ResponseWriter, r *http.Request, op core.Op) {
 	if err := s.Mailbox.State.Mutate(r.Context(), op); err != nil {
-		s.uebersetzen(w, err)
+		s.translate(w, err)
 		return
 	}
 	s.json(w, http.StatusOK, with(s.overview(r), map[string]any{"ok": true}))
 }
 
-// mailLesen holt eine Mail und markiert sie auf Wunsch als gelesen.
-func (s *Server) mailLesen(r *http.Request, key string, alsGelesen bool) (mimeparse.Full, error) {
+// readMail holt eine Mail und markiert sie auf Wunsch als gelesen.
+func (s *Server) readMail(r *http.Request, key string, asRead bool) (mimeparse.Full, error) {
 	if err := s.Mailbox.Own(key); err != nil {
 		return mimeparse.Full{}, err
 	}
-	roh, err := s.Mailbox.Fetch(r.Context(), key, 0)
+	raw, err := s.Mailbox.Fetch(r.Context(), key, 0)
 	if err != nil {
 		return mimeparse.Full{}, err
 	}
-	voll := mimeparse.Read(roh, time.Unix(0, 0).UTC())
-	if alsGelesen {
+	obj := mimeparse.Read(raw, time.Unix(0, 0).UTC())
+	if asRead {
 		_ = s.Mailbox.State.Mutate(r.Context(), core.Op{T: "flags",
 			Mids: []string{s.Mailbox.Mid(key)}, Read: core.Ptr(true)})
 	}
-	return voll, nil
+	return obj, nil
 }
 
 func alsMap(v mimeparse.Full) map[string]any {
@@ -501,9 +501,9 @@ func alsMap(v mimeparse.Full) map[string]any {
 	return m
 }
 
-var unsauber = regexp.MustCompile(`[^\w.\- ]`)
+var unsafeChars = regexp.MustCompile(`[^\w.\- ]`)
 
-func sauberName(s string) string { return unsauber.ReplaceAllString(s, "_") }
+func cleanName(s string) string { return unsafeChars.ReplaceAllString(s, "_") }
 
 // localizedFolders ersetzt den Uebersetzungsschluessel der Systemordner
 // durch Text. Selbst angelegte Ordner tragen ihren Namen und bleiben, wie sie

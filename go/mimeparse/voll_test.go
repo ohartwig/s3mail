@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func korpus(t *testing.T, name string) []byte {
+func corpus(t *testing.T, name string) []byte {
 	t.Helper()
 	raw, err := os.ReadFile(filepath.Join("testdata", "corpus", name+".eml"))
 	if err != nil {
@@ -18,30 +18,30 @@ func korpus(t *testing.T, name string) []byte {
 }
 
 func TestReadTextAndHTML(t *testing.T) {
-	v := Read(korpus(t, "04-alternative"), time.Unix(0, 0).UTC())
+	v := Read(corpus(t, "04-alternative"), time.Unix(0, 0).UTC())
 	if !strings.Contains(v.Text, "Nur-Text-Fassung mit Ümlaut") {
 		t.Errorf("Fliesstext: %q", v.Text)
 	}
 	if !strings.Contains(v.HTML, "<b>Ümlaut</b>") {
 		t.Errorf("HTML: %q", v.HTML)
 	}
-	if len(v.Anhaenge) != 0 {
-		t.Errorf("alternative hat keine Anhaenge: %v", v.Anhaenge)
+	if len(v.Attachments) != 0 {
+		t.Errorf("alternative hat keine Anhaenge: %v", v.Attachments)
 	}
 }
 
 // TestReadAttachmentsWithContent - die Detailansicht muss den Anhang gleich
 // mitliefern, sonst wird die Mail zum Herunterladen ein zweites Mal geparst.
 func TestReadAttachmentsWithContent(t *testing.T) {
-	v := Read(korpus(t, "05-nested-mixed"), time.Unix(0, 0).UTC())
-	if len(v.Anhaenge) != 1 {
-		t.Fatalf("%d Anhaenge", len(v.Anhaenge))
+	v := Read(corpus(t, "05-nested-mixed"), time.Unix(0, 0).UTC())
+	if len(v.Attachments) != 1 {
+		t.Fatalf("%d Anhaenge", len(v.Attachments))
 	}
-	a := v.Anhaenge[0]
+	a := v.Attachments[0]
 	if a.Filename != "Rechnung.pdf" || a.ContentType != "application/pdf" {
 		t.Errorf("%+v", a)
 	}
-	if !strings.HasPrefix(string(a.Inhalt), "%PDF") || a.Size != len(a.Inhalt) {
+	if !strings.HasPrefix(string(a.Content), "%PDF") || a.Size != len(a.Content) {
 		t.Errorf("Inhalt fehlt oder Groesse stimmt nicht: %d Byte", a.Size)
 	}
 	if !strings.Contains(v.Text, "Anbei die Rechnung") {
@@ -54,9 +54,9 @@ func TestReadFilenames(t *testing.T) {
 		{"06-rfc2231-filename", "Bescheid Übersicht.pdf"},
 		{"07-raw-filename", "Übersicht Größe.xlsx"},
 	} {
-		v := Read(korpus(t, f.file), time.Unix(0, 0).UTC())
-		if len(v.Anhaenge) != 1 || v.Anhaenge[0].Filename != f.name {
-			t.Errorf("%s: %v, erwartet %q", f.file, v.Anhaenge, f.name)
+		v := Read(corpus(t, f.file), time.Unix(0, 0).UTC())
+		if len(v.Attachments) != 1 || v.Attachments[0].Filename != f.name {
+			t.Errorf("%s: %v, erwartet %q", f.file, v.Attachments, f.name)
 		}
 	}
 }
@@ -64,9 +64,9 @@ func TestReadFilenames(t *testing.T) {
 // TestReadInlineStaysOut - das Logo aus der Signatur ist kein Anhang und
 // darf auch nicht als Binaermuell im Text landen.
 func TestReadInlineStaysOut(t *testing.T) {
-	v := Read(korpus(t, "08-inline-cid"), time.Unix(0, 0).UTC())
-	if len(v.Anhaenge) != 0 {
-		t.Errorf("inline-Bild als Anhang gezaehlt: %v", v.Anhaenge)
+	v := Read(corpus(t, "08-inline-cid"), time.Unix(0, 0).UTC())
+	if len(v.Attachments) != 0 {
+		t.Errorf("inline-Bild als Anhang gezaehlt: %v", v.Attachments)
 	}
 	if strings.Contains(v.Text, "PNGFAKE") || strings.Contains(v.HTML, "PNGFAKE") {
 		t.Errorf("Bildinhalt im Text gelandet: %q / %q", v.Text, v.HTML)
@@ -77,7 +77,7 @@ func TestReadInlineStaysOut(t *testing.T) {
 }
 
 func TestReadHeaders(t *testing.T) {
-	v := Read(korpus(t, "13-address-commas"), time.Unix(0, 0).UTC())
+	v := Read(corpus(t, "13-address-commas"), time.Unix(0, 0).UTC())
 	if !strings.Contains(v.From, "Firma GmbH, Abteilung Vertrieb") {
 		t.Errorf("Anzeigename mit Komma zerlegt: %q", v.From)
 	}
@@ -87,14 +87,14 @@ func TestReadHeaders(t *testing.T) {
 }
 
 func TestReadSESVerdicts(t *testing.T) {
-	v := Read(korpus(t, "15-ses-verdicts"), time.Unix(0, 0).UTC())
+	v := Read(corpus(t, "15-ses-verdicts"), time.Unix(0, 0).UTC())
 	if !v.Spam || v.Virus {
 		t.Errorf("Verdicts: spam=%v virus=%v", v.Spam, v.Virus)
 	}
 }
 
 func TestReadBrokenMail(t *testing.T) {
-	v := Read(korpus(t, "11-broken"), time.Unix(0, 0).UTC())
+	v := Read(corpus(t, "11-broken"), time.Unix(0, 0).UTC())
 	if v.Subject != "(kein Betreff)" && v.Subject != "(nicht lesbar)" {
 		t.Errorf("Betreff: %q", v.Subject)
 	}

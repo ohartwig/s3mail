@@ -8,13 +8,13 @@ import (
 	"time"
 )
 
-func jetzt() time.Time { return time.Date(2026, 8, 21, 12, 0, 0, 0, time.UTC) }
+func now() time.Time { return time.Date(2026, 8, 21, 12, 0, 0, 0, time.UTC) }
 
-func lies(t *testing.T, roh []byte) *mail.Message {
+func parse(t *testing.T, raw []byte) *mail.Message {
 	t.Helper()
-	m, err := mail.ReadMessage(strings.NewReader(string(roh)))
+	m, err := mail.ReadMessage(strings.NewReader(string(raw)))
 	if err != nil {
-		t.Fatalf("gebaute Mail ist nicht lesbar: %v\n%s", err, roh)
+		t.Fatalf("gebaute Mail ist nicht lesbar: %v\n%s", err, raw)
 	}
 	return m
 }
@@ -25,11 +25,11 @@ func lies(t *testing.T, roh []byte) *mail.Message {
 func TestReplyKeepsTheThread(t *testing.T) {
 	n, err := Build(Draft{Mode: "reply", To: "kunde@x.de", Subject: "Re: Rechnung",
 		Body: "Passt so."}, "support@firma.de",
-		Original{MessageID: "<abc@x.de>", References: "<alt1@x.de> <alt2@x.de>"}, jetzt())
+		Original{MessageID: "<abc@x.de>", References: "<alt1@x.de> <alt2@x.de>"}, now())
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := lies(t, n.Roh)
+	m := parse(t, n.Raw)
 	if m.Header.Get("In-Reply-To") != "<abc@x.de>" {
 		t.Errorf("In-Reply-To: %q", m.Header.Get("In-Reply-To"))
 	}
@@ -39,40 +39,40 @@ func TestReplyKeepsTheThread(t *testing.T) {
 	}
 	// bei einer neuen Mail darf beides fehlen
 	n, _ = Build(Draft{Mode: "new", To: "kunde@x.de", Body: "Hallo"},
-		"support@firma.de", Original{MessageID: "<abc@x.de>"}, jetzt())
-	if lies(t, n.Roh).Header.Get("In-Reply-To") != "" {
+		"support@firma.de", Original{MessageID: "<abc@x.de>"}, now())
+	if parse(t, n.Raw).Header.Get("In-Reply-To") != "" {
 		t.Error("neue Mail bekommt In-Reply-To")
 	}
 }
 
 func TestRecipientsAndSender(t *testing.T) {
 	n, err := Build(Draft{To: `"Nachname, Vorname" <a@x.de>, b@y.de`, Cc: "c@z.de",
-		Body: "x"}, "support@firma.de", Original{}, jetzt())
+		Body: "x"}, "support@firma.de", Original{}, now())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(n.Empfaenger) != 3 {
-		t.Errorf("Empfaenger: %v", n.Empfaenger)
+	if len(n.To) != 3 {
+		t.Errorf("Empfaenger: %v", n.To)
 	}
-	for _, a := range n.Empfaenger {
+	for _, a := range n.To {
 		if strings.Contains(a, "<") || strings.Contains(a, " ") {
 			t.Errorf("SES bekommt einen Anzeigenamen statt einer Adresse: %q", a)
 		}
 	}
-	if n.Absender != "support@firma.de" {
-		t.Errorf("Absender: %q", n.Absender)
+	if n.From != "support@firma.de" {
+		t.Errorf("Absender: %q", n.From)
 	}
 }
 
 func TestRequiredFields(t *testing.T) {
-	if _, err := Build(Draft{To: "a@b.de", Body: "x"}, "", Original{}, jetzt()); err != ErrKeinAbsender {
+	if _, err := Build(Draft{To: "a@b.de", Body: "x"}, "", Original{}, now()); err != ErrNoSender {
 		t.Errorf("ohne Absender: %v", err)
 	}
-	if _, err := Build(Draft{Body: "x"}, "a@b.de", Original{}, jetzt()); err != ErrKeinEmpfaenger {
+	if _, err := Build(Draft{Body: "x"}, "a@b.de", Original{}, now()); err != ErrNoRecipient {
 		t.Errorf("ohne Empfaenger: %v", err)
 	}
 	if _, err := Build(Draft{To: "das ist keine adresse", Body: "x"}, "a@b.de",
-		Original{}, jetzt()); err == nil {
+		Original{}, now()); err == nil {
 		t.Error("kaputte Empfaengerliste durchgelassen")
 	}
 }
@@ -81,26 +81,26 @@ func TestRequiredFields(t *testing.T) {
 // Server entweder abgelehnt oder verstuemmelt.
 func TestSubjectWithUmlauts(t *testing.T) {
 	n, err := Build(Draft{To: "a@b.de", Subject: "Rückfrage über 89,€", Body: "x"},
-		"support@firma.de", Original{}, jetzt())
+		"support@firma.de", Original{}, now())
 	if err != nil {
 		t.Fatal(err)
 	}
-	roh := string(n.Roh)
-	if strings.Contains(roh, "Rückfrage") {
+	raw := string(n.Raw)
+	if strings.Contains(raw, "Rückfrage") {
 		t.Error("Umlaut steht roh im Header")
 	}
-	if !strings.Contains(roh, "=?utf-8?") {
-		t.Errorf("nicht RFC-2047-kodiert:\n%s", roh[:200])
+	if !strings.Contains(raw, "=?utf-8?") {
+		t.Errorf("nicht RFC-2047-kodiert:\n%s", raw[:200])
 	}
 	// und wieder lesbar
-	m := lies(t, n.Roh)
-	dec := entschluesselnHeader(m.Header.Get("Subject"))
+	m := parse(t, n.Raw)
+	dec := decryptHeader(m.Header.Get("Subject"))
 	if dec != "Rückfrage über 89,€" {
 		t.Errorf("zurueckgelesen: %q", dec)
 	}
 }
 
-func entschluesselnHeader(s string) string {
+func decryptHeader(s string) string {
 	out, err := (&mime.WordDecoder{}).DecodeHeader(s)
 	if err != nil {
 		return s
@@ -113,25 +113,25 @@ func TestForwardAttachesTheMail(t *testing.T) {
 	original := []byte("From: alt@x.de\r\nSubject: Original\r\n\r\nAlter Inhalt.\r\n")
 	n, err := Build(Draft{Mode: "forward", Key: "mail/m1", To: "kollege@firma.de",
 		Subject: "Fwd: Original", Body: "Siehe unten."},
-		"support@firma.de", Original{Subject: "Original", Roh: original}, jetzt())
+		"support@firma.de", Original{Subject: "Original", Raw: original}, now())
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := lies(t, n.Roh)
+	m := parse(t, n.Raw)
 	if !strings.HasPrefix(m.Header.Get("Content-Type"), "multipart/mixed") {
 		t.Fatalf("Content-Type: %q", m.Header.Get("Content-Type"))
 	}
-	roh := string(n.Roh)
-	if !strings.Contains(roh, "message/rfc822") {
+	raw := string(n.Raw)
+	if !strings.Contains(raw, "message/rfc822") {
 		t.Error("Anhang hat nicht den Typ message/rfc822")
 	}
-	if !strings.Contains(roh, "Original.eml") {
+	if !strings.Contains(raw, "Original.eml") {
 		t.Error("Dateiname des Anhangs fehlt")
 	}
-	if !strings.Contains(roh, "Alter Inhalt.") {
+	if !strings.Contains(raw, "Alter Inhalt.") {
 		t.Error("die weitergeleitete Mail fehlt im Anhang")
 	}
-	if !strings.Contains(roh, "Siehe unten.") {
+	if !strings.Contains(raw, "Siehe unten.") {
 		t.Error("eigener Text fehlt")
 	}
 }
@@ -140,11 +140,11 @@ func TestMessageIDIsUnique(t *testing.T) {
 	seen := map[string]bool{}
 	for i := 0; i < 100; i++ {
 		n, err := Build(Draft{To: "a@b.de", Body: "x"}, "support@firma.de",
-			Original{}, jetzt())
+			Original{}, now())
 		if err != nil {
 			t.Fatal(err)
 		}
-		id := lies(t, n.Roh).Header.Get("Message-Id")
+		id := parse(t, n.Raw).Header.Get("Message-Id")
 		if seen[id] {
 			t.Fatalf("Message-ID doppelt: %s", id)
 		}

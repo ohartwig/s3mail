@@ -15,29 +15,29 @@ import (
 	"github.com/aws/smithy-go"
 )
 
-// GeteiltesVerzeichnis ist der Ort von credentials und config. Leer heisst: was
+// SharedDir ist der Ort von credentials und config. Leer heisst: was
 // das SDK von sich aus nimmt (~/.aws).
 //
 // Der Assistent schreibt die Zugangsdaten irgendwohin - das SDK muss sie an
 // derselben Stelle suchen, sonst legt jemand ein Profil an, das nie gefunden wird.
-var GeteiltesVerzeichnis string
+var SharedDir string
 
 // Session baut die AWS-Konfiguration aus Profil und Region. Beides darf leer sein;
 // dann greift, was in der Umgebung steht.
-func Session(ctx context.Context, profil, region string) (aws.Config, error) {
+func Session(ctx context.Context, profile, region string) (aws.Config, error) {
 	var opts []func(*config.LoadOptions) error
-	if profil != "" {
-		opts = append(opts, config.WithSharedConfigProfile(profil))
+	if profile != "" {
+		opts = append(opts, config.WithSharedConfigProfile(profile))
 	}
 	if region != "" {
 		opts = append(opts, config.WithRegion(region))
 	}
-	if GeteiltesVerzeichnis != "" {
+	if SharedDir != "" {
 		opts = append(opts,
 			config.WithSharedCredentialsFiles([]string{
-				filepath.Join(GeteiltesVerzeichnis, "credentials")}),
+				filepath.Join(SharedDir, "credentials")}),
 			config.WithSharedConfigFiles([]string{
-				filepath.Join(GeteiltesVerzeichnis, "config")}))
+				filepath.Join(SharedDir, "config")}))
 	}
 	cfg, err := config.LoadDefaultConfig(ctx, opts...)
 	if err != nil {
@@ -62,31 +62,31 @@ func CheckAccess(ctx context.Context, cfg aws.Config) error {
 // Das AWS-SDK meldet fehlende oder unbrauchbare Zugangsdaten in einem halben
 // Dutzend Formen, alle englisch und alle ohne Hinweis darauf, dass der Assistent
 // zwei Felder weiter oben genau das loesen wuerde.
-func PlainText(err error, profil string, cat i18n.Catalog) string {
+func PlainText(err error, profile string, cat i18n.Catalog) string {
 	if err == nil {
 		return ""
 	}
 	wo := cat.T("aws.defaultProfile")
-	if profil != "" {
-		wo = cat.Tf("aws.namedProfile", profil)
+	if profile != "" {
+		wo = cat.Tf("aws.namedProfile", profile)
 	}
 	keys := cat.T("aws.enterKeys")
 	text := err.Error()
 
 	// Profil gibt es nicht
-	var fehltProfil config.SharedConfigProfileNotExistError
-	if errors.As(err, &fehltProfil) {
-		return cat.Tf("aws.noSuchProfile", profil, keys)
+	var missingProfile config.SharedConfigProfileNotExistError
+	if errors.As(err, &missingProfile) {
+		return cat.Tf("aws.noSuchProfile", profile, keys)
 	}
 
 	// SSO: die Anmeldung fehlt, nicht die Zugangsdaten
 	if strings.Contains(text, "sso") || strings.Contains(text, "SSO") ||
 		strings.Contains(text, "token") && strings.Contains(text, "expired") {
-		befehl := "aws sso login"
-		if profil != "" {
-			befehl += " --profile " + profil
+		cmd := "aws sso login"
+		if profile != "" {
+			cmd += " --profile " + profile
 		}
-		return cat.Tf("aws.ssoLoginNeeded", wo, befehl)
+		return cat.Tf("aws.ssoLoginNeeded", wo, cmd)
 	}
 
 	// Fehlende Region faellt sonst als kryptischer Endpunktfehler auf

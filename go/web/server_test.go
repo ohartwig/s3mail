@@ -17,15 +17,15 @@ import (
 
 const testToken = "test-token-123"
 
-func serverBauen(t *testing.T) (*httptest.Server, *store.Mailbox) {
+func buildServer(t *testing.T) (*httptest.Server, *store.Mailbox) {
 	t.Helper()
 	ctx := context.Background()
 	f := s3fake.New()
-	f.Store("mail/m1", mailRoh("Anna <anna@kunde.de>", "Rechnung 1", "Anbei die Rechnung.",
+	f.Store("mail/m1", rawMail("Anna <anna@kunde.de>", "Rechnung 1", "Anbei die Rechnung.",
 		"Mon, 03 Aug 2026 09:00:00 +0000"))
-	f.Store("mail/m2", mailRoh("Shop <news@shop.io>", "Angebot", "Neu im Sortiment.",
+	f.Store("mail/m2", rawMail("Shop <news@shop.io>", "Angebot", "Neu im Sortiment.",
 		"Tue, 04 Aug 2026 09:00:00 +0000"))
-	f.Store("mail/archiv/alt1", mailRoh("Alt <alt@firma.de>", "Altes", "Alter Text.",
+	f.Store("mail/archiv/alt1", rawMail("Alt <alt@firma.de>", "Altes", "Alter Text.",
 		"Wed, 01 Jul 2026 08:00:00 +0000"))
 
 	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), true)
@@ -37,30 +37,30 @@ func serverBauen(t *testing.T) (*httptest.Server, *store.Mailbox) {
 	ts := httptest.NewServer(srv)
 	t.Cleanup(ts.Close)
 	// Port aus der Testadresse uebernehmen, sonst schlaegt die Host-Pruefung zu
-	srv.Port = portVon(ts.URL)
+	srv.Port = portOf(ts.URL)
 	return ts, mb
 }
 
-func mailRoh(from, subject, body, date string) []byte {
+func rawMail(from, subject, body, date string) []byte {
 	return []byte("From: " + from + "\r\nTo: post@firma.de\r\nSubject: " + subject +
 		"\r\nDate: " + date + "\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n" + body + "\r\n")
 }
 
-func portVon(u string) int {
-	teile := strings.Split(u, ":")
+func portOf(u string) int {
+	parts1 := strings.Split(u, ":")
 	p := 0
-	for _, c := range teile[len(teile)-1] {
+	for _, c := range parts1[len(parts1)-1] {
 		p = p*10 + int(c-'0')
 	}
 	return p
 }
 
-type ruf struct {
+type call struct {
 	Code int
 	Body []byte
 }
 
-func (r ruf) json(t *testing.T) map[string]any {
+func (r call) json(t *testing.T) map[string]any {
 	t.Helper()
 	var m map[string]any
 	if err := json.Unmarshal(r.Body, &m); err != nil {
@@ -69,18 +69,18 @@ func (r ruf) json(t *testing.T) map[string]any {
 	return m
 }
 
-func rufen(t *testing.T, ts *httptest.Server, methode, path string, body string,
-	header map[string]string) ruf {
+func callServer(t *testing.T, ts *httptest.Server, method, path string, body string,
+	header map[string]string) call {
 	t.Helper()
-	var leser io.Reader
+	var reader io.Reader
 	if body != "" {
-		leser = strings.NewReader(body)
+		reader = strings.NewReader(body)
 	}
-	req, err := http.NewRequest(methode, ts.URL+path, leser)
+	req, err := http.NewRequest(method, ts.URL+path, reader)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, gesetzt := header["X-S3mail-Token"]; !gesetzt {
+	if _, set := header["X-S3mail-Token"]; !set {
 		req.Header.Set("X-S3mail-Token", testToken)
 	}
 	for k, v := range header {
@@ -96,13 +96,13 @@ func rufen(t *testing.T, ts *httptest.Server, methode, path string, body string,
 	}
 	defer resp.Body.Close()
 	blob, _ := io.ReadAll(resp.Body)
-	return ruf{resp.StatusCode, blob}
+	return call{resp.StatusCode, blob}
 }
 
 func TestMailboxRoutes(t *testing.T) {
-	ts, mb := serverBauen(t)
+	ts, mb := buildServer(t)
 
-	d := rufen(t, ts, "GET", "/api/messages?folder=", "", nil).json(t)
+	d := callServer(t, ts, "GET", "/api/messages?folder=", "", nil).json(t)
 	msgs, _ := d["messages"].([]any)
 	if len(msgs) != 2 {
 		t.Errorf("%d Mails im Posteingang, erwartet 2", len(msgs))
@@ -111,30 +111,30 @@ func TestMailboxRoutes(t *testing.T) {
 		t.Errorf("Uebersicht fehlt in der Antwort: %v", d)
 	}
 
-	rufen(t, ts, "POST", "/api/flag", `{"keys":["mail/m1"],"star":true}`, nil)
-	d = rufen(t, ts, "GET", "/api/messages?folder=&star=1", "", nil).json(t)
+	callServer(t, ts, "POST", "/api/flag", `{"keys":["mail/m1"],"star":true}`, nil)
+	d = callServer(t, ts, "GET", "/api/messages?folder=&star=1", "", nil).json(t)
 	if msgs, _ := d["messages"].([]any); len(msgs) != 1 {
 		t.Errorf("Stern-Filter: %d Treffer", len(msgs))
 	}
 
-	rufen(t, ts, "POST", "/api/tag", `{"keys":["mail/m1"],"add":["wichtig"]}`, nil)
-	d = rufen(t, ts, "GET", "/api/messages?folder=*&tag=wichtig", "", nil).json(t)
+	callServer(t, ts, "POST", "/api/tag", `{"keys":["mail/m1"],"add":["wichtig"]}`, nil)
+	d = callServer(t, ts, "GET", "/api/messages?folder=*&tag=wichtig", "", nil).json(t)
 	if msgs, _ := d["messages"].([]any); len(msgs) != 1 {
 		t.Errorf("Tag-Filter: %d Treffer", len(msgs))
 	}
 
-	d = rufen(t, ts, "POST", "/api/move", `{"keys":["mail/m2"],"folder":"spam"}`, nil).json(t)
+	d = callServer(t, ts, "POST", "/api/move", `{"keys":["mail/m2"],"folder":"spam"}`, nil).json(t)
 	moved, _ := d["moved"].([]any)
 	if len(moved) != 1 {
 		t.Fatalf("Verschieben: %v", d)
 	}
 
 	// endgueltig loeschen nur aus dem Papierkorb
-	if r := rufen(t, ts, "POST", "/api/delete", `{"keys":["mail/spam/m2"]}`, nil); r.Code != 403 {
+	if r := callServer(t, ts, "POST", "/api/delete", `{"keys":["mail/spam/m2"]}`, nil); r.Code != 403 {
 		t.Errorf("Loeschen ausserhalb des Papierkorbs: HTTP %d", r.Code)
 	}
-	rufen(t, ts, "POST", "/api/move", `{"keys":["mail/spam/m2"],"folder":"trash"}`, nil)
-	d = rufen(t, ts, "POST", "/api/delete", `{"keys":["mail/trash/m2"]}`, nil).json(t)
+	callServer(t, ts, "POST", "/api/move", `{"keys":["mail/spam/m2"],"folder":"trash"}`, nil)
+	d = callServer(t, ts, "POST", "/api/delete", `{"keys":["mail/trash/m2"]}`, nil).json(t)
 	if d["deleted"] != float64(1) {
 		t.Errorf("Loeschen aus dem Papierkorb: %v", d)
 	}
@@ -142,10 +142,10 @@ func TestMailboxRoutes(t *testing.T) {
 }
 
 func TestErrorCodes(t *testing.T) {
-	ts, _ := serverBauen(t)
-	faelle := []struct {
-		name, methode, path, body string
-		code                      int
+	ts, _ := buildServer(t)
+	cases := []struct {
+		name, method, path, body string
+		code                     int
 	}{
 		{"ungueltiger Ordner", "POST", "/api/move", `{"keys":["mail/m1"],"folder":"../boese"}`, 400},
 		{"fremder Key", "GET", "/api/message?key=andere/nicht-meins", "", 400},
@@ -154,8 +154,8 @@ func TestErrorCodes(t *testing.T) {
 		{"kaputtes JSON", "POST", "/api/flag", `{kaputt`, 400},
 		{"unbekannte Tag-Aktion", "POST", "/api/tags", `{"action":"quatsch","name":"x"}`, 400},
 	}
-	for _, f := range faelle {
-		if r := rufen(t, ts, f.methode, f.path, f.body, nil); r.Code != f.code {
+	for _, f := range cases {
+		if r := callServer(t, ts, f.method, f.path, f.body, nil); r.Code != f.code {
 			t.Errorf("%s: HTTP %d, erwartet %d (%s)", f.name, r.Code, f.code, r.Body)
 		}
 	}
@@ -178,9 +178,9 @@ func TestReadMailAndAttachment(t *testing.T) {
 	srv := NewServer(mb, testToken, "127.0.0.1", 0, nil)
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
-	srv.Port = portVon(ts.URL)
+	srv.Port = portOf(ts.URL)
 
-	d := rufen(t, ts, "GET", "/api/message?key=mail/m1", "", nil).json(t)
+	d := callServer(t, ts, "GET", "/api/message?key=mail/m1", "", nil).json(t)
 	if !strings.Contains(d["text"].(string), "Ümlaut") {
 		t.Errorf("Fliesstext: %v", d["text"])
 	}
@@ -192,11 +192,11 @@ func TestReadMailAndAttachment(t *testing.T) {
 		t.Error("Oeffnen hat nicht als gelesen markiert")
 	}
 
-	r := rufen(t, ts, "GET", "/api/attachment?key=mail/m1&index=1", "", nil)
+	r := callServer(t, ts, "GET", "/api/attachment?key=mail/m1&index=1", "", nil)
 	if r.Code != 200 || !strings.HasPrefix(string(r.Body), "%PDF") {
 		t.Errorf("Anhang: HTTP %d %q", r.Code, r.Body)
 	}
-	r = rufen(t, ts, "GET", "/api/raw?key=mail/m1", "", nil)
+	r = callServer(t, ts, "GET", "/api/raw?key=mail/m1", "", nil)
 	if r.Code != 200 || !strings.HasPrefix(string(r.Body), "From:") {
 		t.Errorf("Rohmail: HTTP %d", r.Code)
 	}
@@ -204,34 +204,34 @@ func TestReadMailAndAttachment(t *testing.T) {
 
 // TestAccessControl - dieselben drei Pruefungen wie in der Python-Fassung.
 func TestAccessControl(t *testing.T) {
-	ts, _ := serverBauen(t)
-	ohne := map[string]string{"X-S3mail-Token": ""}
+	ts, _ := buildServer(t)
+	without := map[string]string{"X-S3mail-Token": ""}
 
-	if r := rufen(t, ts, "GET", "/api/overview", "", ohne); r.Code != 403 {
+	if r := callServer(t, ts, "GET", "/api/overview", "", without); r.Code != 403 {
 		t.Errorf("ohne Token: HTTP %d", r.Code)
 	}
-	if r := rufen(t, ts, "GET", "/api/overview", "", map[string]string{"X-S3mail-Token": "falsch"}); r.Code != 403 {
+	if r := callServer(t, ts, "GET", "/api/overview", "", map[string]string{"X-S3mail-Token": "falsch"}); r.Code != 403 {
 		t.Errorf("falsches Token: HTTP %d", r.Code)
 	}
-	if r := rufen(t, ts, "GET", "/", "", ohne); r.Code != 403 {
+	if r := callServer(t, ts, "GET", "/", "", without); r.Code != 403 {
 		t.Errorf("Postfachseite ohne Token: HTTP %d", r.Code)
 	}
-	if r := rufen(t, ts, "GET", "/api/overview", "", map[string]string{"Cookie": "s3mail=" + testToken,
+	if r := callServer(t, ts, "GET", "/api/overview", "", map[string]string{"Cookie": "s3mail=" + testToken,
 		"X-S3mail-Token": ""}); r.Code != 200 {
 		t.Errorf("Token per Cookie: HTTP %d", r.Code)
 	}
 
 	// CSRF: fremde Seite schickt einen POST, das Token-Cookie faehrt mit
-	if r := rufen(t, ts, "POST", "/api/empty-trash", "{}",
+	if r := callServer(t, ts, "POST", "/api/empty-trash", "{}",
 		map[string]string{"Origin": "https://boese.example"}); r.Code != 403 {
 		t.Errorf("CSRF-POST von fremder Herkunft: HTTP %d", r.Code)
 	}
-	if r := rufen(t, ts, "POST", "/api/empty-trash", "{}",
+	if r := callServer(t, ts, "POST", "/api/empty-trash", "{}",
 		map[string]string{"Origin": "http://localhost:1234"}); r.Code != 403 {
 		t.Errorf("fremder Port als Origin: HTTP %d", r.Code)
 	}
 	// DNS-Rebinding: fremder Name im Host-Header
-	if r := rufen(t, ts, "GET", "/api/messages?folder=", "",
+	if r := callServer(t, ts, "GET", "/api/messages?folder=", "",
 		map[string]string{"Host": "boese.example"}); r.Code != 403 {
 		t.Errorf("fremder Host: HTTP %d", r.Code)
 	}
@@ -239,7 +239,7 @@ func TestAccessControl(t *testing.T) {
 
 // TestPageSetsCookie - daran haengen die Download-Links.
 func TestPageSetsCookie(t *testing.T) {
-	ts, _ := serverBauen(t)
+	ts, _ := buildServer(t)
 	req, _ := http.NewRequest("GET", ts.URL+"/?t="+testToken, nil)
 	resp, err := http.DefaultTransport.RoundTrip(req)
 	if err != nil {
@@ -264,22 +264,22 @@ func TestInterfaceIsComplete(t *testing.T) {
 	// in den Katalogen, nicht in der Datei. Fuer sie zaehlt, dass die Vorlage
 	// da ist, nicht wie lang sie ist.
 	for name, page := range map[string]string{
-		"Postfach":  SeitePostfach,
-		"Assistent": SeiteAssistent,
-		"Token":     SeiteToken,
+		"Postfach":  PageMailbox,
+		"Assistent": PageWizard,
+		"Token":     PageToken,
 	} {
-		mindestens := 500
+		atLeast := 500
 		if name == "Token" {
-			mindestens = 200
+			atLeast = 200
 		}
-		if len(page) < mindestens {
+		if len(page) < atLeast {
 			t.Errorf("%s: nur %d Zeichen - eingebettet?", name, len(page))
 		}
 		if !strings.Contains(page, "<!doctype html>") && !strings.Contains(page, "<!DOCTYPE html>") {
 			t.Errorf("%s: kein Dokumentkopf", name)
 		}
 	}
-	if !strings.Contains(SeitePostfach, "__CONFIG__") {
+	if !strings.Contains(PageMailbox, "__CONFIG__") {
 		t.Error("Postfachseite hat keinen Platzhalter fuer die Konfiguration")
 	}
 }
@@ -291,31 +291,31 @@ func TestWithoutMailbox(t *testing.T) {
 	srv.WithWizard(&wizard.Wizard{})
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
-	srv.Port = portVon(ts.URL)
+	srv.Port = portOf(ts.URL)
 
 	for _, path := range []string{"/api/messages?folder=", "/api/overview",
 		"/api/message?key=mail/m1", "/api/raw?key=mail/m1"} {
-		r := rufen(t, ts, "GET", path, "", nil)
+		r := callServer(t, ts, "GET", path, "", nil)
 		if r.Code != 503 {
 			t.Errorf("%s: HTTP %d, erwartet 503", path, r.Code)
 		}
 	}
-	if r := rufen(t, ts, "POST", "/api/refresh", "{}", nil); r.Code != 503 {
+	if r := callServer(t, ts, "POST", "/api/refresh", "{}", nil); r.Code != 503 {
 		t.Errorf("refresh: HTTP %d", r.Code)
 	}
 	// Der Assistent muss erreichbar bleiben
-	if r := rufen(t, ts, "POST", "/api/setup/info", "{}", nil); r.Code == 503 {
+	if r := callServer(t, ts, "POST", "/api/setup/info", "{}", nil); r.Code == 503 {
 		t.Error("Assistent gesperrt, obwohl er gebraucht wird")
 	}
 	// Beenden muss gerade hier gehen - das ist der Zustand, in dem ein
 	// Erstnutzer steckt, und ohne Konsole ist der Knopf der einzige Ausweg.
-	beendet := make(chan struct{}, 1)
-	srv.BeimBeenden = func() { beendet <- struct{}{} }
-	if r := rufen(t, ts, "POST", "/api/quit", "{}", nil); r.Code != 200 {
+	stopped := make(chan struct{}, 1)
+	srv.OnShutdown = func() { stopped <- struct{}{} }
+	if r := callServer(t, ts, "POST", "/api/quit", "{}", nil); r.Code != 200 {
 		t.Errorf("Beenden im Assistenten: HTTP %d", r.Code)
 	}
 	select {
-	case <-beendet:
+	case <-stopped:
 	case <-time.After(2 * time.Second):
 		t.Error("BeimBeenden wurde nicht gerufen")
 	}
@@ -324,7 +324,7 @@ func TestWithoutMailbox(t *testing.T) {
 	// kein Satz: die Seite kommt seit der Uebersetzung in der Sprache des
 	// Fragenden, und ein Test, der an einem Wort haengt, geht beim naechsten
 	// Sprachwechsel kaputt, ohne dass etwas kaputt waere.
-	r := rufen(t, ts, "GET", "/", "", nil)
+	r := callServer(t, ts, "GET", "/", "", nil)
 	if r.Code != 200 || !strings.Contains(string(r.Body), `id="saveCreds"`) {
 		t.Errorf("Startseite ohne Postfach: HTTP %d", r.Code)
 	}
@@ -335,7 +335,7 @@ func TestWithoutMailbox(t *testing.T) {
 func TestAutoRefreshIsShipped(t *testing.T) {
 	ctx := context.Background()
 	f := s3fake.New()
-	f.Store("mail/m1", mailRoh("a@b.de", "x", "y", "Mon, 03 Aug 2026 09:00:00 +0000"))
+	f.Store("mail/m1", rawMail("a@b.de", "x", "y", "Mon, 03 Aug 2026 09:00:00 +0000"))
 	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), true)
 	if _, err := mb.Refresh(ctx); err != nil {
 		t.Fatal(err)
@@ -344,9 +344,9 @@ func TestAutoRefreshIsShipped(t *testing.T) {
 		"bucket": "test-bucket", "refresh_seconds": 45})
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
-	srv.Port = portVon(ts.URL)
+	srv.Port = portOf(ts.URL)
 
-	page := string(rufen(t, ts, "GET", "/?t="+testToken, "", nil).Body)
+	page := string(callServer(t, ts, "GET", "/?t="+testToken, "", nil).Body)
 	if !strings.Contains(page, "autoAbgleichPlanen") {
 		t.Error("der automatische Abgleich fehlt in der ausgelieferten Seite")
 	}
@@ -355,7 +355,7 @@ func TestAutoRefreshIsShipped(t *testing.T) {
 	}
 	// Ohne Intervall muss der Takt ausbleiben, nicht auf einen Standardwert fallen
 	srv.Config = map[string]any{"bucket": "test-bucket", "refresh_seconds": 0}
-	page = string(rufen(t, ts, "GET", "/?t="+testToken, "", nil).Body)
+	page = string(callServer(t, ts, "GET", "/?t="+testToken, "", nil).Body)
 	if !strings.Contains(page, `"refresh_seconds":0`) {
 		t.Error("abgeschalteter Abgleich wird nicht als 0 ausgeliefert")
 	}
@@ -366,13 +366,13 @@ func TestAutoRefreshIsShipped(t *testing.T) {
 // kein Weg dorthin. Das faellt niemandem auf, der ein volles Postfach testet.
 func TestComposeWithoutATemplate(t *testing.T) {
 	for _, part := range []string{`id="new"`, `compose("new")`, `mode === "new" ? ""`} {
-		if !strings.Contains(SeitePostfach, part) {
+		if !strings.Contains(PageMailbox, part) {
 			t.Errorf("Postfachseite ohne %s - neue Nachricht nicht erreichbar", part)
 		}
 	}
 	// Der Schluessel der offenen Mail darf nicht mitgehen, sonst haengt die neue
 	// Nachricht am Faden einer fremden.
-	if strings.Contains(SeitePostfach, `{mode, key: current`) {
+	if strings.Contains(PageMailbox, `{mode, key: current`) {
 		t.Error("neue Nachricht schickt den Schluessel der offenen Mail mit")
 	}
 }

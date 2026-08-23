@@ -21,7 +21,7 @@ type Fake struct {
 	Objs    map[string][]byte
 	Meta    map[string]map[string]string
 	SSE     map[string]store.CopyOpts
-	Aufrufe []string
+	CallLog []string
 	PutErr  error // wenn gesetzt, scheitert jedes Put
 	ListErr error // wenn gesetzt, scheitert jedes List
 }
@@ -42,7 +42,7 @@ func (f *Fake) etag(key string) string {
 	return fmt.Sprintf("%08x", h&0xffffffff)
 }
 
-func (f *Fake) record(was string) { f.Aufrufe = append(f.Aufrufe, was) }
+func (f *Fake) record(op string) { f.CallLog = append(f.CallLog, op) }
 
 func (f *Fake) List(_ context.Context, _, prefix string) ([]store.ObjectInfo, error) {
 	f.mu.Lock()
@@ -68,7 +68,7 @@ func (f *Fake) Get(_ context.Context, _, key, byteRange string) (store.Object, e
 	f.record("get " + key + " " + byteRange)
 	body, da := f.Objs[key]
 	if !da {
-		return store.Object{}, store.ErrNichtGefunden
+		return store.Object{}, store.ErrNotFound
 	}
 	if byteRange != "" {
 		var a, b int
@@ -90,7 +90,7 @@ func (f *Fake) Head(_ context.Context, _, key string) (store.Head, error) {
 	f.record("head " + key)
 	body, da := f.Objs[key]
 	if !da {
-		return store.Head{}, store.ErrNichtGefunden
+		return store.Head{}, store.ErrNotFound
 	}
 	o := f.SSE[key]
 	return store.Head{Meta: copyMeta(f.Meta[key]), ContentLength: int64(len(body)),
@@ -126,7 +126,7 @@ func (f *Fake) Copy(_ context.Context, _, src, dst string, o store.CopyOpts) err
 	f.record("copy " + src + " -> " + dst)
 	body, da := f.Objs[src]
 	if !da {
-		return store.ErrNichtGefunden
+		return store.ErrNotFound
 	}
 	f.Objs[dst] = append([]byte(nil), body...)
 	if m := f.Meta[src]; m != nil {
@@ -153,7 +153,7 @@ func (f *Fake) PutCount(part string) int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	n := 0
-	for _, a := range f.Aufrufe {
+	for _, a := range f.CallLog {
 		if strings.HasPrefix(a, "put ") && strings.Contains(a, part) {
 			n++
 		}
@@ -212,12 +212,12 @@ func (f *Fake) Has(key string) bool {
 func (f *Fake) ClearCalls() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.Aufrufe = nil
+	f.CallLog = nil
 }
 
 // Calls returns what has been recorded so far.
 func (f *Fake) Calls() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return append([]string(nil), f.Aufrufe...)
+	return append([]string(nil), f.CallLog...)
 }

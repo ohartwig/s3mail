@@ -132,15 +132,15 @@ func translateError(err error) error {
 	if err == nil {
 		return nil
 	}
-	var keiner *types.NoSuchKey
-	var nix *types.NotFound
-	if errors.As(err, &keiner) || errors.As(err, &nix) {
-		return fmt.Errorf("%w: %v", store.ErrNichtGefunden, err)
+	var none *types.NoSuchKey
+	var notFound *types.NotFound
+	if errors.As(err, &none) || errors.As(err, &notFound) {
+		return fmt.Errorf("%w: %v", store.ErrNotFound, err)
 	}
 	var api smithy.APIError
 	if errors.As(err, &api) && (api.ErrorCode() == "NoSuchKey" || api.ErrorCode() == "404" ||
 		api.ErrorCode() == "NotFound") {
-		return fmt.Errorf("%w: %v", store.ErrNichtGefunden, err)
+		return fmt.Errorf("%w: %v", store.ErrNotFound, err)
 	}
 	return err
 }

@@ -24,7 +24,7 @@ const (
 	// CompactAfter ist die Zahl offener Ops, ab der zusammengefasst wird.
 	CompactAfter = 50
 
-	holWorkers = 8
+	fetchWorkers = 8
 )
 
 // State ist der geteilte Zustand im Bucket.
@@ -59,10 +59,10 @@ type State struct {
 	dirty    bool
 	seq      int
 
-	// instanz unterscheidet diesen Prozess von jedem anderen, der auf denselben
+	// instance unterscheidet diesen Prozess von jedem anderen, der auf denselben
 	// Bucket schreibt. Ohne das koennten zwei Rechner in derselben Mikrosekunde
 	// denselben Op-Namen erzeugen - und einer der beiden waere weg.
-	instanz string
+	instance string
 
 	// austauschbar, damit Tests deterministisch laufen
 	Now     func() time.Time
@@ -77,9 +77,9 @@ func NewState(ctx context.Context, s3 S3, bucket, root, localFile string) *State
 		localFile: localFile,
 		data:      core.NewData(),
 		remoteOK:  true,
-		instanz:   InstanceID(),
+		instance:  InstanceID(),
 		Now:       func() time.Time { return time.Now().UTC() },
-		Workers:   holWorkers,
+		Workers:   fetchWorkers,
 	}
 	st.Load(ctx)
 	return st
@@ -97,7 +97,7 @@ func InstanceID() string {
 }
 
 // SetInstance ist fuer Tests, die zwei Rechner nachstellen.
-func (s *State) SetInstance(k string) { s.instanz = k }
+func (s *State) SetInstance(k string) { s.instance = k }
 
 // Data gibt eine Momentaufnahme heraus. Aufrufer duerfen sie lesen, nicht aendern.
 func (s *State) Data() *core.Data {
@@ -120,7 +120,7 @@ func (s *State) RemoteOK() bool {
 	return s.remoteOK
 }
 
-func (s *State) OffeneOps() int {
+func (s *State) PendingOps() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.openOps
@@ -128,7 +128,7 @@ func (s *State) OffeneOps() int {
 
 // -- Laden ------------------------------------------------------------------ //
 
-func (s *State) snapshotHolen(ctx context.Context) *core.Data {
+func (s *State) fetchSnapshot(ctx context.Context) *core.Data {
 	obj, err := s.s3.Get(ctx, s.bucket, s.key, "")
 	if err != nil {
 		return nil
@@ -140,7 +140,7 @@ func (s *State) snapshotHolen(ctx context.Context) *core.Data {
 	return d.Normalize()
 }
 
-func (s *State) lokalLesen() *core.Data {
+func (s *State) readLocal() *core.Data {
 	blob, err := os.ReadFile(s.localFile)
 	if err != nil {
 		return nil
@@ -152,8 +152,8 @@ func (s *State) lokalLesen() *core.Data {
 	return d.Normalize()
 }
 
-// opsAuflisten liefert die Schluessel aller abgelegten Ops, aelteste zuerst.
-func (s *State) opsAuflisten(ctx context.Context) []string {
+// listOps liefert die Schluessel aller abgelegten Ops, aelteste zuerst.
+func (s *State) listOps(ctx context.Context) []string {
 	objs, err := s.s3.List(ctx, s.bucket, s.opsPrefix)
 	if err != nil {
 		return nil
@@ -166,8 +166,8 @@ func (s *State) opsAuflisten(ctx context.Context) []string {
 	return keys
 }
 
-// opsHolen laedt die Op-Objekte nebenlaeufig; die Reihenfolge bleibt die der Schluessel.
-func (s *State) opsHolen(ctx context.Context, keys []string) [][]core.Op {
+// fetchOps laedt die Op-Objekte nebenlaeufig; die Reihenfolge bleibt die der Schluessel.
+func (s *State) fetchOps(ctx context.Context, keys []string) [][]core.Op {
 	out := make([][]core.Op, len(keys))
 	if len(keys) == 0 {
 		return out
@@ -199,39 +199,39 @@ func (s *State) opsHolen(ctx context.Context, keys []string) [][]core.Op {
 
 // Load holt Snapshot und Ops und baut daraus den aktuellen Stand.
 func (s *State) Load(ctx context.Context) {
-	lokal := s.lokalLesen()
-	snap := s.snapshotHolen(ctx)
+	local := s.readLocal()
+	snap := s.fetchSnapshot(ctx)
 
-	var basis *core.Data
+	var base *core.Data
 	var upto string
 	if snap != nil {
-		basis, upto = snap, snap.Upto
-		if lokal != nil {
-			core.MergeMissing(basis, lokal) // offline Gemachtes nicht verlieren
+		base, upto = snap, snap.Upto
+		if local != nil {
+			core.MergeMissing(base, local) // offline Gemachtes nicht verlieren
 		}
-	} else if lokal != nil {
-		basis = lokal
+	} else if local != nil {
+		base = local
 	} else {
-		basis = core.NewData()
+		base = core.NewData()
 	}
-	basis.Upto = ""
-	basis.Normalize()
+	base.Upto = ""
+	base.Normalize()
 
-	schnitt := len(s.opsPrefix)
+	cut := len(s.opsPrefix)
 	var open []string
-	for _, k := range s.opsAuflisten(ctx) {
-		if len(k) > schnitt && k[schnitt:] > upto {
+	for _, k := range s.listOps(ctx) {
+		if len(k) > cut && k[cut:] > upto {
 			open = append(open, k)
 		}
 	}
-	for _, ops := range s.opsHolen(ctx, open) {
+	for _, ops := range s.fetchOps(ctx, open) {
 		for _, op := range ops {
-			core.Apply(basis, op)
+			core.Apply(base, op)
 		}
 	}
 
 	s.mu.Lock()
-	s.data, s.upto, s.openOps = basis, upto, len(open)
+	s.data, s.upto, s.openOps = base, upto, len(open)
 	for _, op := range s.pending { // eigene offene Aenderungen erneut drauf
 		core.Apply(s.data, op)
 	}
@@ -250,10 +250,10 @@ func (s *State) Load(ctx context.Context) {
 func (s *State) opName() string {
 	s.seq++
 	return fmt.Sprintf("%s-%s-%04d.json",
-		s.Now().UTC().Format("20060102T150405.000000"), s.instanz, s.seq)
+		s.Now().UTC().Format("20060102T150405.000000"), s.instance, s.seq)
 }
 
-func (s *State) lokalSchreiben(payload []byte) {
+func (s *State) writeLocal(payload []byte) {
 	if s.localFile == "" {
 		return
 	}
@@ -288,7 +288,7 @@ func (s *State) Save(ctx context.Context) error {
 	ops := s.pending
 	s.pending = nil
 	payload, _ := json.Marshal(s.data)
-	s.lokalSchreiben(payload)
+	s.writeLocal(payload)
 	if len(ops) == 0 {
 		s.dirty = false
 		s.mu.Unlock()
@@ -311,10 +311,10 @@ func (s *State) Save(ctx context.Context) error {
 	s.mu.Lock()
 	s.remoteOK, s.dirty = true, false
 	s.openOps++
-	faellig := s.openOps >= CompactAfter
+	due := s.openOps >= CompactAfter
 	s.mu.Unlock()
 
-	if faellig {
+	if due {
 		s.Load(ctx) // holt fremde Ops mit dazu und fasst zusammen
 	}
 	return nil
@@ -330,18 +330,18 @@ func (s *State) Compact(ctx context.Context, merged []string) {
 	if len(merged) == 0 {
 		return
 	}
-	schnitt := len(s.opsPrefix)
+	cut := len(s.opsPrefix)
 	s.mu.Lock()
-	kopie := *s.data
-	kopie.Upto = merged[len(merged)-1][schnitt:]
-	payload, _ := json.Marshal(&kopie)
+	clone := *s.data
+	clone.Upto = merged[len(merged)-1][cut:]
+	payload, _ := json.Marshal(&clone)
 	s.mu.Unlock()
 
 	if err := s.s3.Put(ctx, s.bucket, s.key, payload, "application/json"); err != nil {
 		return // bleibt eben liegen, beim naechsten Mal wieder
 	}
 	s.mu.Lock()
-	s.upto, s.openOps = kopie.Upto, 0
+	s.upto, s.openOps = clone.Upto, 0
 	s.mu.Unlock()
 
 	sem := make(chan struct{}, s.Workers)
@@ -368,9 +368,9 @@ func (s *State) Batch(ctx context.Context, fn func() error) error {
 
 	s.mu.Lock()
 	s.defers--
-	spuelen := s.defers == 0 && s.dirty
+	flush := s.defers == 0 && s.dirty
 	s.mu.Unlock()
-	if spuelen {
+	if flush {
 		if e := s.Save(ctx); err == nil {
 			err = e
 		}

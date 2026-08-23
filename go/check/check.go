@@ -25,12 +25,12 @@ type Item struct {
 type Environment interface {
 	store.S3
 	Buckets(ctx context.Context) ([]string, error)
-	LifecycleTage(ctx context.Context, bucket string) int
+	LifecycleDays(ctx context.Context, bucket string) int
 }
 
 // SESChecker reports whether a sender address is verified in SES.
 type SESChecker interface {
-	Verifiziert(ctx context.Context, address, domain string) ([]string, error)
+	Verified(ctx context.Context, address, domain string) ([]string, error)
 }
 
 // Run walks the list. It creates a test object and deletes it again - the only
@@ -47,14 +47,14 @@ func Run(ctx context.Context, s3 store.S3, kms store.KMS, ses SESChecker,
 			Hint: listHint(prefix, cat)})
 		return items
 	}
-	var beispiel string
+	var example string
 	for _, o := range objs {
 		if o.Size > 0 && !isInternal(o.Key, prefix) {
-			beispiel = o.Key
+			example = o.Key
 			break
 		}
 	}
-	if beispiel != "" {
+	if example != "" {
 		add(Item{Name: cat.T("check.listBucket"), OK: true,
 			Detail: cat.Tf("check.listBucket.found", len(objs), display(prefix))})
 	} else {
@@ -64,18 +64,18 @@ func Run(ctx context.Context, s3 store.S3, kms store.KMS, ses SESChecker,
 	}
 
 	// 2. Read a real message - and see how it is encrypted while doing so
-	if beispiel == "" {
+	if example == "" {
 		add(Item{Name: cat.T("check.readMail"), OK: true, Detail: cat.T("check.skipped.noMail"),
 			Skipped: true})
 		add(Item{Name: cat.T("check.encryption"), OK: true, Detail: cat.T("check.skipped.noMail"),
 			Skipped: true})
 	} else {
-		obj, err := s3.Get(ctx, bucket, beispiel, "bytes=0-2047")
+		obj, err := s3.Get(ctx, bucket, example, "bytes=0-2047")
 		if err != nil {
 			add(Item{Name: cat.T("check.readMail"), Detail: short(err), Hint: cat.T("check.readMail.hint")})
 		} else {
-			add(Item{Name: cat.T("check.readMail"), OK: true, Detail: baseName(beispiel)})
-			add(encryption(ctx, s3, kms, bucket, beispiel, obj, cat))
+			add(Item{Name: cat.T("check.readMail"), OK: true, Detail: baseName(example)})
+			add(encryption(ctx, s3, kms, bucket, example, obj, cat))
 		}
 	}
 
@@ -115,13 +115,13 @@ func Run(ctx context.Context, s3 store.S3, kms store.KMS, ses SESChecker,
 		if i := strings.LastIndex(sender, "@"); i >= 0 {
 			domain = sender[i+1:]
 		}
-		gut, err := ses.Verifiziert(ctx, sender, domain)
+		good, err := ses.Verified(ctx, sender, domain)
 		switch {
 		case err != nil:
 			add(Item{Name: cat.T("check.sender"), Detail: short(err), Skipped: true,
 				Hint: cat.T("check.sender.noPermission")})
-		case len(gut) > 0:
-			add(Item{Name: cat.T("check.sender"), OK: true, Detail: cat.Tf("check.sender.verified", strings.Join(gut, ", "))})
+		case len(good) > 0:
+			add(Item{Name: cat.T("check.sender"), OK: true, Detail: cat.Tf("check.sender.verified", strings.Join(good, ", "))})
 		default:
 			add(Item{Name: cat.T("check.sender"), Detail: cat.Tf("check.sender.unverified", sender),
 				Hint: cat.T("check.sender.hint")})
@@ -135,9 +135,9 @@ func encryption(ctx context.Context, s3 store.S3, kms store.KMS,
 	bucket, key string, obj store.Object, cat i18n.Catalog) Item {
 	if store.IsEnvelope(obj.Meta) {
 		// A partial fetch cannot be decrypted - so fetch the whole thing.
-		voll, err := s3.Get(ctx, bucket, key, "")
+		obj, err := s3.Get(ctx, bucket, key, "")
 		if err == nil {
-			_, err = store.Decrypt(voll.Body, voll.Meta, kms)
+			_, err = store.Decrypt(obj.Body, obj.Meta, kms)
 		}
 		if err != nil {
 			return Item{Name: cat.T("check.encryption"),

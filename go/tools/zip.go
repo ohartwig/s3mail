@@ -26,7 +26,7 @@ func main() {
 	}
 	target, err := os.Create(os.Args[1])
 	if err != nil {
-		abbruch(err)
+		fail(err)
 	}
 	defer target.Close()
 
@@ -34,37 +34,37 @@ func main() {
 	for _, name := range os.Args[2:] {
 		info, err := os.Stat(name)
 		if err != nil {
-			abbruch(err)
+			fail(err)
 		}
 		if info.IsDir() {
 			// A macOS app bundle is a directory. The structure below it has to
 			// survive, or it stops being a bundle and becomes a folder.
-			wurzel := filepath.Dir(strings.TrimSuffix(name, string(filepath.Separator)))
+			base := filepath.Dir(strings.TrimSuffix(name, string(filepath.Separator)))
 			err = filepath.WalkDir(name, func(path string, d os.DirEntry, err error) error {
 				if err != nil || d.IsDir() {
 					return err
 				}
-				rel, err := filepath.Rel(wurzel, path)
+				rel, err := filepath.Rel(base, path)
 				if err != nil {
 					return err
 				}
 				return write(w, path, filepath.ToSlash(rel), d)
 			})
 			if err != nil {
-				abbruch(err)
+				fail(err)
 			}
 			continue
 		}
 		entry, err := os.Lstat(name)
 		if err != nil {
-			abbruch(err)
+			fail(err)
 		}
-		if err := write(w, name, filepath.Base(name), fsEintrag{entry}); err != nil {
-			abbruch(err)
+		if err := write(w, name, filepath.Base(name), fsEntry{entry}); err != nil {
+			fail(err)
 		}
 	}
 	if err := w.Close(); err != nil {
-		abbruch(err)
+		fail(err)
 	}
 }
 
@@ -82,11 +82,11 @@ func write(w *zip.Writer, path, name string, d os.DirEntry) error {
 	header.Method = zip.Deflate
 	// Whatever was executable stays executable - and a bundle's launcher has to
 	// be, or the double click starts nothing.
-	modus := info.Mode()
-	if modus&0o111 != 0 || filepath.Ext(name) == "" {
-		modus |= 0o111
+	mode := info.Mode()
+	if mode&0o111 != 0 || filepath.Ext(name) == "" {
+		mode |= 0o111
 	}
-	header.SetMode(modus)
+	header.SetMode(mode)
 	part, err := w.CreateHeader(header)
 	if err != nil {
 		return err
@@ -100,14 +100,14 @@ func write(w *zip.Writer, path, name string, d os.DirEntry) error {
 	return err
 }
 
-type fsEintrag struct{ os.FileInfo }
+type fsEntry struct{ os.FileInfo }
 
-func (f fsEintrag) Name() string               { return f.FileInfo.Name() }
-func (f fsEintrag) IsDir() bool                { return f.FileInfo.IsDir() }
-func (f fsEintrag) Type() os.FileMode          { return f.FileInfo.Mode().Type() }
-func (f fsEintrag) Info() (os.FileInfo, error) { return f.FileInfo, nil }
+func (f fsEntry) Name() string               { return f.FileInfo.Name() }
+func (f fsEntry) IsDir() bool                { return f.FileInfo.IsDir() }
+func (f fsEntry) Type() os.FileMode          { return f.FileInfo.Mode().Type() }
+func (f fsEntry) Info() (os.FileInfo, error) { return f.FileInfo, nil }
 
-func abbruch(err error) {
+func fail(err error) {
 	fmt.Fprintln(os.Stderr, "zippen:", err)
 	os.Exit(1)
 }

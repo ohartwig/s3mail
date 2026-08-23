@@ -22,13 +22,13 @@ func equal(a, b string) bool {
 	return len(a) > 0 && subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }
 
-// TokenDateiSchreiben legt die Startadresse in einer nur fuer den Benutzer
+// WriteTokenFile legt die Startadresse in einer nur fuer den Benutzer
 // lesbaren Datei ab.
 //
 // Unter Windows startet s3mail per Doppelklick, und wer das Konsolenfenster
 // schliesst, kommt an die Adresse nicht mehr heran - der Server laeuft dann noch,
 // ist aber unerreichbar. Deshalb steht sie zusaetzlich hier.
-func TokenDateiSchreiben(dir, url string) (string, error) {
+func WriteTokenFile(dir, url string) (string, error) {
 	if dir == "" {
 		return "", nil
 	}
@@ -44,9 +44,9 @@ func TokenDateiSchreiben(dir, url string) (string, error) {
 	return path, nil
 }
 
-// TokenDateiEntfernen raeumt beim Beenden auf - eine abgelaufene Adresse in einer
+// RemoveTokenFile raeumt beim Beenden auf - eine abgelaufene Adresse in einer
 // Datei stiftet nur Verwirrung.
-func TokenDateiEntfernen(dir string) {
+func RemoveTokenFile(dir string) {
 	if dir != "" {
 		_ = os.Remove(filepath.Join(dir, "adresse.txt"))
 	}

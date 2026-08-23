@@ -1,6 +1,6 @@
-// Package mimeparse portiert die MIME-Schicht von s3mail nach Go - der Teil, an
-// dem eine Portierung scheitern wuerde, wenn sie scheitert. Gemessen wird gegen
-// die Ausgabe des bestehenden Python-Parsers (testdata/expected.json).
+// Package mimeparse is s3mail's MIME layer - the part a port would founder on
+// if it foundered anywhere. It is measured against the output of the previous
+// Python parser (testdata/expected.json).
 package mimeparse
 
 import (
@@ -19,7 +19,7 @@ import (
 	_ "github.com/emersion/go-message/charset" // registriert iso-8859-*, windows-125*, …
 )
 
-// Summary ist das, was s3mail pro Mail in den Index legt.
+// Summary is what s3mail puts into the index for each message.
 type Summary struct {
 	From        string       `json:"from"`
 	To          string       `json:"to"`
@@ -38,7 +38,7 @@ type Attachment struct {
 	CType string `json:"ctype"`
 }
 
-// Dec entspricht dem Python-dec(): MIME-kodierte Header lesbar machen.
+// Dec matches Python's dec(): make MIME-encoded headers readable.
 func Dec(value string) string {
 	if value == "" {
 		return ""
@@ -51,11 +51,11 @@ func Dec(value string) string {
 	return repairLatin(out)
 }
 
-// repairLatin rettet Header, die rohe 8-Bit-Zeichen enthalten, statt sie sauber
-// nach RFC 2047 zu kodieren - Outlook und aeltere Serverketten tun das staendig.
-// Ist das Ergebnis kein gueltiges UTF-8, war es mit grosser Wahrscheinlichkeit
-// windows-1252. Python wirft an dieser Stelle Ersatzzeichen ein, der Text ist
-// dann unwiederbringlich weg.
+// repairLatin rescues headers that carry raw 8-bit characters instead of
+// encoding them properly per RFC 2047 - Outlook and older server chains do this
+// constantly. If the result is not valid UTF-8, it was most likely
+// windows-1252. Python inserts replacement characters at this point, and the
+// text is then gone for good.
 func repairLatin(s string) string {
 	if utf8.ValidString(s) {
 		return s
@@ -66,7 +66,7 @@ func repairLatin(s string) string {
 	return strings.ToValidUTF8(s, "\ufffd")
 }
 
-// AddrStr entspricht addr_str(): "Name <adresse>, …" als ein lesbarer String.
+// AddrStr matches addr_str(): "Name <address>, …" as one readable string.
 func AddrStr(value string) string {
 	if strings.TrimSpace(value) == "" {
 		return ""
@@ -87,7 +87,7 @@ func AddrStr(value string) string {
 	return strings.Join(parts, ", ")
 }
 
-// ParseDate entspricht parse_date(): Datum aus dem Header, sonst der Rueckfallwert.
+// ParseDate matches parse_date(): the date from the header, else the fallback.
 func ParseDate(header string, fallback time.Time) time.Time {
 	if t, err := mail.ParseDate(header); err == nil {
 		return t
@@ -110,51 +110,51 @@ func StripHTML(raw string) string {
 	return strings.TrimSpace(spaceRe.ReplaceAllString(s, " "))
 }
 
-// Rolle eines Parts im Dokument.
+// role of a part within the document.
 type role int
 
 const (
-	rolleText   role = iota // Fliesstext oder HTML
-	rolleAnhang             // taucht in der Anhangsliste auf
-	rolleInline             // Bild, auf das das HTML per cid: zeigt - beides nicht
+	roleText       role = iota // body text or HTML
+	roleAttachment             // shows up in the attachment list
+	roleInline                 // image the HTML points at by cid: - neither of the two
 )
 
 func roleOf(h message.Header) role {
 	disp, dparams, _ := h.ContentDisposition()
 	ctype, cparams, _ := h.ContentType()
-	_, hatDateiname := dparams["filename"]
+	_, hasFilename := dparams["filename"]
 	if _, ok := cparams["name"]; ok {
-		hatDateiname = true
+		hasFilename = true
 	}
 
-	// Ein Bild, auf das das HTML per cid: verweist, gehoert weder in die
-	// Anhangsliste noch in den Vorschautext. Python zaehlt es als Anhang - jede
-	// Signatur mit Logo erzeugt dort eine Bueroklammer, die keine ist.
+	// An image the HTML refers to by cid: belongs neither in the attachment
+	// list nor in the preview text. Python counts it as an attachment - every
+	// signature with a logo grows a paperclip there that is not one.
 	if h.Get("Content-Id") != "" && !strings.HasPrefix(ctype, "text/") && disp != "attachment" {
-		return rolleInline
+		return roleInline
 	}
 	if disp == "attachment" {
-		return rolleAnhang
+		return roleAttachment
 	}
 	if strings.HasPrefix(ctype, "text/") {
-		return rolleText
+		return roleText
 	}
-	if hatDateiname {
-		return rolleAnhang
+	if hasFilename {
+		return roleAttachment
 	}
-	// Binaerteil ohne Namen und ohne Content-ID: nicht in die Vorschau kippen
+	// A binary part with no name and no Content-ID: keep it out of the preview
 	if !strings.HasPrefix(ctype, "text/") && ctype != "" {
-		return rolleAnhang
+		return roleAttachment
 	}
-	return rolleText
+	return roleText
 }
 
-// Summarize liest eine rohe Mail und baut daraus den Indexeintrag.
+// Summarize reads a raw message and builds the index entry from it.
 func Summarize(raw []byte, fallback time.Time) Summary {
 	s := Summary{Attachments: []Attachment{}}
 	ent, err := message.Read(strings.NewReader(string(raw)))
 	if ent == nil {
-		s.Preview = rohvorschau(raw) // gar kein MIME - dann eben der Rohtext
+		s.Preview = rawPreview(raw) // gar kein MIME - dann eben der Rohtext
 		return s
 	}
 	_ = err // ein Header-Fehler kippt die Mail nicht, der Rest ist oft brauchbar
@@ -180,15 +180,15 @@ func Summarize(raw []byte, fallback time.Time) Summary {
 	}
 	s.HasHTML = strings.TrimSpace(html.String()) != ""
 
-	// Was nicht als MIME durchgeht, ist trotzdem eine Datei im Postfach - dann
-	// lieber den Rohtext zeigen als eine leere Zeile.
+	// Something that does not parse as MIME is still a file in the mailbox -
+	// better to show the raw text than an empty line.
 	if s.Preview == "" && s.Subject == "" && len(s.Attachments) == 0 {
-		s.Preview = rohvorschau(raw)
+		s.Preview = rawPreview(raw)
 	}
 	return s
 }
 
-func rohvorschau(raw []byte) string {
+func rawPreview(raw []byte) string {
 	out := strings.Join(strings.Fields(repairLatin(string(raw))), " ")
 	if r := []rune(out); len(r) > 160 {
 		out = string(r[:160])
@@ -210,9 +210,9 @@ func walk(ent *message.Entity, idx *int, text, html *strings.Builder, s *Summary
 	i := *idx
 	*idx++
 	switch roleOf(ent.Header) {
-	case rolleInline:
+	case roleInline:
 		return
-	case rolleAnhang:
+	case roleAttachment:
 		_, dparams, _ := ent.Header.ContentDisposition()
 		name := dparams["filename"]
 		if name == "" {
@@ -236,41 +236,41 @@ func walk(ent *message.Entity, idx *int, text, html *strings.Builder, s *Summary
 	}
 }
 
-// Full ist die ganze Mail fuer die Detailansicht - mit Fliesstext, HTML und den
-// Anhaengen samt Inhalt.
+// Full is the whole message for the detail view - body text, HTML and the
+// attachments including their content.
 type Full struct {
-	Subject    string   `json:"subject"`
-	From       string   `json:"from"`
-	ReplyTo    string   `json:"reply_to"`
-	To         string   `json:"to"`
-	Cc         string   `json:"cc"`
-	Date       string   `json:"date"`
-	MessageID  string   `json:"message_id"`
-	References string   `json:"references"`
-	Spam       bool     `json:"spam"`
-	Virus      bool     `json:"virus"`
-	Text       string   `json:"text"`
-	HTML       string   `json:"html"`
-	Anhaenge   []Anhang `json:"attachments"`
+	Subject     string           `json:"subject"`
+	From        string           `json:"from"`
+	ReplyTo     string           `json:"reply_to"`
+	To          string           `json:"to"`
+	Cc          string           `json:"cc"`
+	Date        string           `json:"date"`
+	MessageID   string           `json:"message_id"`
+	References  string           `json:"references"`
+	Spam        bool             `json:"spam"`
+	Virus       bool             `json:"virus"`
+	Text        string           `json:"text"`
+	HTML        string           `json:"html"`
+	Attachments []FullAttachment `json:"attachments"`
 }
 
-// Anhang traegt den Inhalt mit, damit die HTTP-Schicht ihn ausliefern kann, ohne
-// die Mail ein zweites Mal zu parsen.
-type Anhang struct {
+// Attachment carries its content along, so the HTTP layer can serve it without
+// parsing the message a second time.
+type FullAttachment struct {
 	Index       int    `json:"index"`
 	Filename    string `json:"filename"`
 	ContentType string `json:"content_type"`
 	Size        int    `json:"size"`
-	Inhalt      []byte `json:"-"`
+	Content     []byte `json:"-"`
 }
 
-// Read parst eine ganze Mail.
+// Read parses a whole message.
 func Read(raw []byte, fallback time.Time) Full {
-	v := Full{Anhaenge: []Anhang{}}
+	v := Full{Attachments: []FullAttachment{}}
 	ent, err := message.Read(strings.NewReader(string(raw)))
 	if ent == nil {
 		v.Subject = "(nicht lesbar)"
-		v.Text = rohvorschau(raw)
+		v.Text = rawPreview(raw)
 		return v
 	}
 	_ = err
@@ -291,7 +291,7 @@ func Read(raw []byte, fallback time.Time) Full {
 
 	var text, html []string
 	idx := 0
-	vollWalk(ent, &idx, &text, &html, &v)
+	fullWalk(ent, &idx, &text, &html, &v)
 
 	v.HTML = strings.Join(html, "\n<hr>\n")
 	v.Text = strings.Join(text, "\n\n")
@@ -301,23 +301,23 @@ func Read(raw []byte, fallback time.Time) Full {
 	return v
 }
 
-func vollWalk(ent *message.Entity, idx *int, text, html *[]string, v *Full) {
+func fullWalk(ent *message.Entity, idx *int, text, html *[]string, v *Full) {
 	if mr := ent.MultipartReader(); mr != nil {
 		for {
 			part, err := mr.NextPart()
 			if err != nil {
 				return
 			}
-			vollWalk(part, idx, text, html, v)
+			fullWalk(part, idx, text, html, v)
 		}
 	}
 	ctype, cparams, _ := ent.Header.ContentType()
 	i := *idx
 	*idx++
 	switch roleOf(ent.Header) {
-	case rolleInline:
+	case roleInline:
 		return
-	case rolleAnhang:
+	case roleAttachment:
 		content, _ := io.ReadAll(ent.Body)
 		_, dparams, _ := ent.Header.ContentDisposition()
 		name := dparams["filename"]
@@ -327,8 +327,8 @@ func vollWalk(ent *message.Entity, idx *int, text, html *[]string, v *Full) {
 		if name == "" {
 			name = fmt.Sprintf("anhang-%d", i)
 		}
-		v.Anhaenge = append(v.Anhaenge, Anhang{Index: i, Filename: Dec(name),
-			ContentType: ctype, Size: len(content), Inhalt: content})
+		v.Attachments = append(v.Attachments, FullAttachment{Index: i, Filename: Dec(name),
+			ContentType: ctype, Size: len(content), Content: content})
 		return
 	}
 	body, err := io.ReadAll(ent.Body)

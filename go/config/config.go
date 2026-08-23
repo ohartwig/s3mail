@@ -14,11 +14,11 @@ import (
 
 // Config is what config.json holds.
 type Config struct {
-	Profil      string `json:"profile"`
+	Profile     string `json:"profile"`
 	Region      string `json:"region"`
 	Bucket      string `json:"bucket"`
 	Prefix      string `json:"prefix"`
-	Absender    string `json:"from"`
+	From        string `json:"from"`
 	AllowDelete bool   `json:"allow_delete"`
 	Port        int    `json:"port"`
 	Host        string `json:"host"`
@@ -26,7 +26,7 @@ type Config struct {
 	// Language of the interface. Empty means: take the browser's - for a
 	// program running next to the browser that is a better default than a
 	// guessed one.
-	Sprache string `json:"language"`
+	Language string `json:"language"`
 }
 
 func Defaults() Config {
@@ -40,11 +40,11 @@ func Dir() string {
 	if v := os.Getenv("S3MAIL_CONFIG_DIR"); v != "" {
 		return v
 	}
-	basis, err := os.UserConfigDir()
+	base, err := os.UserConfigDir()
 	if err != nil {
-		basis = "."
+		base = "."
 	}
-	return filepath.Join(basis, "s3mail")
+	return filepath.Join(base, "s3mail")
 }
 
 // CacheDir is where the index lives - data whose loss costs nothing but time.
@@ -52,11 +52,11 @@ func CacheDir() string {
 	if v := os.Getenv("S3MAIL_CACHE_DIR"); v != "" {
 		return v
 	}
-	basis, err := os.UserCacheDir()
+	base, err := os.UserCacheDir()
 	if err != nil {
-		basis = "."
+		base = "."
 	}
-	return filepath.Join(basis, "s3mail")
+	return filepath.Join(base, "s3mail")
 }
 
 func File() string { return filepath.Join(Dir(), "config.json") }
@@ -123,18 +123,18 @@ func AWSDir() string {
 	if v := os.Getenv("S3MAIL_AWS_DIR"); v != "" {
 		return v
 	}
-	heim, err := os.UserHomeDir()
+	home, err := os.UserHomeDir()
 	if err != nil {
 		return ".aws"
 	}
-	return filepath.Join(heim, ".aws")
+	return filepath.Join(home, ".aws")
 }
 
 // Profiles reads the profile names from ~/.aws/credentials and ~/.aws/config.
 func Profiles() []string {
 	seen := map[string]bool{}
 	var out []string
-	fuegeHinzu := func(name string) {
+	add := func(name string) {
 		if name != "" && !seen[name] {
 			seen[name] = true
 			out = append(out, name)
@@ -157,7 +157,7 @@ func Profiles() []string {
 			if strings.HasPrefix(name, "sso-session ") || strings.HasPrefix(name, "services ") {
 				continue // das sind keine Profile
 			}
-			fuegeHinzu(name)
+			add(name)
 		}
 	}
 	return out
@@ -212,7 +212,7 @@ func iniSet(path, section string, values map[string]string) error {
 	}
 	header := "[" + section + "]"
 
-	start, ende := -1, len(lines)
+	start, end := -1, len(lines)
 	for i, z := range lines {
 		t := strings.TrimSpace(z)
 		if t == header {
@@ -220,7 +220,7 @@ func iniSet(path, section string, values map[string]string) error {
 			continue
 		}
 		if start >= 0 && strings.HasPrefix(t, "[") {
-			ende = i
+			end = i
 			break
 		}
 	}
@@ -233,26 +233,26 @@ func iniSet(path, section string, values map[string]string) error {
 			lines = append(lines, fmt.Sprintf("%s = %s", k, v))
 		}
 	} else {
-		block := append([]string{}, lines[start+1:ende]...)
+		block := append([]string{}, lines[start+1:end]...)
 		for k, v := range values {
-			ersetzt := false
+			replaced := false
 			for i, z := range block {
 				if strings.HasPrefix(strings.TrimSpace(z), k) &&
 					strings.Contains(z, "=") &&
 					strings.TrimSpace(strings.SplitN(z, "=", 2)[0]) == k {
 					block[i] = fmt.Sprintf("%s = %s", k, v)
-					ersetzt = true
+					replaced = true
 					break
 				}
 			}
-			if !ersetzt {
+			if !replaced {
 				block = append(block, fmt.Sprintf("%s = %s", k, v))
 			}
 		}
-		neu := append([]string{}, lines[:start+1]...)
-		neu = append(neu, block...)
-		neu = append(neu, lines[ende:]...)
-		lines = neu
+		fresh := append([]string{}, lines[:start+1]...)
+		fresh = append(fresh, block...)
+		fresh = append(fresh, lines[end:]...)
+		lines = fresh
 	}
 	return os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o600)
 }

@@ -18,10 +18,10 @@ func TestTokenPageIsTranslated(t *testing.T) {
 		"en": "Token missing",
 		"es": "Falta el token",
 	}
-	for code, satz := range fuer {
-		out := page("token", SeiteToken, code, nil)
-		if !strings.Contains(out, satz) {
-			t.Errorf("%s: %q fehlt in der Seite", code, satz)
+	for code, phrase := range fuer {
+		out := page("token", PageToken, code, nil)
+		if !strings.Contains(out, phrase) {
+			t.Errorf("%s: %q fehlt in der Seite", code, phrase)
 		}
 		if !strings.Contains(out, `lang="`+code+`"`) {
 			t.Errorf("%s: lang-Attribut nicht gesetzt", code)
@@ -32,12 +32,12 @@ func TestTokenPageIsTranslated(t *testing.T) {
 // Ein Sprachwechsel darf nicht mehr aendern als die Sprache: derselbe Aufbau,
 // dieselben Ankerpunkte fuer das Skript.
 func TestSwitchingLanguageKeepsTheMarkup(t *testing.T) {
-	de := page("inbox", SeitePostfach, "de", map[string]any{"bucket": "b"})
-	es := page("inbox", SeitePostfach, "es", map[string]any{"bucket": "b"})
+	de := page("inbox", PageMailbox, "de", map[string]any{"bucket": "b"})
+	es := page("inbox", PageMailbox, "es", map[string]any{"bucket": "b"})
 
-	for _, anker := range []string{`id="side"`, `id="list"`, `id="view"`, `id="q"`} {
-		if !strings.Contains(de, anker) || !strings.Contains(es, anker) {
-			t.Errorf("%s fehlt in einer der beiden Fassungen", anker)
+	for _, anchor := range []string{`id="side"`, `id="list"`, `id="view"`, `id="q"`} {
+		if !strings.Contains(de, anchor) || !strings.Contains(es, anchor) {
+			t.Errorf("%s fehlt in einer der beiden Fassungen", anchor)
 		}
 	}
 	if de == es {
@@ -48,7 +48,7 @@ func TestSwitchingLanguageKeepsTheMarkup(t *testing.T) {
 // Der Katalog muss auch im Skript ankommen: die Saetze, die beim Klicken
 // entstehen, kann keine Vorlage vorher erzeugen.
 func TestCatalogReachesTheScript(t *testing.T) {
-	out := page("inbox", SeitePostfach, "es", map[string]any{"bucket": "b"})
+	out := page("inbox", PageMailbox, "es", map[string]any{"bucket": "b"})
 
 	if strings.Contains(out, "__I18N__") {
 		t.Error("__I18N__ steht noch als Platzhalter in der Seite")
@@ -75,10 +75,10 @@ func TestChoiceBeatsBrowser(t *testing.T) {
 	}
 
 	// Ohne alles entscheidet der Browser.
-	leer := NewServer(nil, testToken, "127.0.0.1", 0, nil)
+	empty := NewServer(nil, testToken, "127.0.0.1", 0, nil)
 	r2 := httptest.NewRequest("GET", "/", nil)
 	r2.Header.Set("Accept-Language", "es-ES,es;q=0.9,en;q=0.4")
-	if got := leer.language(r2); got != "es" {
+	if got := empty.language(r2); got != "es" {
 		t.Errorf("Browser wird nicht gehoert: %q", got)
 	}
 }
@@ -88,7 +88,7 @@ func TestLanguageRouteSetsACookie(t *testing.T) {
 	srv.WithWizard(nil)
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
-	srv.Port = portVon(ts.URL)
+	srv.Port = portOf(ts.URL)
 
 	client := ts.Client()
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
@@ -101,14 +101,14 @@ func TestLanguageRouteSetsACookie(t *testing.T) {
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Fatalf("Status %d", resp.StatusCode)
 	}
-	var gesetzt string
+	var set string
 	for _, c := range resp.Cookies() {
 		if c.Name == "s3mail_lang" {
-			gesetzt = c.Value
+			set = c.Value
 		}
 	}
-	if gesetzt != "es" {
-		t.Errorf("Cookie = %q", gesetzt)
+	if set != "es" {
+		t.Errorf("Cookie = %q", set)
 	}
 
 	// Eine Sprache, die es nicht gibt, darf nicht als Wunsch haengenbleiben.
@@ -127,7 +127,7 @@ func TestLanguageRouteSetsACookie(t *testing.T) {
 // opens that dialog in that language ever sees it.
 func TestPagesUseOnlyKnownKeys(t *testing.T) {
 	keys := map[string]bool{}
-	for _, page := range []string{SeitePostfach, SeiteAssistent, SeiteToken} {
+	for _, page := range []string{PageMailbox, PageWizard, PageToken} {
 		for _, m := range regexp.MustCompile(`T\["([^"]+)"\]`).FindAllStringSubmatch(page, -1) {
 			keys[m[1]] = true
 		}

@@ -10,19 +10,19 @@ import (
 // Schreibreihenfolge entsprechen, sonst spielt ein Rechner die Aenderungen eines
 // anderen in der falschen Reihenfolge ab.
 func TestOpNamesSort(t *testing.T) {
-	s := &State{instanz: "aaaaaaaaaaaa"}
+	s := &State{instance: "aaaaaaaaaaaa"}
 	n := 0
 	s.Now = func() time.Time { n++; return time.Date(2026, 8, 21, 10, 0, n, 0, time.UTC) }
-	var vorher string
+	var before string
 	for i := 0; i < 5; i++ {
 		name := s.opName()
 		if !strings.HasSuffix(name, ".json") {
 			t.Fatalf("%q", name)
 		}
-		if name <= vorher {
-			t.Fatalf("nicht aufsteigend: %q nach %q", name, vorher)
+		if name <= before {
+			t.Fatalf("nicht aufsteigend: %q nach %q", name, before)
 		}
-		vorher = name
+		before = name
 	}
 }
 

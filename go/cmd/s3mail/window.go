@@ -32,18 +32,18 @@ func appModeBrowser() []string {
 	case "darwin":
 		return []string{"Google Chrome", "Microsoft Edge", "Brave Browser", "Chromium"}
 	case "windows":
-		var pfade []string
-		for _, basis := range []string{os.Getenv("ProgramFiles"),
+		var paths []string
+		for _, base := range []string{os.Getenv("ProgramFiles"),
 			os.Getenv("ProgramFiles(x86)"), os.Getenv("LocalAppData")} {
-			if basis == "" {
+			if base == "" {
 				continue
 			}
-			pfade = append(pfade,
-				filepath.Join(basis, `Google\Chrome\Application\chrome.exe`),
-				filepath.Join(basis, `Microsoft\Edge\Application\msedge.exe`),
-				filepath.Join(basis, `BraveSoftware\Brave-Browser\Application\brave.exe`))
+			paths = append(paths,
+				filepath.Join(base, `Google\Chrome\Application\chrome.exe`),
+				filepath.Join(base, `Microsoft\Edge\Application\msedge.exe`),
+				filepath.Join(base, `BraveSoftware\Brave-Browser\Application\brave.exe`))
 		}
-		return pfade
+		return paths
 	default:
 		return []string{"google-chrome", "chromium", "chromium-browser",
 			"microsoft-edge", "brave-browser"}
@@ -65,8 +65,8 @@ func startAppMode(url string) bool {
 	if runtime.GOOS == "darwin" {
 		return startAppModeMac(url)
 	}
-	for _, kandidat := range appModeBrowser() {
-		path := kandidat
+	for _, candidate := range appModeBrowser() {
+		path := candidate
 		if !filepath.IsAbs(path) {
 			found, err := exec.LookPath(path)
 			if err != nil {

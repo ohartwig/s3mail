@@ -6,22 +6,23 @@ import (
 	"strings"
 )
 
-// Suchsyntax: freie Woerter, dazu Filter der Form feld:wert. Anfuehrungszeichen
-// halten Leerzeichen zusammen:
+// Search syntax: free words, plus filters of the form field:value. Quotes hold
+// spaces together. The field names exist in all three interface languages, so a
+// reader types what they see:
 //
-//	rechnung from:kunde@x.de subject:"Angebot" after:2026-01-01
-//	has:anhang is:ungelesen tag:wichtig in:archiv
+//	invoice from:customer@x.com subject:"quote" after:2026-01-01
+//	has:attachment is:unread tag:important in:archiv
 var (
 	tokenRe  = regexp.MustCompile(`\w+:"[^"]*"|\w+:\S+|"[^"]*"|\S+`)
 	filterRe = regexp.MustCompile(`(?i)^(from|von|de|to|an|para|subject|betreff|asunto|after|nach|desde|before|vor|hasta|has|hat|tiene|tag|etiqueta|is|ist|es|in|en)\s*:\s*"?([^"]*)"?$`)
 )
 
-type filter struct{ feld, value string }
+type filter struct{ field, value string }
 
-// Query ist eine geparste Suchanfrage.
+// Query is a parsed search request.
 type Query struct {
-	Begriffe []string
-	Filter   []filter
+	Terms  []string
+	Filter []filter
 }
 
 func ParseQuery(q string) Query {
@@ -33,44 +34,44 @@ func ParseQuery(q string) Query {
 			continue
 		}
 		if b := strings.ToLower(strings.Trim(token, `"`)); b != "" {
-			out.Begriffe = append(out.Begriffe, b)
+			out.Terms = append(out.Terms, b)
 		}
 	}
 	return out
 }
 
-// Matches prueft eine bereits dekorierte Mail gegen die Anfrage.
+// Matches checks an already decorated message against the query.
 func (q Query) Matches(m Message) bool {
 	hay := strings.ToLower(strings.Join([]string{
 		m.From, m.To, m.Cc, m.Subject, m.Snippet, m.Key,
 		strings.Join(m.Tags, " "),
 	}, " "))
-	for _, b := range q.Begriffe {
+	for _, b := range q.Terms {
 		if !strings.Contains(hay, b) {
 			return false
 		}
 	}
 	for _, f := range q.Filter {
-		if !passt(f, m) {
+		if !matches(f, m) {
 			return false
 		}
 	}
 	return true
 }
 
-func passt(f filter, m Message) bool {
-	hat := func(s string) bool { return strings.Contains(strings.ToLower(s), f.value) }
-	switch f.feld {
+func matches(f filter, m Message) bool {
+	has := func(s string) bool { return strings.Contains(strings.ToLower(s), f.value) }
+	switch f.field {
 	case "from", "von", "de":
-		return hat(m.From)
+		return has(m.From)
 	case "to", "an", "para":
-		return hat(m.To + m.Cc)
+		return has(m.To + m.Cc)
 	case "subject", "betreff", "asunto":
-		return hat(m.Subject)
+		return has(m.Subject)
 	case "after", "nach", "desde":
-		return datumsteil(m.Date) >= f.value
+		return datePart(m.Date) >= f.value
 	case "before", "vor", "hasta":
-		return datumsteil(m.Date) <= f.value
+		return datePart(m.Date) <= f.value
 	case "tag", "etiqueta":
 		for _, t := range m.Tags {
 			if strings.ToLower(t) == f.value {
@@ -109,17 +110,17 @@ func passt(f filter, m Message) bool {
 			return m.Star
 		}
 	}
-	return true // unbekannter Filter schraenkt nicht ein
+	return true // an unknown filter restricts nothing
 }
 
-func datumsteil(iso string) string {
+func datePart(iso string) string {
 	if len(iso) >= 10 {
 		return iso[:10]
 	}
 	return iso
 }
 
-// SearchOpts sind die Einschraenkungen, die nicht aus der Textanfrage kommen.
+// SearchOpts are the restrictions that do not come from the text query.
 type SearchOpts struct {
 	Folder     *string // nil = alle Ordner
 	Tag        string
@@ -127,22 +128,22 @@ type SearchOpts struct {
 	OnlyStar   bool
 }
 
-// Search filtert den Index und sortiert nach Datum, neueste zuerst.
+// Search filters the index and sorts by date, newest first.
 func Search(index []Message, d *Data, query string, o SearchOpts) []Message {
 	q := ParseQuery(query)
 	hits := make([]Message, 0, len(index))
-	for _, roh := range index {
-		if o.Folder != nil && roh.Folder != *o.Folder {
+	for _, raw := range index {
+		if o.Folder != nil && raw.Folder != *o.Folder {
 			continue
 		}
-		m := Decorate(roh, d)
+		m := Decorate(raw, d)
 		if o.OnlyUnread && m.Read {
 			continue
 		}
 		if o.OnlyStar && !m.Star {
 			continue
 		}
-		if o.Tag != "" && !enthaelt(m.Tags, o.Tag) {
+		if o.Tag != "" && !contains(m.Tags, o.Tag) {
 			continue
 		}
 		if q.Matches(m) {

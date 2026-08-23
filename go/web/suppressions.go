@@ -6,67 +6,67 @@ import (
 	"strings"
 )
 
-// Sperrliste ist der Ausschnitt der SES-Unterdrueckungsliste, den der Server
+// SuppressionList ist der Ausschnitt der SES-Unterdrueckungsliste, den der Server
 // braucht. Als Interface, damit die Tests ohne AWS auskommen.
-type Sperrliste interface {
-	Sperren(ctx context.Context, address string) error
-	Freigeben(ctx context.Context, address string) error
-	Lesen(ctx context.Context) ([]Sperreintrag, error)
+type SuppressionList interface {
+	Block(ctx context.Context, address string) error
+	Unblock(ctx context.Context, address string) error
+	List(ctx context.Context) ([]SuppressionEntry, error)
 }
 
-// Sperreintrag ist eine gesperrte Adresse.
-type Sperreintrag struct {
-	Adresse string `json:"address"`
-	Grund   string `json:"reason"`
-	Seit    string `json:"since"`
+// SuppressionEntry ist eine gesperrte Adresse.
+type SuppressionEntry struct {
+	Address string `json:"address"`
+	Reason  string `json:"reason"`
+	Since   string `json:"since"`
 }
 
-// MitSperrliste schaltet die Routen dafuer frei.
-func (s *Server) MitSperrliste(l Sperrliste) { s.sperrliste = l }
+// WithSuppressionList schaltet die Routen dafuer frei.
+func (s *Server) WithSuppressionList(l SuppressionList) { s.suppressions = l }
 
-func (s *Server) sperrlistenRouten() {
+func (s *Server) suppressionRoutes() {
 	s.mux.HandleFunc("GET /api/blocked", func(w http.ResponseWriter, r *http.Request) {
-		if s.sperrliste == nil {
+		if s.suppressions == nil {
 			s.writeError(w, http.StatusBadRequest, s.text(r, "error.noBlocklist"))
 			return
 		}
-		list, err := s.sperrliste.Lesen(r.Context())
+		list, err := s.suppressions.List(r.Context())
 		if err != nil {
-			s.uebersetzen(w, err)
+			s.translate(w, err)
 			return
 		}
 		s.json(w, http.StatusOK, map[string]any{"blocked": list})
 	})
 
 	s.post("/api/block", func(w http.ResponseWriter, r *http.Request, a request) {
-		s.sperrlisteAendern(w, r, a, true)
+		s.changeSuppression(w, r, a, true)
 	})
 	s.post("/api/unblock", func(w http.ResponseWriter, r *http.Request, a request) {
-		s.sperrlisteAendern(w, r, a, false)
+		s.changeSuppression(w, r, a, false)
 	})
 }
 
-func (s *Server) sperrlisteAendern(w http.ResponseWriter, r *http.Request, a request, sperren bool) {
-	if s.sperrliste == nil {
+func (s *Server) changeSuppression(w http.ResponseWriter, r *http.Request, a request, block1 bool) {
+	if s.suppressions == nil {
 		s.writeError(w, http.StatusBadRequest, s.text(r, "error.noBlocklist"))
 		return
 	}
-	address := adresseAus(a.Address)
+	address := addressFrom(a.Address)
 	if address == "" {
 		s.writeError(w, http.StatusBadRequest, s.text(r, "error.noAddress"))
 		return
 	}
 	var err error
-	if sperren {
-		err = s.sperrliste.Sperren(r.Context(), address)
+	if block1 {
+		err = s.suppressions.Block(r.Context(), address)
 	} else {
-		err = s.sperrliste.Freigeben(r.Context(), address)
+		err = s.suppressions.Unblock(r.Context(), address)
 	}
 	if err != nil {
-		s.uebersetzen(w, err)
+		s.translate(w, err)
 		return
 	}
-	list, err := s.sperrliste.Lesen(r.Context())
+	list, err := s.suppressions.List(r.Context())
 	if err != nil {
 		// Eingetragen ist eingetragen - dass die Liste danach nicht zu lesen war,
 		// darf die Handlung nicht als gescheitert erscheinen lassen.
@@ -76,10 +76,10 @@ func (s *Server) sperrlisteAendern(w http.ResponseWriter, r *http.Request, a req
 	s.json(w, http.StatusOK, map[string]any{"address": address, "blocked": list})
 }
 
-// adresseAus holt die nackte Adresse aus einer Kopfzeile: aus
+// addressFrom holt die nackte Adresse aus einer Kopfzeile: aus
 // `Vorname Nachname <a@x.de>` wird `a@x.de`. Ohne das landete der Anzeigename
 // auf der Sperrliste, und SES lehnte den Eintrag ab.
-func adresseAus(s string) string {
+func addressFrom(s string) string {
 	s = strings.TrimSpace(s)
 	if i := strings.LastIndex(s, "<"); i >= 0 {
 		if j := strings.Index(s[i:], ">"); j > 0 {

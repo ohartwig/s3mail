@@ -30,9 +30,9 @@ func NewSuppressions(cfg aws.Config, endpoint string) *Suppressions {
 
 // Entry ist eine gesperrte Adresse mit Grund und Zeitpunkt.
 type Entry struct {
-	Adresse string `json:"address"`
-	Grund   string `json:"reason"`
-	Seit    string `json:"since"`
+	Address string `json:"address"`
+	Reason  string `json:"reason"`
+	Since   string `json:"since"`
 }
 
 // Block traegt eine Adresse ein. Grund ist COMPLAINT: der Eintrag entsteht,
@@ -65,9 +65,9 @@ func (s *Suppressions) List(ctx context.Context) ([]Entry, error) {
 			return nil, err
 		}
 		for _, d := range resp.SuppressedDestinationSummaries {
-			e := Entry{Adresse: aws.ToString(d.EmailAddress), Grund: string(d.Reason)}
+			e := Entry{Address: aws.ToString(d.EmailAddress), Reason: string(d.Reason)}
 			if d.LastUpdateTime != nil {
-				e.Seit = d.LastUpdateTime.UTC().Format(time.RFC3339)
+				e.Since = d.LastUpdateTime.UTC().Format(time.RFC3339)
 			}
 			out = append(out, e)
 		}
@@ -78,6 +78,6 @@ func (s *Suppressions) List(ctx context.Context) ([]Entry, error) {
 			break
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Seit > out[j].Seit })
+	sort.Slice(out, func(i, j int) bool { return out[i].Since > out[j].Since })
 	return out, nil
 }

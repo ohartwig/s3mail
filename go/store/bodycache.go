@@ -30,7 +30,7 @@ type bodyCache struct {
 	mu  sync.Mutex
 }
 
-func neuerBodyCache(dir string) *bodyCache {
+func newBodyCache(dir string) *bodyCache {
 	if dir == "" {
 		return nil
 	}
@@ -47,7 +47,7 @@ func (c *bodyCache) path(etag string) string {
 	return filepath.Join(c.dir, hex.EncodeToString(sum[:16])+".eml")
 }
 
-func (c *bodyCache) lesen(etag string) ([]byte, bool) {
+func (c *bodyCache) read(etag string) ([]byte, bool) {
 	if c == nil || etag == "" {
 		return nil, false
 	}
@@ -63,7 +63,7 @@ func (c *bodyCache) lesen(etag string) ([]byte, bool) {
 	return b, true
 }
 
-func (c *bodyCache) schreiben(etag string, body []byte) {
+func (c *bodyCache) put(etag string, body []byte) {
 	if c == nil || etag == "" || len(body) == 0 {
 		return
 	}
@@ -78,47 +78,47 @@ func (c *bodyCache) schreiben(etag string, body []byte) {
 		_ = os.Remove(tmp)
 		return
 	}
-	c.aufraeumen()
+	c.cleanup()
 }
 
-// aufraeumen wirft die am laengsten unbenutzten Eintraege weg, bis die Grenze
+// cleanup wirft die am laengsten unbenutzten Eintraege weg, bis die Grenze
 // wieder eingehalten ist.
-func (c *bodyCache) aufraeumen() {
+func (c *bodyCache) cleanup() {
 	entries, err := os.ReadDir(c.dir)
 	if err != nil {
 		return
 	}
 	type file struct {
-		path    string
-		groesse int64
-		alter   int64
+		path  string
+		size  int64
+		older int64
 	}
-	var alle []file
-	var summe int64
+	var all []file
+	var total int64
 	for _, e := range entries {
 		info, err := e.Info()
 		if err != nil || e.IsDir() {
 			continue
 		}
-		alle = append(alle, file{filepath.Join(c.dir, e.Name()), info.Size(), info.ModTime().Unix()})
-		summe += info.Size()
+		all = append(all, file{filepath.Join(c.dir, e.Name()), info.Size(), info.ModTime().Unix()})
+		total += info.Size()
 	}
-	if summe <= CacheMax {
+	if total <= CacheMax {
 		return
 	}
-	sort.Slice(alle, func(i, j int) bool { return alle[i].alter < alle[j].alter })
-	for _, d := range alle {
-		if summe <= CacheMax {
+	sort.Slice(all, func(i, j int) bool { return all[i].older < all[j].older })
+	for _, d := range all {
+		if total <= CacheMax {
 			return
 		}
 		if os.Remove(d.path) == nil {
-			summe -= d.groesse
+			total -= d.size
 		}
 	}
 }
 
-// Leeren wirft den ganzen Zwischenspeicher weg.
-func (c *bodyCache) Leeren() {
+// Clear wirft den ganzen Zwischenspeicher weg.
+func (c *bodyCache) Clear() {
 	if c == nil {
 		return
 	}
