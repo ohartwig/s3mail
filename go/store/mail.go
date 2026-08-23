@@ -259,7 +259,8 @@ func (m *Mailbox) fill(base core.Message, raw []byte, fallback time.Time) core.M
 	s := mimeparse.Summarize(raw, fallback)
 	base.Date = s.Date
 	base.From, base.To, base.Cc = s.From, s.To, s.Cc
-	base.FromAddr = s.FromAddr
+	base.FromAddr, base.ToAddrs = s.FromAddr, s.ToAddrs
+	base.MessageID = s.MessageID
 	base.Subject = s.Subject
 	if base.Subject == "" {
 		base.Subject = mimeparse.SubjectNone
@@ -267,6 +268,7 @@ func (m *Mailbox) fill(base core.Message, raw []byte, fallback time.Time) core.M
 	base.Snippet = s.Preview
 	base.HasAttachment = len(s.Attachments) > 0
 	base.Spam = s.Spam == "FAIL"
+	base.Virus = s.Virus == "FAIL"
 	return base
 }
 
@@ -521,6 +523,15 @@ func (m *Mailbox) ApplyRules(ctx context.Context, pool []core.Message, force boo
 	return moved, err
 }
 
+// indexVersion is the shape of the cached index. Raising it throws the old file
+// away and forces one full pass over the headers.
+//
+// It has to be raised whenever a field is added, and the reason is subtle:
+// Refresh only fetches what changed its ETag, so an entry written before the
+// field existed would keep its empty value forever. The version was written
+// from the start and not read - which made it a comment rather than a check.
+const indexVersion = 3
+
 func (m *Mailbox) readCache() {
 	blob, err := os.ReadFile(m.CacheFile)
 	if err != nil {
@@ -530,7 +541,7 @@ func (m *Mailbox) readCache() {
 		Version  int                     `json:"version"`
 		Messages map[string]core.Message `json:"messages"`
 	}
-	if json.Unmarshal(blob, &d) == nil && d.Messages != nil {
+	if json.Unmarshal(blob, &d) == nil && d.Messages != nil && d.Version == indexVersion {
 		m.index = d.Messages
 	}
 }
@@ -543,7 +554,7 @@ func (m *Mailbox) writeCache() {
 	blob, err := json.Marshal(struct {
 		Version  int                     `json:"version"`
 		Messages map[string]core.Message `json:"messages"`
-	}{2, m.index})
+	}{indexVersion, m.index})
 	m.mu.RUnlock()
 	if err != nil {
 		return

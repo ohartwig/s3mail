@@ -33,6 +33,7 @@ type Account struct {
 	Sender    Sender
 	From      string
 	Signature string
+	Snippets  []config.Snippet
 	Blocked   SuppressionList
 }
 
@@ -294,7 +295,17 @@ func (s *Server) overview(r *http.Request, acc *Account) map[string]any {
 		"can_block":    acc.Blocked != nil,
 		"default_from": acc.From,
 		"signature":    acc.Signature,
+		// Never nil to the interface: a nil slice becomes JSON `null`, and
+		// `null.map(...)` ends the page's script.
+		"snippets": notNilSnippets(acc.Snippets),
 	}
+}
+
+func notNilSnippets(l []config.Snippet) []config.Snippet {
+	if l == nil {
+		return []config.Snippet{}
+	}
+	return l
 }
 
 func with(base map[string]any, extra map[string]any) map[string]any {
@@ -560,6 +571,39 @@ func (s *Server) routes() {
 				s.OnShutdown()
 			}()
 		}
+	})
+
+	// What went out and nobody answered. A GET: it reads, it decides nothing.
+	s.mux.HandleFunc("GET /api/waiting", func(w http.ResponseWriter, r *http.Request) {
+		acc, ok := s.pick(w, r)
+		if !ok {
+			return
+		}
+		days := 5
+		if v, err := strconv.Atoi(r.URL.Query().Get("days")); err == nil && v > 0 && v < 3650 {
+			days = v
+		}
+		found := core.Unanswered(acc.Mailbox.Index(), time.Now(),
+			time.Duration(days)*24*time.Hour)
+		if found == nil {
+			found = []core.Waiting{}
+		}
+		s.json(w, http.StatusOK, map[string]any{"waiting": found, "days": days})
+	})
+
+	// Everything to and from one address, across the folders.
+	s.mux.HandleFunc("GET /api/conversation", func(w http.ResponseWriter, r *http.Request) {
+		acc, ok := s.pick(w, r)
+		if !ok {
+			return
+		}
+		found := core.Conversation(acc.Mailbox.Index(),
+			strings.ToLower(strings.TrimSpace(r.URL.Query().Get("address"))))
+		if found == nil {
+			found = []core.Message{}
+		}
+		s.json(w, http.StatusOK, with(s.overview(r, acc), map[string]any{
+			"messages": s.localizedSubjects(r, found)}))
 	})
 
 	// Suggestions read the index and propose what somebody is already doing by

@@ -27,13 +27,18 @@ type Summary struct {
 	// FromAddr is the bare address out of From: "Anna <anna@x.de>" becomes
 	// "anna@x.de". Everything that groups by sender needs it - a display name
 	// varies between two messages from the same person.
-	FromAddr    string       `json:"from_addr"`
+	FromAddr string `json:"from_addr"`
+	// ToAddrs are the bare recipient addresses. Anything asking "did they
+	// answer" needs them: a display name is no key.
+	ToAddrs     []string     `json:"to_addrs"`
+	MessageID   string       `json:"message_id"`
 	Subject     string       `json:"subject"`
 	Date        string       `json:"date"`
 	Preview     string       `json:"preview"`
 	HasHTML     bool         `json:"has_html"`
 	Attachments []Attachment `json:"attachments"`
 	Spam        string       `json:"spam"`
+	Virus       string       `json:"virus"`
 }
 
 // The two placeholders a message can carry instead of a subject. They land in
@@ -92,6 +97,31 @@ func BareAddr(value string) string {
 		return ""
 	}
 	return strings.ToLower(list[0].Address)
+}
+
+// BareAddrs takes the addresses out of several headers at once, lowercased and
+// without duplicates.
+func BareAddrs(values ...string) []string {
+	seen := map[string]bool{}
+	out := []string{}
+	p := &mail.AddressParser{WordDecoder: &mime.WordDecoder{CharsetReader: charsetReader}}
+	for _, v := range values {
+		if strings.TrimSpace(v) == "" {
+			continue
+		}
+		list, err := p.ParseList(v)
+		if err != nil {
+			continue
+		}
+		for _, a := range list {
+			addr := strings.ToLower(a.Address)
+			if addr != "" && !seen[addr] {
+				seen[addr] = true
+				out = append(out, addr)
+			}
+		}
+	}
+	return out
 }
 
 func AddrStr(value string) string {
@@ -188,11 +218,14 @@ func Summarize(raw []byte, fallback time.Time) Summary {
 	h := msg.Header
 	s.From = AddrStr(h.Get("From"))
 	s.FromAddr = BareAddr(h.Get("From"))
+	s.ToAddrs = BareAddrs(h.Get("To"), h.Get("Cc"))
+	s.MessageID = strings.TrimSpace(h.Get("Message-Id"))
 	s.To = AddrStr(h.Get("To"))
 	s.Cc = AddrStr(h.Get("Cc"))
 	s.Subject = Dec(h.Get("Subject"))
 	s.Date = ParseDate(h.Get("Date"), fallback).UTC().Format(time.RFC3339)
 	s.Spam = strings.ToUpper(h.Get("X-Ses-Spam-Verdict"))
+	s.Virus = strings.ToUpper(h.Get("X-Ses-Virus-Verdict"))
 
 	var text, html strings.Builder
 	idx := 0

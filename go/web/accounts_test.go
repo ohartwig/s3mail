@@ -247,3 +247,74 @@ func TestNoSuggestionsIsAnEmptyListAndNotNull(t *testing.T) {
 		t.Errorf("empty suggestions are not an empty list: %s", r.Body)
 	}
 }
+
+// TestWaitingAndConversationHaveTheirRoutes - both read the index and decide
+// nothing; both have to answer an empty list rather than null, or the page's
+// script ends on `null.map(...)`.
+func TestWaitingAndConversationHaveTheirRoutes(t *testing.T) {
+	ts, _ := twoMailboxes(t)
+	for _, path := range []string{"/api/waiting", "/api/conversation?address=niemand@x.de"} {
+		r := callServer(t, ts, "GET", path, "", nil)
+		if r.Code != 200 {
+			t.Errorf("%s: HTTP %d: %s", path, r.Code, r.Body)
+		}
+		// `:null` and not bare "null": a message may contain the word, a field
+		// that is null is what ends the page's script.
+		if strings.Contains(string(r.Body), ":null") {
+			t.Errorf("%s has a field that is null: %s", path, r.Body)
+		}
+	}
+}
+
+// TestTheWaitingWindowIsBounded - the days come out of a URL somebody can type.
+func TestTheWaitingWindowIsBounded(t *testing.T) {
+	ts, _ := twoMailboxes(t)
+	for _, f := range []struct {
+		query string
+		want  int
+	}{
+		{"", 5}, {"?days=30", 30}, {"?days=0", 5}, {"?days=-3", 5},
+		{"?days=99999", 5}, {"?days=nonsense", 5},
+	} {
+		r := callServer(t, ts, "GET", "/api/waiting"+f.query, "", nil)
+		var d struct {
+			Days int `json:"days"`
+		}
+		_ = json.Unmarshal(r.Body, &d)
+		if d.Days != f.want {
+			t.Errorf("%q -> %d days, expected %d", f.query, d.Days, f.want)
+		}
+	}
+}
+
+// TestTheConversationFindsBothDirections through the route, not only in core.
+func TestTheConversationFindsBothDirections(t *testing.T) {
+	ctx := context.Background()
+	f := s3fake.New()
+	f.Store("mail/in1", rawMail("Anna <anna@kunde.de>", "Anfrage", "Text.",
+		"Mon, 03 Aug 2026 09:00:00 +0000"))
+	f.Store("mail/sent/out1", []byte("From: post@firma.de\r\nTo: Anna <anna@kunde.de>\r\n"+
+		"Subject: Antwort\r\nDate: Tue, 04 Aug 2026 09:00:00 +0000\r\n\r\nText\r\n"))
+	f.Store("mail/in2", rawMail("Bert <bert@anders.de>", "Anderes", "Text.",
+		"Wed, 05 Aug 2026 09:00:00 +0000"))
+	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), true)
+	if _, err := mb.Refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	srv := NewServer(one(mb), testToken, "127.0.0.1", 0, nil)
+	ts := httptest.NewServer(srv)
+	defer ts.Close()
+	srv.Port = portOf(ts.URL)
+
+	r := callServer(t, ts, "GET", "/api/conversation?address=anna@kunde.de", "", nil)
+	var d struct {
+		Messages []map[string]any `json:"messages"`
+	}
+	if err := json.Unmarshal(r.Body, &d); err != nil {
+		t.Fatal(err)
+	}
+	if len(d.Messages) != 2 {
+		t.Fatalf("%d messages in the conversation, expected the received and the sent one: %+v",
+			len(d.Messages), d.Messages)
+	}
+}

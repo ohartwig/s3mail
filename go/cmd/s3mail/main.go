@@ -225,7 +225,7 @@ func activate(ctx context.Context, srv *web.Server, k config.Config, noSend bool
 		mb := store.NewMailbox(ctx, awsx.NewS3(cfg, ""), awsx.NewKMS(cfg, ""),
 			a.Bucket, a.Prefix, config.CacheDir(), k.AllowDelete)
 		acc := web.Account{ID: a.ID(), Name: a.Name(), Mailbox: mb,
-			From: a.From, Signature: a.Signature}
+			From: a.From, Signature: a.Signature, Snippets: a.Snippets}
 		if !noSend {
 			acc.Sender = awsx.NewSES(cfg, "")
 			// The suppression list hangs off sending: whoever may not send need not

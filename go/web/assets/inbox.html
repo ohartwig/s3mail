@@ -161,6 +161,7 @@
   <div><label>{{t "compose.subject"}}</label><input id="c_subject"></div>
   <div><label>{{t "compose.body"}}</label><textarea id="c_body"></textarea></div>
   <div><label>{{t "compose.attachments"}}</label><div>
+    <select id="c_snippet" style="display:none"></select>
     <button id="c_attach" type="button">📎 {{t "compose.attach"}}</button>
     <input id="c_files" type="file" multiple hidden>
     <div id="c_atts" class="atts"></div>
@@ -214,6 +215,7 @@ const LANGS = __LANGUAGES__;
 const $ = s => document.querySelector(s);
 let messages = [], over = {folders:[], tags:{}, rules:[]}, current = null;
 let folder = "", tagFilter = null, onlyUnread = false, onlyStar = false;
+let waiting = false, conversation = null;
 let checked = new Set(), lastIdx = null, mode = "reply", showImages = false, msg = null;
 
 // What used to sit in CFG at load time now rides with every answer: it belongs
@@ -277,6 +279,12 @@ function renderAccounts() {
   };
 }
 
+// plain clears the views that are not the ordinary list. Two of them at once
+// would produce a list nobody could explain.
+function plain() {
+  waiting = false; conversation = null; onlyUnread = false; onlyStar = false;
+}
+
 function renderSide() {
   renderAccounts();
   $("#new").style.display = canSend() ? "" : "none";
@@ -299,6 +307,7 @@ function renderSide() {
     <div class="sec">${T["side.filter"]}</div>
     <div class="nav${onlyUnread ? " sel" : ""}" id="fUnread"><span>●</span><span class="name">${T["filter.unread"]}</span></div>
     <div class="nav${onlyStar ? " sel" : ""}" id="fStar"><span>★</span><span class="name">${T["filter.starred"]}</span></div>
+    <div class="nav${waiting ? " sel" : ""}" id="fWaiting"><span>⏳</span><span class="name">${T["filter.waiting"]}</span></div>
     <div class="sec">${T["side.tags"]}</div>
     ${tags.length ? tags.map(([name, color]) => `
       <div class="nav${tagFilter === name ? " sel" : ""}" data-t="${esc(name)}">
@@ -310,11 +319,11 @@ function renderSide() {
     ${over.state_remote === false ? `<div class="sec" style="color:var(--danger)">${T["sidebar.stateLocal"]}<br>${T["sidebar.stateLocalWhy"]}</div>` : ""}`;
 
   $("#side").querySelectorAll("[data-f]").forEach(el => el.onclick = () => {
-    folder = el.dataset.f; tagFilter = null; current = null; checked.clear(); load();
+    plain(); folder = el.dataset.f; tagFilter = null; current = null; checked.clear(); load();
   });
   $("#side").querySelectorAll("[data-t]").forEach(el => el.onclick = e => {
     if (e.target.dataset.deltag) return;
-    tagFilter = tagFilter === el.dataset.t ? null : el.dataset.t; load();
+    plain(); tagFilter = tagFilter === el.dataset.t ? null : el.dataset.t; load();
   });
   $("#side").querySelectorAll("[data-deltag]").forEach(el => el.onclick = guard(async e => {
     e.stopPropagation();
@@ -322,8 +331,9 @@ function renderSide() {
     if (tagFilter === el.dataset.deltag) tagFilter = null;
     load();
   }));
-  $("#fUnread").onclick = () => { onlyUnread = !onlyUnread; load(); };
-  $("#fStar").onclick = () => { onlyStar = !onlyStar; load(); };
+  $("#fUnread").onclick = () => { plain(); onlyUnread = !onlyUnread; load(); };
+  $("#fStar").onclick = () => { plain(); onlyStar = !onlyStar; load(); };
+  $("#fWaiting").onclick = () => { const on = waiting; plain(); waiting = !on; load(); };
   $("#addFolder").onclick = e => {
     e.stopPropagation();
     const box = $("#newFolderBox");
@@ -522,11 +532,28 @@ const toggleStar = guard(async i => {
 });
 
 async function load() {
-  const p = new URLSearchParams({folder, q: $("#q").value, unread: onlyUnread ? "1" : "0",
-                                 star: onlyStar ? "1" : "0"});
-  if (tagFilter) p.set("tag", tagFilter);
-  if (tagFilter) p.set("folder", "*");
-  const d = await api("/api/messages?" + p.toString());
+  // Three sources, one list: the ordinary search, the conversation with one
+  // address, and what nobody answered. The last one is not a search - it
+  // compares sent mail against what came back - so it has its own route.
+  let d;
+  if (conversation) {
+    d = await api("/api/conversation?address=" + encodeURIComponent(conversation));
+  } else if (waiting) {
+    const w = await api("/api/waiting");
+    const keys = new Set((w.waiting || []).map(x => x.key));
+    d = await api("/api/messages?folder=*");
+    d.messages = d.messages.filter(m => keys.has(m.key));
+    // The days come from the answer; the list itself does not know them.
+    const days = {};
+    (w.waiting || []).forEach(x => days[x.key] = x.days);
+    d.messages.forEach(m => m.waitingDays = days[m.key]);
+  } else {
+    const p = new URLSearchParams({folder, q: $("#q").value, unread: onlyUnread ? "1" : "0",
+                                   star: onlyStar ? "1" : "0"});
+    if (tagFilter) p.set("tag", tagFilter);
+    if (tagFilter) p.set("folder", "*");
+    d = await api("/api/messages?" + p.toString());
+  }
   messages = d.messages;
   checked = new Set([...checked].filter(k => messages.some(m => m.key === k)));
   renderSide(); renderTools(); renderList();
@@ -584,6 +611,7 @@ const open = guard(async key => {
       ${m.folder === "trash"
         ? (over.allow_delete ? `<button class="danger" id="vPurge">${T["action.deleteForever"]}</button>` : "")
         : `<button id="vTrash">🗑 ${T["folder.trash"]}</button>`}
+      <button id="vHistory" title="${T["view.history.title"]}">${T["view.history"]}</button>
       ${over.can_block ? `<button id="vBlock" title="${T["blocked.buttonTitle"]}">${T["blocked.button"]}</button>` : ""}
       <a class="att" href="/api/raw?key=${encodeURIComponent(key)}">⬇︎ .eml</a>
       ${m.html ? `<button id="imgs">${showImages ? T["view.blockImages"] : T["view.loadImages"]}</button>` : ""}
@@ -604,6 +632,13 @@ const open = guard(async key => {
   on("#vMove", e => folderMenu(e.target, guard(async f => { await move([key], f); })));
   on("#vTag", e => tagMenu(e.target, [key]));
   on("#vBlock", () => askToBlock(m.reply_to || m.from));
+  on("#vHistory", () => {
+    // The bare address, not the display name: the same person writes under
+    // three of those over a year.
+    const addr = (m.from_addr || m.from || "").match(/[^<\s]+@[^>\s]+/);
+    if (!addr) { toast(T["view.history.none"], true); return; }
+    plain(); conversation = addr[0].toLowerCase(); current = null; load();
+  });
   on("#vStar", guard(async () => {
     await api("/api/flag", {keys:[key], star: !m.star});
     m.star = !m.star; open(key);
@@ -621,6 +656,7 @@ function compose(kind, all) {
   $("#c_err").textContent = "";
   attachments = []; draftKey = "";
   renderAtts();
+  fillSnippets();
   $("#c_bcc").value = "";
   $("#c_from").value = over.default_from || "";
   // A new message has no template - everything below reads from m, which is
@@ -701,6 +737,28 @@ async function addFiles(files) {
   if (attBytes() > MAX_MAIL) problem = T["compose.tooLarge"];
   $("#c_err").textContent = problem;
 }
+/* Text somebody writes over and over. Inserted where the cursor stands rather
+   than appended: a paragraph belongs in the middle of a message as often as at
+   the end. */
+function fillSnippets() {
+  const sel = $("#c_snippet");
+  const list = over.snippets || [];
+  sel.style.display = list.length ? "" : "none";
+  if (!list.length) return;
+  sel.innerHTML = `<option value="">${T["compose.snippet"]}</option>`
+    + list.map((s, i) => `<option value="${i}">${esc(s.name)}</option>`).join("");
+  sel.onchange = () => {
+    const s = list[+sel.value];
+    if (!s) return;
+    const box = $("#c_body");
+    const at = box.selectionStart ?? box.value.length;
+    box.value = box.value.slice(0, at) + s.text + box.value.slice(box.selectionEnd ?? at);
+    box.focus();
+    box.setSelectionRange(at + s.text.length, at + s.text.length);
+    sel.value = "";
+  };
+}
+
 $("#c_attach").onclick = () => $("#c_files").click();
 $("#c_files").onchange = async e => { await addFiles(e.target.files); e.target.value = ""; };
 

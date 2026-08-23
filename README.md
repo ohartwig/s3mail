@@ -279,6 +279,25 @@ einsortiert – wenn du sie zurückschiebst, bleibt sie liegen. Über „Auf all
 Mails anwenden“ laufen die Regeln nachträglich übers ganze Postfach. Papierkorb und
 Spam fasst die Automatik nicht an.
 
+**Für die Arbeit am Kunden**
+
+- **Wartet auf Antwort** – Filter in der Seitenleiste: was vor mindestens fünf
+  Tagen rausging und worauf niemand geantwortet hat, längste Wartezeit zuerst.
+  Als beantwortet gilt eine Mail, wenn von einem der Empfänger danach etwas kam –
+  bewusst über die Adresse und nicht über den Faden: eine Antwort kommt oft als
+  neue Mail, von einer Kollegin der angeschriebenen Person, oder mit einem Faden,
+  den ein Ticketsystem abgeschnitten hat.
+- **Verlauf** – Knopf in der Mailansicht: alle Mails mit dieser Adresse über alle
+  Ordner, neueste zuerst. Das, was man vor einem Anruf vor sich haben will.
+- **Textbausteine** – je Postfach in der Konfiguration, Auswahl im Verfassen-Dialog.
+  Eingesetzt wird an der Cursorposition, nicht am Ende: ein Absatz gehört so oft in
+  die Mitte einer Mail wie ans Ende.
+
+```json
+{"accounts": [{"bucket": "post", "prefix": "mail/", "from": "info@firma.de",
+  "snippets": [{"name": "Terminvorschlag", "text": "passt Ihnen Dienstag 10 Uhr?"}]}]}
+```
+
 **Regelvorschläge**
 
 Im Regeldialog steht, was du ohnehin schon von Hand tust: „Du hast 11 von 12

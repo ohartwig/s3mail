@@ -36,6 +36,16 @@ type Account struct {
 	// push, the timer does it. The wizard reads it out of the IAM policy, so
 	// nobody has to type a URL.
 	Queue string `json:"queue"`
+
+	// Snippets are the paragraphs somebody writes over and over. Kept per
+	// mailbox: what support answers is not what accounting answers.
+	Snippets []Snippet `json:"snippets"`
+}
+
+// Snippet is a block of text with a name to find it by.
+type Snippet struct {
+	Name string `json:"name"`
+	Text string `json:"text"`
 }
 
 // ID names the mailbox in a URL and in a cookie. It comes from bucket and
