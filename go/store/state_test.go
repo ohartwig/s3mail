@@ -15,11 +15,11 @@ import (
 	"s3mail/store"
 )
 
-// jede Testinstanz bekommt eine eigene Kennung - so wie zwei echte Rechner.
+// every test instance gets an identifier of its own - like two real machines.
 var instanceCounter atomic.Uint64
 
-// buildState liefert einen store.State mit fester Uhr - sonst waeren die Op-Namen
-// nicht reproduzierbar.
+// buildState returns a store.State with a fixed clock - otherwise the op names
+// would not be reproducible.
 func buildState(t *testing.T, f *s3fake.Fake) *store.State {
 	t.Helper()
 	ctx := context.Background()
@@ -48,8 +48,8 @@ func snapshot(t *testing.T, f *s3fake.Fake) *core.Data {
 	return d.Normalize()
 }
 
-// TestOneChangeOneSmallOp - der Kern des Umbaus: nicht das ganze Dokument,
-// sondern die Aenderung.
+// TestOneChangeOneSmallOp - the core of the rebuild: not the whole document,
+// but the change.
 func TestOneChangeOneSmallOp(t *testing.T) {
 	ctx := context.Background()
 	f := s3fake.New()
@@ -60,16 +60,16 @@ func TestOneChangeOneSmallOp(t *testing.T) {
 	}
 	written := ops(f)
 	if len(written) != 1 {
-		t.Fatalf("%d Objekte fuer eine Aenderung: %v", len(written), written)
+		t.Fatalf("%d objects for one change: %v", len(written), written)
 	}
 	if n := len(f.Objs[written[0]]); n > 200 {
-		t.Errorf("%d Byte - das sieht nach dem ganzen Dokument aus", n)
+		t.Errorf("%d bytes - that looks like the whole document", n)
 	}
 	if _, da := f.Objs["mail/"+store.StateObject]; da {
-		t.Error("Snapshot wurde bei einer einzelnen Aenderung geschrieben")
+		t.Error("a snapshot was written for a single change")
 	}
 	if !s.Get("m1").Read {
-		t.Error("Aenderung nicht im Speicher")
+		t.Error("change not in memory")
 	}
 }
 
@@ -82,19 +82,19 @@ func TestTwoMachinesNoConflict(t *testing.T) {
 	if err := a.Mutate(ctx, core.Op{T: "tags", Mids: []string{"m1"}, Add: []string{"von-A"}}); err != nil {
 		t.Fatal(err)
 	}
-	// b kennt A's Aenderung noch nicht - schreibt trotzdem gefahrlos
+	// b does not know A's change yet - and writes safely all the same
 	if err := b.Mutate(ctx, core.Op{T: "tags", Mids: []string{"m2"}, Add: []string{"von-B"}}); err != nil {
 		t.Fatal(err)
 	}
 	if len(ops(f)) != 2 {
-		t.Fatalf("%d Op-Objekte - schreiben die beiden auf denselben Schluessel?", len(ops(f)))
+		t.Fatalf("%d op objects - do the two write to the same key?", len(ops(f)))
 	}
-	c := buildState(t, f) // dritter Rechner liest nach
+	c := buildState(t, f) // a third machine reads afterwards
 	if !has(c.Get("m1").Tags, "von-A") {
-		t.Error("Aenderung von A verloren")
+		t.Error("change from A lost")
 	}
 	if !has(c.Get("m2").Tags, "von-B") {
-		t.Error("Aenderung von B verloren")
+		t.Error("change from B lost")
 	}
 }
 
@@ -110,19 +110,19 @@ func TestZusammenfassen(t *testing.T) {
 	}
 	snap := snapshot(t, f)
 	if snap == nil || snap.Upto == "" {
-		t.Fatal("kein Snapshot mit Wasserstand")
+		t.Fatal("no snapshot with a watermark")
 	}
 	if n := len(ops(f)); n > 3 {
-		t.Errorf("%d Ops nach dem Zusammenfassen uebrig", n)
+		t.Errorf("%d ops left after merging", n)
 	}
 	fresh := buildState(t, f)
 	if n := len(fresh.Get("m1").Tags); n != store.CompactAfter+2 {
-		t.Errorf("frischer Rechner sieht %d Tags, erwartet %d", n, store.CompactAfter+2)
+		t.Errorf("a fresh machine sees %d tags, expected %d", n, store.CompactAfter+2)
 	}
 }
 
-// TestWatermarkSkipsWhatIsAlreadyIn - genau dafuer gibt es den
-// Wasserstand: ein liegengebliebenes Op darf nicht ein zweites Mal wirken.
+// TestWatermarkSkipsWhatIsAlreadyIn - that is exactly what the watermark is
+// for: an op left behind must not take effect a second time.
 func TestWatermarkSkipsWhatIsAlreadyIn(t *testing.T) {
 	ctx := context.Background()
 	f := s3fake.New()
@@ -134,18 +134,18 @@ func TestWatermarkSkipsWhatIsAlreadyIn(t *testing.T) {
 	altKey := ops(f)[0]
 	altBody := append([]byte(nil), f.Objs[altKey]...)
 
-	s.Compact(ctx, []string{altKey}) // zusammenfassen, Op fliegt weg
+	s.Compact(ctx, []string{altKey}) // merge, the op flies away
 	if snapshot(t, f).Upto == "" {
-		t.Fatal("kein Wasserstand gesetzt")
+		t.Fatal("no watermark set")
 	}
 	if err := s.Mutate(ctx, core.Op{T: "flags", Mids: []string{"m1"}, Read: core.Ptr(false)}); err != nil {
 		t.Fatal(err)
 	}
-	f.Objs[altKey] = altBody // Loeschen war gescheitert: altes Op ist wieder da
+	f.Objs[altKey] = altBody // the delete had failed: the old op is back
 
 	fresh := buildState(t, f)
 	if fresh.Get("m1").Read {
-		t.Error("liegengebliebenes Op wurde erneut angewandt - der Wasserstand traegt nicht")
+		t.Error("an op left behind was applied again - the watermark does not hold")
 	}
 }
 
@@ -167,12 +167,12 @@ func TestBatchWritesOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	if n := len(ops(f)); n != 1 {
-		t.Errorf("%d Op-Objekte fuer einen Batch, erwartet 1", n)
+		t.Errorf("%d op objects for one batch, expected 1", n)
 	}
 	fresh := buildState(t, f)
 	for i := 0; i < 10; i++ {
 		if !has(fresh.Get(fmt.Sprintf("m%d", i)).Tags, "stapel") {
-			t.Fatalf("m%d fehlt nach dem Batch", i)
+			t.Fatalf("m%d missing after the batch", i)
 		}
 	}
 }
@@ -185,7 +185,7 @@ func TestSchreibfehlerBehaeltAenderung(t *testing.T) {
 
 	err := s.Mutate(ctx, core.Op{T: "flags", Mids: []string{"m1"}, Star: core.Ptr(true)})
 	if err == nil {
-		t.Fatal("Schreibfehler wurde verschluckt")
+		t.Fatal("write error was swallowed")
 	}
 	if s.RemoteOK() {
 		t.Error("RemoteOK haette fallen muessen")
@@ -195,14 +195,14 @@ func TestSchreibfehlerBehaeltAenderung(t *testing.T) {
 	}
 
 	f.PutErr = nil
-	if err := s.Save(ctx); err != nil { // naechster Versuch holt es nach
+	if err := s.Save(ctx); err != nil { // the next attempt catches up
 		t.Fatal(err)
 	}
 	if !s.RemoteOK() || len(ops(f)) != 1 {
 		t.Errorf("Nachholen misslungen: remoteOK=%v ops=%v", s.RemoteOK(), ops(f))
 	}
 	if !buildState(t, f).Get("m1").Star {
-		t.Error("nachgeholte Aenderung fehlt im Bucket")
+		t.Error("the caught-up change is missing from the bucket")
 	}
 }
 
@@ -214,10 +214,10 @@ func TestLocalFallback(t *testing.T) {
 	f.PutErr = errors.New("AccessDenied")
 	_ = s.Mutate(ctx, core.Op{T: "tags", Mids: []string{"m1"}, Add: []string{"offline"}})
 
-	// neuer Prozess, immer noch kein Schreibrecht: der lokale Stand traegt
+	// a new process, still no write permission: the local state carries
 	second := store.NewState(ctx, f, "test-bucket", "mail/", local)
 	if !has(second.Get("m1").Tags, "offline") {
-		t.Error("lokaler Rueckfall greift nicht")
+		t.Error("the local fallback does not take hold")
 	}
 }
 

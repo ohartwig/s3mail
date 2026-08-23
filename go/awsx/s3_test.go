@@ -21,9 +21,9 @@ import (
 	"s3mail/store"
 )
 
-// s3Server spricht so viel vom S3-Protokoll, wie s3mail benutzt. Damit laeuft das
-// echte AWS-SDK gegen einen Server, den der Test kontrolliert - geprueft wird also
-// die Anfrage auf dem Draht, nicht ein nachgebauter Client.
+// s3Server speaks as much of the S3 protocol as s3mail uses. That way the real
+// AWS SDK runs against a server the test controls - what gets checked is the
+// request on the wire, not a rebuilt client.
 type s3Server struct {
 	mu       sync.Mutex
 	objs     map[string][]byte
@@ -190,7 +190,7 @@ func (s *s3Server) handleCopy(w http.ResponseWriter, r *http.Request, key string
 	if m := s.meta[srcKey]; m != nil {
 		s.meta[key] = m
 	}
-	// merken, welche Kopfzeilen die Kopie mitbekommen hat
+	// remember which headers the copy got
 	header := http.Header{}
 	for _, name := range []string{"x-amz-server-side-encryption",
 		"x-amz-server-side-encryption-aws-kms-key-id",
@@ -247,11 +247,11 @@ func TestListPaginates(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(objs) != 5 {
-		t.Fatalf("%d Objekte, erwartet 5 - blaettert der Paginator?", len(objs))
+		t.Fatalf("%d objects, expected 5 - does the paginator page?", len(objs))
 	}
 	for _, o := range objs {
 		if strings.HasPrefix(o.ETag, `"`) {
-			t.Errorf("ETag nicht entklammert: %q", o.ETag)
+			t.Errorf("ETag not unquoted: %q", o.ETag)
 		}
 		if o.Size != 6 || o.LastModified.IsZero() {
 			t.Errorf("Felder unvollstaendig: %+v", o)
@@ -264,12 +264,12 @@ func TestListPaginates(t *testing.T) {
 		}
 	}
 	if pages < 3 {
-		t.Errorf("%d Listing-Anfragen - es sollte geblaettert werden", pages)
+		t.Errorf("%d listing requests - it should have paged", pages)
 	}
 }
 
-// TestRangeIsSent - der Index holt nur die ersten 64 KB. Faellt der
-// Range-Header weg, laedt s3mail bei jedem Abgleich das ganze Postfach.
+// TestRangeIsSent - the index fetches only the first 64 KB. If the range
+// header falls away, s3mail loads the whole mailbox on every refresh.
 func TestRangeIsSent(t *testing.T) {
 	srv := newS3Server()
 	srv.objs["mail/m1"] = []byte("0123456789abcdefghij")
@@ -291,8 +291,8 @@ func TestRangeIsSent(t *testing.T) {
 	}
 }
 
-// TestMetadataArrives - dort steckt der Krypto-Umschlag. Gehen sie verloren,
-// ist eine verschluesselte Mail nicht mehr zu oeffnen.
+// TestMetadataArrives - the crypto envelope sits there. If it gets lost, an
+// encrypted message can no longer be opened.
 func TestMetadataArrives(t *testing.T) {
 	srv := newS3Server()
 	srv.objs["mail/enc"] = []byte("chiffrat")
@@ -306,7 +306,7 @@ func TestMetadataArrives(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !store.IsEnvelope(obj.Meta) {
-		t.Fatalf("Umschlag nicht erkannt, Metadaten: %v", obj.Meta)
+		t.Fatalf("envelope not recognised, metadata: %v", obj.Meta)
 	}
 	if store.LowerMeta(obj.Meta)["x-amz-matdesc"] != `{"a":"b"}` {
 		t.Errorf("Encryption Context verloren: %v", obj.Meta)
@@ -316,12 +316,12 @@ func TestMetadataArrives(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !store.IsEnvelope(h.Meta) {
-		t.Errorf("Head liefert keine Metadaten: %v", h.Meta)
+		t.Errorf("Head returns no metadata: %v", h.Meta)
 	}
 }
 
-// TestCopyCarriesEncryption - sonst landet die Kopie unter dem
-// Standardschluessel des Buckets statt unter dem des Originals.
+// TestCopyCarriesEncryption - otherwise the copy lands under the bucket's
+// default key instead of the original's.
 func TestCopyCarriesEncryption(t *testing.T) {
 	srv := newS3Server()
 	srv.objs["mail/m1"] = []byte("inhalt")
@@ -342,13 +342,13 @@ func TestCopyCarriesEncryption(t *testing.T) {
 	}
 	for name, want := range wants {
 		if got := srv.headerOf("mail/archiv/m1", name); got != want {
-			t.Errorf("%s: %q, erwartet %q", name, got, want)
+			t.Errorf("%s: %q, expected %q", name, got, want)
 		}
 	}
 }
 
-// TestCopyWithSpecialCharacters - Schluessel mit Leerzeichen und Umlauten muessen
-// in x-amz-copy-source kodiert werden, sonst schlaegt die Signatur fehl.
+// TestCopyWithSpecialCharacters - keys with spaces and umlauts have to be
+// encoded in x-amz-copy-source, or the signature fails.
 func TestCopyWithSpecialCharacters(t *testing.T) {
 	srv := newS3Server()
 	srv.objs["mail/Rechnung Übersicht.eml"] = []byte("inhalt")
@@ -360,7 +360,7 @@ func TestCopyWithSpecialCharacters(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, da := srv.objs["mail/archiv/Rechnung Übersicht.eml"]; !da {
-		t.Errorf("Kopie fehlt, vorhanden: %v", key(srv))
+		t.Errorf("copy missing, present: %v", key(srv))
 	}
 }
 
@@ -369,11 +369,11 @@ func TestMissingObject(t *testing.T) {
 	a, _ := adapter(t, srv)
 	_, err := a.Get(context.Background(), "test-bucket", "mail/gibtsnicht", "")
 	if !errors.Is(err, store.ErrNotFound) {
-		t.Errorf("NoSuchKey nicht uebersetzt: %v", err)
+		t.Errorf("NoSuchKey not translated: %v", err)
 	}
 	_, err = a.Head(context.Background(), "test-bucket", "mail/gibtsnicht")
 	if !errors.Is(err, store.ErrNotFound) {
-		t.Errorf("NotFound nicht uebersetzt: %v", err)
+		t.Errorf("NotFound not translated: %v", err)
 	}
 }
 
@@ -392,12 +392,12 @@ func TestPutAndDelete(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, da := srv.objs["mail/.s3mail-state/x.json"]; da {
-		t.Error("nicht geloescht")
+		t.Error("not deleted")
 	}
 }
 
-// TestWholeMailboxThroughTheAdapter faehrt die Schicht darueber gegen den
-// S3-Server: indexieren, verschieben, Zustand schreiben und wieder lesen.
+// TestWholeMailboxThroughTheAdapter runs the layer above against the S3
+// server: index, move, write the state and read it back.
 func TestWholeMailboxThroughTheAdapter(t *testing.T) {
 	ctx := context.Background()
 	srv := newS3Server()
@@ -417,15 +417,15 @@ func TestWholeMailboxThroughTheAdapter(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, da := srv.objs["mail/archiv/m1"]; !da {
-		t.Errorf("nicht verschoben: %v", key(srv))
+		t.Errorf("not moved: %v", key(srv))
 	}
-	// Zustand landet im Bucket und wird von einem zweiten Postfach gelesen
+	// the state lands in the bucket and is read by a second mailbox
 	other := store.NewMailbox(ctx, a, nil, "test-bucket", "mail/", t.TempDir(), true)
 	if _, err := other.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if other.Index()[0].Folder != "archiv" {
-		t.Errorf("zweiter Rechner sieht: %+v", other.Index()[0])
+		t.Errorf("the second machine sees: %+v", other.Index()[0])
 	}
 }
 
@@ -440,14 +440,14 @@ func key(s *s3Server) []string {
 	return out
 }
 
-// TestBucketsWithoutPermissionYieldEmptyList prueft den Pfad, der jeden
-// Postfach-Benutzer traf: deren IAM-Policy gibt absichtlich kein
-// s3:ListAllMyBuckets, der Aufruf laeuft also in ein AccessDenied.
+// TestBucketsWithoutPermissionYieldEmptyList checks the path that hit every
+// mailbox user: their IAM policy deliberately grants no s3:ListAllMyBuckets,
+// so the call runs into an AccessDenied.
 //
-// Entscheidend ist, dass dabei ein LEERES Slice herauskommt und nicht nil: ein
-// nil-Slice wird zu JSON `null`, und die Oberflaeche ruft darauf .map() auf.
-// Der Nutzer sah dann nicht "kein Recht zum Auflisten", sondern
-// "Cannot read properties of null (reading 'map')" - und nichts ging mehr.
+// What matters is that an EMPTY slice comes out of it and not nil: a nil slice
+// becomes JSON `null`, and the interface calls .map() on it. The reader then
+// saw not "no right to list" but "Cannot read properties of null (reading
+// 'map')" - and nothing worked any more.
 func TestBucketsWithoutPermissionYieldEmptyList(t *testing.T) {
 	srv := newS3Server()
 	verweigern := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -467,10 +467,10 @@ func TestBucketsWithoutPermissionYieldEmptyList(t *testing.T) {
 
 	buckets, err := a.Buckets(context.Background())
 	if err != nil {
-		t.Fatalf("AccessDenied soll kein Fehler sein: %v", err)
+		t.Fatalf("AccessDenied should not be an error: %v", err)
 	}
 	if buckets == nil {
-		t.Fatal("nil statt leerer Liste - daran stirbt die Oberflaeche")
+		t.Fatal("nil instead of an empty list - the interface dies on this")
 	}
 	blob, _ := json.Marshal(map[string]any{"buckets": buckets})
 	if string(blob) != `{"buckets":[]}` {

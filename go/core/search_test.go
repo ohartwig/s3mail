@@ -28,8 +28,8 @@ func load(t *testing.T) ([]Message, *Data) {
 	return index, data.Normalize()
 }
 
-// TestSearchAgainstPython faehrt dieselben Abfragen wie die Python-Fassung und
-// vergleicht Treffer *und* Reihenfolge.
+// TestSearchAgainstPython runs the same queries as the Python version and
+// compares hits *and* order.
 func TestSearchAgainstPython(t *testing.T) {
 	index, data := load(t)
 	blob, err := os.ReadFile(filepath.Join("testdata", "searches.json"))
@@ -61,41 +61,41 @@ func TestSearchAgainstPython(t *testing.T) {
 	}
 }
 
-// TestSuchOptionen deckt ab, was nicht ueber die Textanfrage laeuft.
-func TestSuchOptionen(t *testing.T) {
+// TestSearchOptions covers what does not run through the text query.
+func TestSearchOptions(t *testing.T) {
 	index, data := load(t)
 	archiv := Archive
 	inboxName := Inbox
 
 	if got := len(Search(index, data, "", SearchOpts{Folder: &archiv})); got != 2 {
-		t.Errorf("archiv: %d Treffer, erwartet 2", got)
+		t.Errorf("archiv: %d hits, expected 2", got)
 	}
 	if got := len(Search(index, data, "", SearchOpts{Folder: &inboxName})); got != 3 {
-		t.Errorf("posteingang: %d Treffer, erwartet 3", got)
+		t.Errorf("inbox: %d hits, expected 3", got)
 	}
 	for _, f := range Search(index, data, "", SearchOpts{OnlyStar: true}) {
 		if !f.Star {
-			t.Error("OnlyStar liefert Mail ohne Stern")
+			t.Error("OnlyStar returns a message without a star")
 		}
 	}
 	for _, f := range Search(index, data, "", SearchOpts{OnlyUnread: true}) {
 		if f.Read {
-			t.Error("OnlyUnread liefert gelesene Mail")
+			t.Error("OnlyUnread returns a read message")
 		}
 	}
 	if got := Search(index, data, "", SearchOpts{Tag: "wichtig"}); len(got) != 1 || got[0].Mid != "m1" {
-		t.Errorf("Tag-Filter: %v", got)
+		t.Errorf("tag filter: %v", got)
 	}
 }
 
-// TestSortingNewestFirst - die Liste haengt daran, dass Date als Text
-// sortierbar ist (RFC 3339 in UTC).
+// TestSortingNewestFirst - the list hangs on Date being sortable as text
+// (RFC 3339 in UTC).
 func TestSortingNewestFirst(t *testing.T) {
 	index, data := load(t)
 	hits := Search(index, data, "", SearchOpts{})
 	for i := 1; i < len(hits); i++ {
 		if hits[i-1].Date < hits[i].Date {
-			t.Fatalf("nicht absteigend: %s vor %s", hits[i-1].Date, hits[i].Date)
+			t.Fatalf("not descending: %s before %s", hits[i-1].Date, hits[i].Date)
 		}
 	}
 }

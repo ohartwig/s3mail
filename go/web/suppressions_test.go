@@ -12,8 +12,8 @@ import (
 	"s3mail/store"
 )
 
-// serverWithSuppressions baut einen Server mit Postfach - ohne das antworten alle
-// /api/-Routen mit 503 ("noch nicht eingerichtet"), auch diese hier.
+// serverWithSuppressions builds a server with a mailbox - without one every
+// /api/ route answers 503 ("not set up yet"), these here included.
 func serverWithSuppressions(t *testing.T, l SuppressionList) (*httptest.Server, *Server) {
 	t.Helper()
 	ctx := context.Background()
@@ -26,7 +26,7 @@ func serverWithSuppressions(t *testing.T, l SuppressionList) (*httptest.Server, 
 	}
 	ts := httptest.NewServer(srv)
 	t.Cleanup(ts.Close)
-	srv.Port = portOf(ts.URL) // sonst schlaegt die Host-Pruefung zu
+	srv.Port = portOf(ts.URL) // or the host check kicks in
 	return ts, srv
 }
 
@@ -56,9 +56,9 @@ func (f *fakeSuppressions) List(context.Context) ([]SuppressionEntry, error) {
 	return out, nil
 }
 
-// TestAddressFromHeader - der Knopf sitzt an der Mailansicht, und dort steht
-// die Adresse als `Name <a@x.de>`. Ginge das ungefiltert an SES, landete der
-// Anzeigename auf der Sperrliste oder SES lehnte ab.
+// TestAddressFromHeader - the button sits on the message view, and there the
+// address reads `Name <a@x.com>`. Passed to SES unfiltered, the display name
+// would land on the suppression list or SES would refuse.
 func TestAddressFromHeader(t *testing.T) {
 	cases := map[string]string{
 		`Vorname Nachname <a@x.de>`:    "a@x.de",
@@ -66,12 +66,12 @@ func TestAddressFromHeader(t *testing.T) {
 		`  c@z.de  `:                   "c@z.de",
 		`<d@z.de>`:                     "d@z.de",
 		`a@x.de, b@y.de`:               "", // zwei auf einmal: lieber nichts
-		`kein-at-zeichen`:              "",
+		`no-at-sign`:                   "",
 		``:                             "",
 	}
 	for in, want := range cases {
 		if got := addressFrom(in); got != want {
-			t.Errorf("%q -> %q, erwartet %q", in, got, want)
+			t.Errorf("%q -> %q, expected %q", in, got, want)
 		}
 	}
 }
@@ -96,33 +96,33 @@ func TestBlockAndUnblock(t *testing.T) {
 		t.Fatalf("block: %d", resp.StatusCode)
 	}
 	var d struct {
-		Address  string             `json:"address"`
-		Gesperrt []SuppressionEntry `json:"blocked"`
+		Address string             `json:"address"`
+		Blocked []SuppressionEntry `json:"blocked"`
 	}
 	json.NewDecoder(resp.Body).Decode(&d)
 	if d.Address != "weg@x.de" || !f.blocked["weg@x.de"] {
-		t.Fatalf("nicht gesperrt: %+v", d)
+		t.Fatalf("not blocked: %+v", d)
 	}
-	// Die Antwort traegt die neue Liste, damit der Dialog ohne zweiten Aufruf stimmt.
-	if len(d.Gesperrt) != 1 {
-		t.Errorf("Liste in der Antwort: %+v", d.Gesperrt)
+	// The answer carries the new list, so the dialog is right without a second call.
+	if len(d.Blocked) != 1 {
+		t.Errorf("list in the answer: %+v", d.Blocked)
 	}
 
 	if resp := call1("/api/unblock", `{"address":"weg@x.de"}`); resp.StatusCode != 200 {
 		t.Fatalf("unblock: %d", resp.StatusCode)
 	}
 	if f.blocked["weg@x.de"] {
-		t.Error("nach dem Freigeben immer noch gesperrt")
+		t.Error("still blocked after unblocking")
 	}
 
-	// Ohne brauchbare Adresse: 400, und nichts passiert.
+	// Without a usable address: 400, and nothing happens.
 	if resp := call1("/api/block", `{"address":"quatsch"}`); resp.StatusCode != 400 {
-		t.Errorf("kaputte Adresse -> %d, erwartet 400", resp.StatusCode)
+		t.Errorf("broken address -> %d, expected 400", resp.StatusCode)
 	}
 }
 
-// TestNoSendingNoSuppressionList - wer nicht senden darf (--no-send), soll auch
-// niemanden vom Senden ausschliessen koennen. Ohne die Pruefung liefe die Route
+// TestNoSendingNoSuppressionList - whoever may not send (--no-send) should not
+// be able to exclude anyone from being sent to either. Without the check the
 // in einen Nil-Zeiger.
 func TestNoSendingNoSuppressionList(t *testing.T) {
 	ts, _ := serverWithSuppressions(t, nil)
@@ -133,11 +133,11 @@ func TestNoSendingNoSuppressionList(t *testing.T) {
 		t.Fatal(err)
 	}
 	if resp.StatusCode != 400 {
-		t.Errorf("ohne Sperrliste -> %d, erwartet 400", resp.StatusCode)
+		t.Errorf("without a suppression list -> %d, expected 400", resp.StatusCode)
 	}
 }
 
-// TestSuppressionListInTheInterface - der Knopf ist der einzige Weg dorthin.
+// TestSuppressionListInTheInterface - the button is the only way there.
 func TestSuppressionListInTheInterface(t *testing.T) {
 	for _, part := range []string{`id="vBlock"`, `id="blockedBtn"`, "/api/unblock"} {
 		if !strings.Contains(PageMailbox, part) {

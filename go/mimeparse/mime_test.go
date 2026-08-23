@@ -9,8 +9,8 @@ import (
 	"time"
 )
 
-// TestAgainstPython faehrt jede Mail aus dem Korpus durch den Go-Parser und
-// vergleicht Feld fuer Feld mit dem, was der bestehende Python-Parser liefert.
+// TestAgainstPython runs every message from the corpus through the Go parser
+// and compares field by field with what the existing Python parser delivers.
 func TestAgainstPython(t *testing.T) {
 	blob, err := os.ReadFile(filepath.Join("testdata", "expected.json"))
 	if err != nil {
@@ -74,9 +74,9 @@ func TestAgainstPython(t *testing.T) {
 	}
 }
 
-// deviations sind die Stellen, an denen der Go-Parser bewusst etwas anderes
-// liefert als der Python-Parser - allesamt, weil Python dort Daten verliert.
-// Jede Zeile hier ist eine Entscheidung, keine Nachlaessigkeit.
+// deviations are the places where the Go parser deliberately delivers
+// something else than the Python parser - all of them because Python loses
+// data there. Every line here is a decision, not carelessness.
 var deviations = map[string]string{
 	"03-cp1252-8bit/subject": "roher 8-Bit-Header wird als windows-1252 gerettet; " +
 		"Python setzt Ersatzzeichen, der Text ist dort verloren",

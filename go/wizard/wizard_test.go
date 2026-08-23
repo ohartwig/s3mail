@@ -5,14 +5,14 @@ import (
 	"testing"
 )
 
-// TestNeverNullToTheInterface haelt den Fehler fest, der v0.2.x fuer jeden
-// Postfach-Benutzer unbrauchbar machte.
+// TestNeverNullToTheInterface pins down the bug that made v0.2.x unusable for
+// every mailbox user.
 //
-// Die Postfach-Policy gibt absichtlich kein s3:ListAllMyBuckets - sonst saehe
-// jeder alle Buckets des Kontos, auch die Backups. Der Aufruf lief also in ein
-// AccessDenied und lieferte ein nil-Slice. In Go wird daraus JSON `null`, nicht
-// `[]`, und `null.map(...)` beendet das Skript der Seite. Der Nutzer sah dann
-// nicht "kein Recht zum Auflisten", sondern gar nichts mehr:
+// The mailbox policy deliberately grants no s3:ListAllMyBuckets - otherwise
+// everyone would see every bucket of the account, backups included. So the
+// call ran into an AccessDenied and returned a nil slice. In Go that becomes
+// JSON `null`, not `[]`, and `null.map(...)` ends the page's script. The
+// reader then saw not "no right to list" but nothing at all any more:
 //
 //	✕ Cannot read properties of null (reading 'map')
 func TestNeverNullToTheInterface(t *testing.T) {
@@ -26,13 +26,13 @@ func TestNeverNullToTheInterface(t *testing.T) {
 			t.Fatal(err)
 		}
 		if string(blob) == `{"buckets":null}` {
-			t.Errorf("%s: wird zu null - die Seite stirbt daran", name)
+			t.Errorf("%s: becomes null - the page dies on it", name)
 		}
 	}
 }
 
-// TestNilReallyBecomesNull dokumentiert, warum es nichtNil ueberhaupt braucht -
-// damit niemand die Funktion als ueberfluessig wegraeumt.
+// TestNilReallyBecomesNull documents why notNil is needed at all - so nobody
+// clears the function away as superfluous.
 func TestNilReallyBecomesNull(t *testing.T) {
 	var empty []string
 	blob, _ := json.Marshal(map[string]any{"buckets": empty})

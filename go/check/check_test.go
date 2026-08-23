@@ -17,6 +17,11 @@ import (
 	"s3mail/store"
 )
 
+// label is the name a checklist item carries in German. The test indexes by the
+// catalogue key and not by the sentence: the wording belongs to the catalogue,
+// and a test hanging on it breaks the next time somebody polishes a sentence.
+func label(key string) string { return i18n.Get("de").T(key) }
+
 func byName(items []check.Item) map[string]check.Item {
 	out := map[string]check.Item{}
 	for _, p := range items {
@@ -30,20 +35,20 @@ func TestEverythingOK(t *testing.T) {
 	f.Store("mail/m1", []byte("From: a@b.de\r\nSubject: x\r\n\r\nText\r\n"))
 	p := check.Run(context.Background(), f, nil, nil, "test-bucket", "mail/", "", i18n.Get("de"))
 	if !check.AllOK(p) {
-		t.Errorf("nicht alles gruen: %+v", p)
+		t.Errorf("not everything green: %+v", p)
 	}
 	k := byName(p)
-	if !strings.Contains(k["Bucket lesen"].Detail, "Objekt") {
-		t.Errorf("%+v", k["Bucket lesen"])
+	if !strings.Contains(k[label("check.listBucket")].Detail, "Objekt") {
+		t.Errorf("%+v", k[label("check.listBucket")])
 	}
-	if k["Mail lesen"].Detail != "m1" {
-		t.Errorf("%+v", k["Mail lesen"])
+	if k[label("check.readMail")].Detail != "m1" {
+		t.Errorf("%+v", k[label("check.readMail")])
 	}
-	if k["Verschlüsselung"].Detail != "keine – die Mails liegen im Klartext" {
-		t.Errorf("%+v", k["Verschlüsselung"])
+	if k[label("check.encryption")].Detail != label("check.encryption.none") {
+		t.Errorf("%+v", k[label("check.encryption")])
 	}
-	if !k["Schreiben"].OK || !k["Löschen"].OK {
-		t.Errorf("Schreiben/Loeschen: %+v %+v", k["Schreiben"], k["Löschen"])
+	if !k[label("check.write")].OK || !k[label("check.delete")].OK {
+		t.Errorf("write/delete: %+v %+v", k[label("check.write")], k[label("check.delete")])
 	}
 	// Das Testobjekt muss wieder weg sein
 	if f.Has("mail/.s3mail-probe") {
@@ -51,7 +56,7 @@ func TestEverythingOK(t *testing.T) {
 	}
 }
 
-// TestMissingPermissionNamesTheAction - das ist der ganze Zweck der Liste.
+// TestMissingPermissionNamesTheAction - that is the whole point of the list.
 func TestMissingPermissionNamesTheAction(t *testing.T) {
 	f := s3fake.New()
 	f.Store("mail/m1", []byte("From: a@b.de\r\n\r\nText\r\n"))
@@ -59,14 +64,14 @@ func TestMissingPermissionNamesTheAction(t *testing.T) {
 
 	p := check.Run(context.Background(), f, nil, nil, "test-bucket", "mail/", "", i18n.Get("de"))
 	k := byName(p)
-	if k["Schreiben"].OK {
-		t.Fatal("Schreibfehler nicht bemerkt")
+	if k[label("check.write")].OK {
+		t.Fatal("write error not noticed")
 	}
-	if !strings.Contains(k["Schreiben"].Hint, "s3:PutObject") {
-		t.Errorf("Hinweis nennt die IAM-Aktion nicht: %q", k["Schreiben"].Hint)
+	if !strings.Contains(k[label("check.write")].Hint, "s3:PutObject") {
+		t.Errorf("the hint does not name the IAM action: %q", k[label("check.write")].Hint)
 	}
 	if check.AllOK(p) {
-		t.Error("Gesamturteil trotz Fehler gruen")
+		t.Error("overall verdict green despite the error")
 	}
 }
 
@@ -74,25 +79,25 @@ func TestEmptyMailboxIsNoError(t *testing.T) {
 	f := s3fake.New()
 	p := check.Run(context.Background(), f, nil, nil, "test-bucket", "mail/", "", i18n.Get("de"))
 	k := byName(p)
-	if !k["Bucket lesen"].OK || !strings.Contains(k["Bucket lesen"].Detail, "noch nichts") {
-		t.Errorf("%+v", k["Bucket lesen"])
+	if !k[label("check.listBucket")].OK || !strings.Contains(k[label("check.listBucket")].Detail, "noch nichts") {
+		t.Errorf("%+v", k[label("check.listBucket")])
 	}
-	if !k["Mail lesen"].Skipped || !k["Verschlüsselung"].Skipped {
-		t.Error("leeres Postfach muss uebersprungen werden, nicht rot sein")
+	if !k[label("check.readMail")].Skipped || !k[label("check.encryption")].Skipped {
+		t.Error("an empty mailbox has to be skipped, not turn red")
 	}
 	if !check.AllOK(p) {
-		t.Errorf("leeres Postfach als Fehler gewertet: %+v", p)
+		t.Errorf("empty mailbox counted as an error: %+v", p)
 	}
 }
 
-// TestInternalObjectsAreNotMail - sonst prueft der Test den Zustand statt einer Mail.
+// TestInternalObjectsAreNotMail - otherwise the test checks the state instead of a message.
 func TestInternalObjectsAreNotMail(t *testing.T) {
 	f := s3fake.New()
 	f.Store("mail/"+store.StateObject, []byte(`{"messages":{}}`))
 	f.Store("mail/"+store.StateOps+"x.json", []byte(`{"ops":[]}`))
 	p := byName(check.Run(context.Background(), f, nil, nil, "test-bucket", "mail/", "", i18n.Get("de")))
-	if !p["Mail lesen"].Skipped {
-		t.Errorf("Zustandsdatei als Mail geprueft: %+v", p["Mail lesen"])
+	if !p[label("check.readMail")].Skipped {
+		t.Errorf("state file checked as mail: %+v", p[label("check.readMail")])
 	}
 }
 
@@ -130,8 +135,8 @@ func envelope(t *testing.T) ([]byte, map[string]string, []byte) {
 	return body, f.Meta, key
 }
 
-// TestEncryptionIsDetected - der Assistent soll sagen, womit man es zu tun
-// hat, statt den Nutzer raten zu lassen.
+// TestEncryptionIsDetected - the wizard should say what it is dealing with
+// instead of leaving the reader to guess.
 func TestEncryptionIsDetected(t *testing.T) {
 	body, meta, key := envelope(t)
 
@@ -140,30 +145,30 @@ func TestEncryptionIsDetected(t *testing.T) {
 	f.SetMeta("mail/enc", meta)
 	p := byName(check.Run(context.Background(), f, &kmsFake{key: key}, nil,
 		"test-bucket", "mail/", "", i18n.Get("de")))
-	if !p["Verschlüsselung"].OK || !strings.Contains(p["Verschlüsselung"].Detail, "klappt") {
-		t.Errorf("%+v", p["Verschlüsselung"])
+	if !p[label("check.encryption")].OK || p[label("check.encryption")].Detail != label("check.encryption.clientOk") {
+		t.Errorf("%+v", p[label("check.encryption")])
 	}
 
-	// ohne kms:Decrypt muss der Punkt rot sein und die Aktion nennen
+	// without kms:Decrypt the item has to be red and name the action
 	p = byName(check.Run(context.Background(), f,
 		&kmsFake{err: errors.New("AccessDenied")}, nil, "test-bucket", "mail/", "", i18n.Get("de")))
-	if p["Verschlüsselung"].OK {
-		t.Error("fehlendes kms:Decrypt nicht bemerkt")
+	if p[label("check.encryption")].OK {
+		t.Error("missing kms:Decrypt not noticed")
 	}
-	if !strings.Contains(p["Verschlüsselung"].Hint, "kms:Decrypt") {
-		t.Errorf("Hinweis: %q", p["Verschlüsselung"].Hint)
+	if !strings.Contains(p[label("check.encryption")].Hint, "kms:Decrypt") {
+		t.Errorf("hint: %q", p[label("check.encryption")].Hint)
 	}
 
-	// serverseitig verschluesselt: nur ein Hinweis, kein Fehler
+	// encrypted server-side: only a hint, no error
 	g := s3fake.New()
 	g.Store("mail/m1", []byte("From: a@b.de\r\n\r\nText\r\n"))
 	g.SetSSE("mail/m1", store.CopyOpts{ServerSideEncryption: "aws:kms"})
 	p = byName(check.Run(context.Background(), g, nil, nil, "test-bucket", "mail/", "", i18n.Get("de")))
-	if !p["Verschlüsselung"].OK || !strings.Contains(p["Verschlüsselung"].Detail, "serverseitig") {
-		t.Errorf("%+v", p["Verschlüsselung"])
+	if !p[label("check.encryption")].OK || p[label("check.encryption")].Detail != label("check.encryption.serverKms") {
+		t.Errorf("%+v", p[label("check.encryption")])
 	}
-	if !strings.Contains(p["Verschlüsselung"].Hint, "kms:GenerateDataKey") {
-		t.Errorf("Hinweis zu SSE-KMS fehlt: %q", p["Verschlüsselung"].Hint)
+	if !strings.Contains(p[label("check.encryption")].Hint, "kms:GenerateDataKey") {
+		t.Errorf("hint about SSE-KMS missing: %q", p[label("check.encryption")].Hint)
 	}
 }
 
@@ -183,41 +188,41 @@ func TestSESSender(t *testing.T) {
 
 	p := byName(check.Run(ctx, f, nil, &sesFake{good: []string{"support@firma.de"}},
 		"test-bucket", "mail/", "support@firma.de", i18n.Get("de")))
-	if !p["SES-Absender"].OK {
-		t.Errorf("%+v", p["SES-Absender"])
+	if !p[label("check.sender")].OK {
+		t.Errorf("%+v", p[label("check.sender")])
 	}
 	p = byName(check.Run(ctx, f, nil, &sesFake{}, "test-bucket", "mail/", "x@y.de", i18n.Get("de")))
-	if p["SES-Absender"].OK {
+	if p[label("check.sender")].OK {
 		t.Error("unverifizierte Adresse als in Ordnung gemeldet")
 	}
-	if !strings.Contains(p["SES-Absender"].Hint, "verifizieren") {
-		t.Errorf("Hinweis: %q", p["SES-Absender"].Hint)
+	if p[label("check.sender")].Hint != label("check.sender.hint") {
+		t.Errorf("hint: %q", p[label("check.sender")].Hint)
 	}
-	// ohne Absender: uebersprungen, nicht rot
+	// without a sender: skipped, not red
 	p = byName(check.Run(ctx, f, nil, &sesFake{}, "test-bucket", "mail/", "", i18n.Get("de")))
-	if !p["SES-Absender"].Skipped {
-		t.Errorf("%+v", p["SES-Absender"])
+	if !p[label("check.sender")].Skipped {
+		t.Errorf("%+v", p[label("check.sender")])
 	}
 }
 
-// TestHintNamesThePrefixFirst - der haeufigste Grund fuer ein 403 beim
-// Auflisten ist bei prefix-beschraenkten Zugaengen nicht das fehlende Recht,
-// sondern ein Prefix eine Ebene zu weit oben. Die alte Fassung nannte genau das
-// nicht und schickte den Nutzer zur IAM-Konsole statt ins Feld darueber.
+// TestHintNamesThePrefixFirst - for prefix-restricted accesses the most
+// common reason for a 403 while listing is not the missing right but a prefix
+// one level too high. The old version named exactly that not at all and sent
+// the reader to the IAM console instead of to the field above.
 func TestHintNamesThePrefixFirst(t *testing.T) {
 	f := s3fake.New()
 	f.ListErr = errors.New("AccessDenied")
 	p := byName(check.Run(context.Background(), f, nil, nil,
 		"test-bucket", "mail/ole/", "", i18n.Get("de")))
 
-	h := p["Bucket lesen"].Hint
+	h := p[label("check.listBucket")].Hint
 	if !strings.Contains(h, "mail/ole/") {
-		t.Errorf("das erwartete Prefix wird nicht genannt: %q", h)
+		t.Errorf("the expected prefix is not named: %q", h)
 	}
 	if !strings.Contains(h, "Prefix") {
-		t.Errorf("Prefix kommt im Hinweis nicht vor: %q", h)
+		t.Errorf("the prefix does not appear in the hint: %q", h)
 	}
 	if strings.Index(h, "Prefix") > strings.Index(h, "s3:ListBucket") {
-		t.Errorf("die unwahrscheinlichere Ursache steht zuerst: %q", h)
+		t.Errorf("the less likely cause comes first: %q", h)
 	}
 }

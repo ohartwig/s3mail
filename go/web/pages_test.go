@@ -21,65 +21,65 @@ func TestTokenPageIsTranslated(t *testing.T) {
 	for code, phrase := range fuer {
 		out := page("token", PageToken, code, nil)
 		if !strings.Contains(out, phrase) {
-			t.Errorf("%s: %q fehlt in der Seite", code, phrase)
+			t.Errorf("%s: %q missing from the page", code, phrase)
 		}
 		if !strings.Contains(out, `lang="`+code+`"`) {
-			t.Errorf("%s: lang-Attribut nicht gesetzt", code)
+			t.Errorf("%s: lang attribute not set", code)
 		}
 	}
 }
 
-// Ein Sprachwechsel darf nicht mehr aendern als die Sprache: derselbe Aufbau,
-// dieselben Ankerpunkte fuer das Skript.
+// A language switch may change no more than the language: the same structure,
+// the same anchors for the script.
 func TestSwitchingLanguageKeepsTheMarkup(t *testing.T) {
 	de := page("inbox", PageMailbox, "de", map[string]any{"bucket": "b"})
 	es := page("inbox", PageMailbox, "es", map[string]any{"bucket": "b"})
 
 	for _, anchor := range []string{`id="side"`, `id="list"`, `id="view"`, `id="q"`} {
 		if !strings.Contains(de, anchor) || !strings.Contains(es, anchor) {
-			t.Errorf("%s fehlt in einer der beiden Fassungen", anchor)
+			t.Errorf("%s missing from one of the two versions", anchor)
 		}
 	}
 	if de == es {
-		t.Error("beide Fassungen sind gleich - wird ueberhaupt uebersetzt?")
+		t.Error("both versions are identical - is anything translated at all?")
 	}
 }
 
-// Der Katalog muss auch im Skript ankommen: die Saetze, die beim Klicken
-// entstehen, kann keine Vorlage vorher erzeugen.
+// The catalogue has to reach the script as well: the sentences that appear on
+// a click cannot be produced by a template beforehand.
 func TestCatalogReachesTheScript(t *testing.T) {
 	out := page("inbox", PageMailbox, "es", map[string]any{"bucket": "b"})
 
 	if strings.Contains(out, "__I18N__") {
-		t.Error("__I18N__ steht noch als Platzhalter in der Seite")
+		t.Error("__I18N__ still sits in the page as a placeholder")
 	}
 	if !strings.Contains(out, `"nav.refresh"`) {
-		t.Error("der Katalog fehlt im ausgelieferten Skript")
+		t.Error("the catalogue is missing from the shipped script")
 	}
 }
 
-// Die gewaehlte Sprache schlaegt die des Browsers. Wer in s3mail eine Sprache
-// gewaehlt hat, hat etwas Bestimmteres gesagt als seine Browsereinstellung.
+// The chosen language beats the browser. Whoever picked a language in s3mail
+// has said something more specific than their browser setting.
 func TestChoiceBeatsBrowser(t *testing.T) {
 	srv := NewServer(nil, testToken, "127.0.0.1", 0, map[string]any{"language": "de"})
 
 	r := httptest.NewRequest("GET", "/", nil)
 	r.Header.Set("Accept-Language", "es-ES,es;q=0.9")
 	if got := srv.language(r); got != "de" {
-		t.Errorf("Konfiguration schlaegt Browser nicht: %q", got)
+		t.Errorf("configuration does not beat the browser: %q", got)
 	}
 
 	r.AddCookie(&http.Cookie{Name: "s3mail_lang", Value: "es"})
 	if got := srv.language(r); got != "es" {
-		t.Errorf("Auswahl schlaegt Konfiguration nicht: %q", got)
+		t.Errorf("the choice does not beat the configuration: %q", got)
 	}
 
-	// Ohne alles entscheidet der Browser.
+	// With neither, the browser decides.
 	empty := NewServer(nil, testToken, "127.0.0.1", 0, nil)
 	r2 := httptest.NewRequest("GET", "/", nil)
 	r2.Header.Set("Accept-Language", "es-ES,es;q=0.9,en;q=0.4")
 	if got := empty.language(r2); got != "es" {
-		t.Errorf("Browser wird nicht gehoert: %q", got)
+		t.Errorf("the browser is not heard: %q", got)
 	}
 }
 
@@ -111,13 +111,13 @@ func TestLanguageRouteSetsACookie(t *testing.T) {
 		t.Errorf("Cookie = %q", set)
 	}
 
-	// Eine Sprache, die es nicht gibt, darf nicht als Wunsch haengenbleiben.
+	// A language that does not exist must not stick as a wish.
 	req2, _ := http.NewRequest("GET", ts.URL+"/language/fr", nil)
 	req2.Header.Set("X-S3mail-Token", testToken)
 	resp2, _ := client.Do(req2)
 	for _, c := range resp2.Cookies() {
 		if c.Name == "s3mail_lang" && c.Value != i18n.Fallback {
-			t.Errorf("unbekannte Sprache gespeichert: %q", c.Value)
+			t.Errorf("unknown language stored: %q", c.Value)
 		}
 	}
 }

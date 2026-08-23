@@ -20,8 +20,8 @@ func apiError(code string) error {
 	}
 }
 
-// TestPlainText - das AWS-SDK meldet fehlende Zugangsdaten in einem halben Dutzend
-// Formen, alle englisch. Daraus muss ein Satz mit dem naechsten Schritt werden.
+// TestPlainText - the AWS SDK reports missing credentials in half a dozen
+// shapes, all of them English. That has to become a sentence with a next step.
 func TestPlainText(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -58,24 +58,24 @@ func TestPlainText(t *testing.T) {
 		got := awsx.PlainText(f.err, f.profile, i18n.Get("de"))
 		for _, part := range f.must {
 			if !strings.Contains(got, part) {
-				t.Errorf("%s: %q enthaelt nicht %q", f.name, got, part)
+				t.Errorf("%s: %q does not contain %q", f.name, got, part)
 			}
 		}
 		for _, part := range f.mustNot {
 			if strings.Contains(got, part) {
-				t.Errorf("%s: %q sollte %q nicht enthalten", f.name, got, part)
+				t.Errorf("%s: %q should not contain %q", f.name, got, part)
 			}
 		}
 	}
 }
 
-// TestPlainTextSwallowsNothing - was wir nicht kennen, muss durchkommen, sonst
-// steht der Nutzer vor einer freundlichen, aber nutzlosen Meldung.
+// TestPlainTextSwallowsNothing - what we do not know has to come through, or
+// the reader faces a friendly but useless message.
 func TestPlainTextSwallowsNothing(t *testing.T) {
 	if got := awsx.PlainText(errors.New("Boom aus dem Nichts"), "", i18n.Get("de")); !strings.Contains(got, "Boom") {
-		t.Errorf("unbekannter Fehler verschluckt: %q", got)
+		t.Errorf("unknown error swallowed: %q", got)
 	}
 	if awsx.PlainText(nil, "", i18n.Get("de")) != "" {
-		t.Error("nil ergibt eine Meldung")
+		t.Error("nil yields a message")
 	}
 }

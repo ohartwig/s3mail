@@ -39,15 +39,15 @@ func TestIndexAndFolders(t *testing.T) {
 		t.Fatal(err)
 	}
 	if res.New != 3 {
-		t.Errorf("%d neue Mails, erwartet 3", res.New)
+		t.Errorf("%d new messages, expected 3", res.New)
 	}
 	for _, msg := range m.Index() {
 		if strings.HasPrefix(msg.Key, "andere/") {
-			t.Errorf("Objekt ausserhalb des Prefix im Index: %s", msg.Key)
+			t.Errorf("object outside the prefix in the index: %s", msg.Key)
 		}
 	}
 	if got := m.Index()[0].Subject; got != "Altes" {
-		t.Errorf("Betreff nicht geparst: %q", got)
+		t.Errorf("subject not parsed: %q", got)
 	}
 	to := map[string]core.FolderInfo{}
 	for _, o := range m.Folders() {
@@ -78,7 +78,7 @@ func TestStateAndOpsAreNotMail(t *testing.T) {
 	}
 	for _, o := range m.Folders() {
 		if strings.HasPrefix(o.Name, ".") {
-			t.Errorf("interner Ordner in der Seitenleiste: %s", o.Name)
+			t.Errorf("internal folder in the sidebar: %s", o.Name)
 		}
 	}
 }
@@ -102,11 +102,11 @@ func TestMoveCarriesTheState(t *testing.T) {
 		t.Fatalf("%+v", res)
 	}
 	if _, da := f.Objs["mail/m1"]; da {
-		t.Error("Original nicht geloescht")
+		t.Error("original not deleted")
 	}
 	e := m.State.Get("m1")
 	if !e.Read || !e.Star || !has(e.Tags, "wichtig") {
-		t.Errorf("Zustand nach dem Verschieben verloren: %+v", e)
+		t.Errorf("state lost after the move: %+v", e)
 	}
 }
 
@@ -123,10 +123,10 @@ func TestMoveInheritsEncryption(t *testing.T) {
 	}
 	fresh := f.SSE["mail/archiv/m1"]
 	if fresh.ServerSideEncryption != "aws:kms" || fresh.SSEKMSKeyID == "" {
-		t.Errorf("Verschluesselung nicht mitgenommen: %+v", fresh)
+		t.Errorf("encryption not carried over: %+v", fresh)
 	}
 	if fresh.StorageClass != "STANDARD_IA" {
-		t.Errorf("Speicherklasse nicht mitgenommen: %+v", fresh)
+		t.Errorf("storage class not carried over: %+v", fresh)
 	}
 }
 
@@ -137,7 +137,7 @@ func TestMoveChecks(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := m.Move(ctx, []string{"mail/m1"}, "../boese"); err == nil {
-		t.Error("Ordnername mit .. durchgelassen")
+		t.Error("folder name with .. let through")
 	}
 	if _, err := m.Move(ctx, []string{"andere/nicht-meins"}, core.Archive); err == nil {
 		t.Error("Key ausserhalb des Prefix durchgelassen")
@@ -145,10 +145,10 @@ func TestMoveChecks(t *testing.T) {
 	if _, err := m.Move(ctx, []string{"mail/" + store.StateObject}, core.Archive); err == nil {
 		t.Error("Snapshot verschiebbar")
 	}
-	// in denselben Ordner: uebersprungen, nicht kopiert
+	// into the same folder: skipped, not copied
 	res, err := m.Move(ctx, []string{"mail/m1"}, core.Inbox)
 	if err != nil || len(res) != 1 || !res[0].Skipped {
-		t.Errorf("Verschieben in denselben Ordner: %+v %v", res, err)
+		t.Errorf("move into the same folder: %+v %v", res, err)
 	}
 }
 
@@ -165,14 +165,14 @@ func TestNameCollision(t *testing.T) {
 		t.Fatal(err)
 	}
 	if res[0].NewKey != "mail/archiv/m1-1" {
-		t.Errorf("Kollision nicht entschaerft: %q", res[0].NewKey)
+		t.Errorf("collision not defused: %q", res[0].NewKey)
 	}
 	if _, da := f.Objs["mail/archiv/m1"]; !da {
-		t.Error("bestehende Mail ueberschrieben")
+		t.Error("existing message overwritten")
 	}
 }
 
-// TestDeleteOnlyFromTrash - die Pruefung sitzt im Store, nicht in der UI.
+// TestDeleteOnlyFromTrash - the check sits in the store, not in the UI.
 func TestDeleteOnlyFromTrash(t *testing.T) {
 	ctx := context.Background()
 	_, m := buildMailbox(t)
@@ -187,10 +187,10 @@ func TestDeleteOnlyFromTrash(t *testing.T) {
 	}
 	n, err := m.Delete(ctx, []string{"mail/trash/m1"}, false)
 	if err != nil || n != 1 {
-		t.Errorf("Loeschen aus dem Papierkorb: %d %v", n, err)
+		t.Errorf("delete from the trash: %d %v", n, err)
 	}
 	if _, da := m.State.Data().Messages["m1"]; da {
-		t.Error("Zustandseintrag der geloeschten Mail blieb stehen")
+		t.Error("the state entry of the deleted message stayed behind")
 	}
 }
 
@@ -204,12 +204,12 @@ func TestDeleteBlocked(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := m.Delete(ctx, []string{"mail/trash/m1"}, false); !errors.Is(err, store.ErrDeleteBlocked) {
-		t.Errorf("--no-delete nicht durchgesetzt: %v", err)
+		t.Errorf("--no-delete not enforced: %v", err)
 	}
 }
 
-// TestEncryptedMeansNoRangeGet - ein halbes Chiffrat laesst sich nicht
-// entschluesseln, also muss der Range-GET wegfallen, sobald so ein Objekt auftaucht.
+// TestEncryptedMeansNoRangeGet - half a ciphertext cannot be decrypted, so the
+// range GET has to fall away as soon as such an object turns up.
 func TestEncryptedMeansNoRangeGet(t *testing.T) {
 	ctx := context.Background()
 	plain, cases := loadEnvelopes(t)
@@ -227,7 +227,7 @@ func TestEncryptedMeansNoRangeGet(t *testing.T) {
 		t.Error("Klartext weicht ab")
 	}
 	if !m.Encrypted() {
-		t.Error("Postfach nicht als verschluesselt gemerkt")
+		t.Error("mailbox not remembered as encrypted")
 	}
 	// zweiter Zugriff darf gar keinen Range mehr schicken
 	f.ClearCalls()
@@ -261,10 +261,10 @@ func TestEncryptedWithoutPermissionFailsOnlyThatMail(t *testing.T) {
 		to[msg.Mid] = msg
 	}
 	if to["klar"].Subject != "Lesbar" {
-		t.Errorf("lesbare Mail mitgerissen: %+v", to["klar"])
+		t.Errorf("readable message dragged down: %+v", to["klar"])
 	}
 	if to["enc1"].Subject != "(nicht lesbar)" {
-		t.Errorf("unlesbare Mail nicht markiert: %+v", to["enc1"])
+		t.Errorf("unreadable message not marked: %+v", to["enc1"])
 	}
 }
 
@@ -291,13 +291,13 @@ func TestRulesWhileIndexing(t *testing.T) {
 		to[msg.Mid] = msg
 	}
 	if to["m2"].Folder != core.Archive {
-		t.Errorf("Regel hat nicht verschoben: %+v", to["m2"])
+		t.Errorf("the rule did not move it: %+v", to["m2"])
 	}
 	if !has(m.State.Get("m2").Tags, "Werbung") {
-		t.Error("Regel-Tag fehlt")
+		t.Error("rule tag missing")
 	}
 	if to["m1"].Folder != core.Inbox {
-		t.Error("Regel hat eine unbeteiligte Mail angefasst")
+		t.Error("the rule touched an uninvolved message")
 	}
 }
 
@@ -308,23 +308,23 @@ func TestCacheSavesRequests(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.ClearCalls()
-	res, err := m.Refresh(ctx) // nichts hat sich geaendert
+	res, err := m.Refresh(ctx) // nothing has changed
 	if err != nil {
 		t.Fatal(err)
 	}
 	if res.New != 0 {
-		t.Errorf("%d Mails erneut geholt, erwartet 0", res.New)
+		t.Errorf("%d messages fetched again, expected 0", res.New)
 	}
 	for _, a := range f.CallLog {
 		if strings.HasPrefix(a, "get mail/m") {
-			t.Errorf("Mail trotz gleichem ETag erneut geholt: %s", a)
+			t.Errorf("message fetched again despite the same ETag: %s", a)
 		}
 	}
 }
 
-// TestBodyFromTheCache - eine Mail zum zweiten Mal zu oeffnen darf
-// keinen S3-Zugriff mehr kosten. Der Index lag schon immer lokal, der Inhalt
-// nicht: bisher wurde jede geoeffnete Mail samt Anhaengen erneut geholt.
+// TestBodyFromTheCache - opening a message a second time must not cost an S3
+// access any more. The index was always local, the content was not: until now
+// every opened message was fetched again, attachments and all.
 func TestBodyFromTheCache(t *testing.T) {
 	ctx := context.Background()
 	f, m := buildMailbox(t)
@@ -351,8 +351,8 @@ func TestBodyFromTheCache(t *testing.T) {
 	}
 }
 
-// TestCacheHangsOnTheETag - aendert sich das Objekt, muss der Eintrag
-// verfallen. Sonst zeigt s3mail nach einem Wechsel des Inhalts die alte Fassung.
+// TestCacheHangsOnTheETag - if the object changes, the entry has to expire.
+// Otherwise s3mail shows the old version after the content changed.
 func TestCacheHangsOnTheETag(t *testing.T) {
 	ctx := context.Background()
 	f, m := buildMailbox(t)
@@ -372,16 +372,16 @@ func TestCacheHangsOnTheETag(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(raw), "Anderer Inhalt") {
-		t.Error("alte Fassung aus dem Zwischenspeicher geliefert")
+		t.Error("old version served from the cache")
 	}
 }
 
 // TestPartialFetchesAreNotCached - ein gespeichertes Teilstueck
-// waere beim naechsten Oeffnen eine abgeschnittene Mail, ohne dass es auffaellt.
+// would be a truncated message on the next open, without anyone noticing.
 func TestPartialFetchesAreNotCached(t *testing.T) {
 	ctx := context.Background()
 	f, m := buildMailbox(t)
-	if _, err := m.Refresh(ctx); err != nil { // holt nur HeaderChunk
+	if _, err := m.Refresh(ctx); err != nil { // fetches only HeaderChunk
 		t.Fatal(err)
 	}
 	f.ClearCalls()
@@ -395,6 +395,6 @@ func TestPartialFetchesAreNotCached(t *testing.T) {
 		}
 	}
 	if !fetched {
-		t.Error("ganze Mail kam aus einem Teilstueck im Zwischenspeicher")
+		t.Error("a whole message came out of a fragment in the cache")
 	}
 }

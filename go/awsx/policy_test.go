@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-// Die echte Postfach-Policy, wie IAM sie ausliefert: url-kodiert, Aktionen mal
-// als Liste, mal einzeln. Aendert sich der Zuschnitt in koh-infra, faellt es hier auf.
+// The real mailbox policy the way IAM delivers it: url-encoded, actions
+// sometimes as a list, sometimes single. If the cut changes in koh-infra, it shows up here.
 const mailboxPolicy = `{
   "Version": "2012-10-17",
   "Statement": [
@@ -25,40 +25,40 @@ const mailboxPolicy = `{
 func TestMailboxPolicyYieldsEverything(t *testing.T) {
 	f := fromPolicies([]string{url.QueryEscape(mailboxPolicy)})
 	if f.Bucket != "koh-findready-mail" {
-		t.Errorf("Bucket = %q", f.Bucket)
+		t.Errorf("bucket = %q", f.Bucket)
 	}
 	if f.Prefix != "mail/ole/" {
-		t.Errorf("Prefix = %q, erwartet mail/ole/", f.Prefix)
+		t.Errorf("prefix = %q, expected mail/ole/", f.Prefix)
 	}
 	if f.From != "ole@findready.ai" {
-		t.Errorf("Absender = %q", f.From)
+		t.Errorf("sender = %q", f.From)
 	}
 	if !f.Complete() {
-		t.Error("Fund gilt als unvollstaendig, obwohl Bucket und Prefix da sind")
+		t.Error("the finding counts as incomplete although bucket and prefix are there")
 	}
 }
 
 func TestUnencodedDocumentWorksToo(t *testing.T) {
-	// GetPolicyVersion liefert je nach Weg kodiert oder nicht.
+	// GetPolicyVersion delivers it encoded or not, depending on the path.
 	if f := fromPolicies([]string{mailboxPolicy}); f.Prefix != "mail/ole/" {
 		t.Errorf("Prefix = %q", f.Prefix)
 	}
 }
 
 func TestTheMoreSpecificPrefixWins(t *testing.T) {
-	// Ein Verwalter-Zugang darf den ganzen Bucket und trotzdem ein Postfach.
+	// An administrator access may have the whole bucket and a mailbox all the same.
 	doc := `{"Statement":[
 	 {"Effect":"Allow","Action":"s3:GetObject","Resource":"arn:aws:s3:::b/*"},
 	 {"Effect":"Allow","Action":"s3:GetObject","Resource":"arn:aws:s3:::b/mail/tim/*"}]}`
 	f := fromPolicies([]string{doc})
 	if f.Prefix != "mail/tim/" {
-		t.Errorf("Prefix = %q, erwartet den genaueren", f.Prefix)
+		t.Errorf("prefix = %q, expected the more precise one", f.Prefix)
 	}
 }
 
 func TestDenyIsNotReadAsGuidance(t *testing.T) {
-	// Sonst schluege die Bucket-Policy, die fremde Postfaecher verbietet, als
-	// Vorschlag durch - der Zugang landete im Postfach eines anderen.
+	// Otherwise the bucket policy, which forbids foreign mailboxes, would come
+	// through as a suggestion - and the access would land in somebody else's mailbox.
 	doc := `{"Statement":[{"Effect":"Deny","Action":"s3:GetObject",
 	 "Resource":"arn:aws:s3:::b/mail/marc/*"}]}`
 	if f := fromPolicies([]string{doc}); f.Bucket != "" || f.Prefix != "" {
@@ -73,20 +73,20 @@ func TestPlaceholdersAreNoSuggestion(t *testing.T) {
 	  "Condition":{"StringLike":{"ses:FromAddress":"*@findready.ai"}}}]}`
 	f := fromPolicies([]string{doc})
 	if f.Bucket != "" {
-		t.Errorf("Bucket aus Platzhalter-ARN: %q", f.Bucket)
+		t.Errorf("bucket from a wildcard ARN: %q", f.Bucket)
 	}
 	if f.From != "" {
-		t.Errorf("Absender aus Muster: %q", f.From)
+		t.Errorf("sender from a pattern: %q", f.From)
 	}
 }
 
 func TestPrefixWithoutSlashIsCutToTheFolder(t *testing.T) {
-	// "mail/ole" ohne Schraegstrich ist fuer s3:prefix etwas anderes als
-	// "mail/ole/" - und genau daran scheiterte das Auflisten im ersten Versuch.
+	// "mail/ole" without a slash means something else to s3:prefix than
+	// "mail/ole/" - and that is exactly what listing failed on at the first try.
 	doc := `{"Statement":[{"Effect":"Allow","Action":"s3:GetObject",
 	 "Resource":"arn:aws:s3:::b/mail/ole"}]}`
 	if f := fromPolicies([]string{doc}); f.Prefix != "mail/" {
-		t.Errorf("Prefix = %q, erwartet mail/", f.Prefix)
+		t.Errorf("prefix = %q, expected mail/", f.Prefix)
 	}
 }
 
@@ -116,7 +116,7 @@ func TestUserFromArn(t *testing.T) {
 	}
 	for arn, want := range cases {
 		if got := userFromArn(arn); got != want {
-			t.Errorf("%q -> %q, erwartet %q", arn, got, want)
+			t.Errorf("%q -> %q, expected %q", arn, got, want)
 		}
 	}
 }

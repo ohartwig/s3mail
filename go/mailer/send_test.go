@@ -14,14 +14,14 @@ func parse(t *testing.T, raw []byte) *mail.Message {
 	t.Helper()
 	m, err := mail.ReadMessage(strings.NewReader(string(raw)))
 	if err != nil {
-		t.Fatalf("gebaute Mail ist nicht lesbar: %v\n%s", err, raw)
+		t.Fatalf("the built message is not readable: %v\n%s", err, raw)
 	}
 	return m
 }
 
-// TestReplyKeepsTheThread - ohne In-Reply-To und References macht die Antwort im
-// Postfach des Empfaengers einen neuen Strang auf. Das faellt beim Testen nie auf
-// und beim Empfaenger sofort.
+// TestReplyKeepsTheThread - without In-Reply-To and References the reply opens
+// a new thread in the recipient's mailbox. That never shows up while testing
+// and shows up at the recipient immediately.
 func TestReplyKeepsTheThread(t *testing.T) {
 	n, err := Build(Draft{Mode: "reply", To: "kunde@x.de", Subject: "Re: Rechnung",
 		Body: "Passt so."}, "support@firma.de",
@@ -37,11 +37,11 @@ func TestReplyKeepsTheThread(t *testing.T) {
 	if !strings.HasSuffix(refs, "<abc@x.de>") || !strings.Contains(refs, "<alt1@x.de>") {
 		t.Errorf("References: %q", refs)
 	}
-	// bei einer neuen Mail darf beides fehlen
+	// on a new message both may be missing
 	n, _ = Build(Draft{Mode: "new", To: "kunde@x.de", Body: "Hallo"},
 		"support@firma.de", Original{MessageID: "<abc@x.de>"}, now())
 	if parse(t, n.Raw).Header.Get("In-Reply-To") != "" {
-		t.Error("neue Mail bekommt In-Reply-To")
+		t.Error("a new message gets an In-Reply-To")
 	}
 }
 
@@ -60,13 +60,13 @@ func TestRecipientsAndSender(t *testing.T) {
 		}
 	}
 	if n.From != "support@firma.de" {
-		t.Errorf("Absender: %q", n.From)
+		t.Errorf("sender: %q", n.From)
 	}
 }
 
 func TestRequiredFields(t *testing.T) {
 	if _, err := Build(Draft{To: "a@b.de", Body: "x"}, "", Original{}, now()); err != ErrNoSender {
-		t.Errorf("ohne Absender: %v", err)
+		t.Errorf("without a sender: %v", err)
 	}
 	if _, err := Build(Draft{Body: "x"}, "a@b.de", Original{}, now()); err != ErrNoRecipient {
 		t.Errorf("ohne Empfaenger: %v", err)
@@ -77,8 +77,8 @@ func TestRequiredFields(t *testing.T) {
 	}
 }
 
-// TestSubjectWithUmlauts - roh im Header waere das ein 8-Bit-Zeichen und je nach
-// Server entweder abgelehnt oder verstuemmelt.
+// TestSubjectWithUmlauts - raw in the header this would be an 8-bit character
+// and, depending on the server, either refused or mangled.
 func TestSubjectWithUmlauts(t *testing.T) {
 	n, err := Build(Draft{To: "a@b.de", Subject: "Rückfrage über 89,€", Body: "x"},
 		"support@firma.de", Original{}, now())
@@ -90,9 +90,9 @@ func TestSubjectWithUmlauts(t *testing.T) {
 		t.Error("Umlaut steht roh im Header")
 	}
 	if !strings.Contains(raw, "=?utf-8?") {
-		t.Errorf("nicht RFC-2047-kodiert:\n%s", raw[:200])
+		t.Errorf("not RFC 2047 encoded:\n%s", raw[:200])
 	}
-	// und wieder lesbar
+	// and readable again
 	m := parse(t, n.Raw)
 	dec := decryptHeader(m.Header.Get("Subject"))
 	if dec != "Rückfrage über 89,€" {
@@ -123,16 +123,16 @@ func TestForwardAttachesTheMail(t *testing.T) {
 	}
 	raw := string(n.Raw)
 	if !strings.Contains(raw, "message/rfc822") {
-		t.Error("Anhang hat nicht den Typ message/rfc822")
+		t.Error("the attachment does not have the type message/rfc822")
 	}
 	if !strings.Contains(raw, "Original.eml") {
-		t.Error("Dateiname des Anhangs fehlt")
+		t.Error("the attachment has no file name")
 	}
 	if !strings.Contains(raw, "Alter Inhalt.") {
-		t.Error("die weitergeleitete Mail fehlt im Anhang")
+		t.Error("the forwarded message is missing from the attachment")
 	}
 	if !strings.Contains(raw, "Siehe unten.") {
-		t.Error("eigener Text fehlt")
+		t.Error("own text missing")
 	}
 }
 
@@ -149,7 +149,7 @@ func TestMessageIDIsUnique(t *testing.T) {
 			t.Fatalf("Message-ID doppelt: %s", id)
 		}
 		if !strings.HasSuffix(id, "@firma.de>") {
-			t.Errorf("Domain aus dem Absender fehlt: %s", id)
+			t.Errorf("the domain from the sender is missing: %s", id)
 		}
 		seen[id] = true
 	}

@@ -8,8 +8,8 @@ import (
 	"testing"
 )
 
-// TestRegeltrefferGegenPython: dieselbe Regel, dieselben Mails, dieselben Treffer.
-func TestRegeltrefferGegenPython(t *testing.T) {
+// TestRuleHitsAgainstPython: the same rule, the same mail, the same hits.
+func TestRuleHitsAgainstPython(t *testing.T) {
 	index, _ := load(t)
 	blob, err := os.ReadFile(filepath.Join("testdata", "rulehits.json"))
 	if err != nil {
@@ -56,10 +56,10 @@ func TestRulesFirstMatchWins(t *testing.T) {
 	}
 	plan := PlanRules([]Message{mail("m1", Inbox, "news@shop.io", "Angebot")}, d, false)
 	if len(plan) != 1 || plan[0].MoveTo == nil || *plan[0].MoveTo != Archive {
-		t.Fatalf("erste Regel hat nicht gewonnen: %+v", plan)
+		t.Fatalf("the first rule did not win: %+v", plan)
 	}
 	if !reflect.DeepEqual(plan[0].AddTags, []string{"A"}) {
-		t.Errorf("Tags der zweiten Regel angewandt: %v", plan[0].AddTags)
+		t.Errorf("tags of the second rule applied: %v", plan[0].AddTags)
 	}
 }
 
@@ -71,17 +71,17 @@ func TestRulesRunOnlyOnce(t *testing.T) {
 
 	plan := PlanRules([]Message{m}, d, false)
 	if len(plan) != 1 || !plan[0].MarkRuled {
-		t.Fatal("erster Lauf hat nicht gegriffen")
+		t.Fatal("the first run did not take hold")
 	}
 	Apply(d, Op{T: "ruled", Mids: []string{"m1"}})
 
-	// zurueckgeschoben: die Automatik fasst sie nicht wieder an
+	// moved back: the automation does not touch it again
 	if plan := PlanRules([]Message{m}, d, false); len(plan) != 0 {
-		t.Errorf("bereits einsortierte Mail wurde erneut angefasst: %+v", plan)
+		t.Errorf("an already filed message was touched again: %+v", plan)
 	}
-	// ausser man will es ausdruecklich
+	// unless somebody explicitly wants it
 	if plan := PlanRules([]Message{m}, d, true); len(plan) != 1 {
-		t.Error("force hat die Ruled-Marke nicht ueberstimmt")
+		t.Error("force did not override the Ruled mark")
 	}
 }
 
@@ -95,10 +95,10 @@ func TestRulesLeaveTrashAndSpamAlone(t *testing.T) {
 			t.Fatalf("%s: %+v", folder, plan)
 		}
 		if plan[0].MoveTo != nil || len(plan[0].AddTags) > 0 {
-			t.Errorf("%s wurde angefasst: %+v", folder, plan[0])
+			t.Errorf("%s was touched: %+v", folder, plan[0])
 		}
 		if !plan[0].MarkRuled {
-			t.Errorf("%s: Ruled-Marke fehlt, die Mail wird bei jedem Lauf neu geprueft", folder)
+			t.Errorf("%s: Ruled mark missing, the message is checked again on every run", folder)
 		}
 	}
 }
@@ -108,7 +108,7 @@ func TestRulesSwitchedOff(t *testing.T) {
 	archiv := Archive
 	d.Rules = []Rule{{Contains: "shop", Field: "any", Folder: &archiv, Enabled: false}}
 	if plan := PlanRules([]Message{mail("m1", Inbox, "news@shop.io", "x")}, d, false); len(plan) != 0 {
-		t.Errorf("ausgeschaltete Regel hat gegriffen: %+v", plan)
+		t.Errorf("a switched-off rule took hold: %+v", plan)
 	}
 }
 
@@ -117,7 +117,7 @@ func TestCleanRules(t *testing.T) {
 	in := []Rule{
 		{Contains: "  a  ", Field: "FROM", Folder: &archiv, Enabled: true},
 		{Contains: "", Field: "any"},                     // fliegt raus
-		{Contains: "b", Field: "quatsch", Folder: &dash}, // Feld -> any, kein Ordner
+		{Contains: "b", Field: "quatsch", Folder: &dash}, // field -> any, no folder
 		{Contains: "c", Field: "to", Tags: []string{"1", "", "2", "3", "4", "5", "6"}},
 	}
 	got, err := CleanRules(in)
@@ -125,18 +125,18 @@ func TestCleanRules(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(got) != 3 {
-		t.Fatalf("%d Regeln, erwartet 3: %+v", len(got), got)
+		t.Fatalf("%d rules, expected 3: %+v", len(got), got)
 	}
 	if got[0].Contains != "a" || got[0].Name != "a" || got[0].Field != "from" {
-		t.Errorf("erste Regel: %+v", got[0])
+		t.Errorf("first rule: %+v", got[0])
 	}
 	if got[1].Field != "any" || got[1].Folder != nil {
-		t.Errorf("unbekanntes Feld/Strich nicht normalisiert: %+v", got[1])
+		t.Errorf("unknown field/dash not normalised: %+v", got[1])
 	}
 	if len(got[2].Tags) != 5 {
-		t.Errorf("Tags nicht auf 5 begrenzt: %v", got[2].Tags)
+		t.Errorf("tags not capped at 5: %v", got[2].Tags)
 	}
 	if _, err := CleanRules([]Rule{{Contains: "x", Field: "any", Folder: &hostile}}); err == nil {
-		t.Error("ungueltiger Ordner in einer Regel wurde durchgelassen")
+		t.Error("an invalid folder in a rule was let through")
 	}
 }

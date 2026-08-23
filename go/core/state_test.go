@@ -37,7 +37,7 @@ func run(ops []Op, repeats int) *Data {
 	return d
 }
 
-// TestOpsAgainstPython: dieselbe Op-Folge, dasselbe Ergebnis wie in Python.
+// TestOpsAgainstPython: the same sequence of ops, the same result as in Python.
 func TestOpsAgainstPython(t *testing.T) {
 	ops, want := loadOps(t)
 	got := run(ops, 1)
@@ -48,7 +48,7 @@ func TestOpsAgainstPython(t *testing.T) {
 	for mid, w := range want.Messages {
 		g, da := got.Messages[mid]
 		if !da {
-			t.Errorf("%s fehlt in Go", mid)
+			t.Errorf("%s missing in Go", mid)
 			continue
 		}
 		if g.Read != w.Read || g.Star != w.Star || g.Ruled != w.Ruled {
@@ -60,7 +60,7 @@ func TestOpsAgainstPython(t *testing.T) {
 	}
 	for mid := range got.Messages {
 		if _, da := want.Messages[mid]; !da {
-			t.Errorf("%s gibt es in Go zu viel", mid)
+			t.Errorf("%s exists in Go on top", mid)
 		}
 	}
 	if len(got.Rules) != len(want.Rules) {
@@ -68,21 +68,21 @@ func TestOpsAgainstPython(t *testing.T) {
 	}
 }
 
-// TestOpsAreIdempotent ist die Invariante, auf der der Wasserstand ruht: ein
-// Op-Objekt, das beim Aufraeumen liegenbleibt und ein zweites Mal angewandt wird,
-// darf nichts veraendern. Faellt dieser Test, ist das Op-Log-Design kaputt - nicht
-// nur dieser Test.
+// TestOpsAreIdempotent is the invariant the watermark rests on: an op object
+// left behind by an incomplete cleanup and applied a second time must change
+// nothing. If this test falls, the op log design is broken - not just this
+// test.
 func TestOpsAreIdempotent(t *testing.T) {
 	ops, _ := loadOps(t)
 	once, twice := run(ops, 1), run(ops, 2)
 	if !reflect.DeepEqual(once, twice) {
 		a, _ := json.MarshalIndent(once, "", " ")
 		b, _ := json.MarshalIndent(twice, "", " ")
-		t.Fatalf("doppelt angewandt ist nicht dasselbe:\n einmal:\n%s\n zweimal:\n%s", a, b)
+		t.Fatalf("applied twice is not the same:\n once:\n%s\n twice:\n%s", a, b)
 	}
 }
 
-// TestOpsAreIdempotentIndividually zeigt genauer, welche Operation es waere.
+// TestOpsAreIdempotentIndividually shows more precisely which operation it would be.
 func TestOpsAreIdempotentIndividually(t *testing.T) {
 	ops, _ := loadOps(t)
 	for i, op := range ops {
@@ -92,7 +92,7 @@ func TestOpsAreIdempotentIndividually(t *testing.T) {
 		twice := clone(t, once)
 		Apply(twice, op)
 		if !reflect.DeepEqual(once, twice) {
-			t.Errorf("Op %d (%s) ist nicht idempotent", i, op.T)
+			t.Errorf("op %d (%s) is not idempotent", i, op.T)
 		}
 	}
 }
@@ -110,8 +110,8 @@ func clone(t *testing.T, d *Data) *Data {
 	return out.Normalize()
 }
 
-// TestTwoMachines bildet den Fall nach, fuer den es das Op-Log ueberhaupt gibt:
-// zwei Rechner mit demselben Ausgangsstand aendern verschiedene Mails, danach
+// TestTwoMachines stages the case the op log exists for in the first place:
+// two machines with the same starting state change different messages, then
 // dieselbe. Nichts darf verlorengehen.
 func TestTwoMachines(t *testing.T) {
 	out := NewData()
@@ -122,7 +122,7 @@ func TestTwoMachines(t *testing.T) {
 	b := []Op{{T: "tags", Mids: []string{"m2"}, Add: []string{"von-B"}},
 		{T: "tags", Mids: []string{"m1"}, Add: []string{"von-B"}}}
 
-	// beide Reihenfolgen muessen dasselbe ergeben - keiner ueberschreibt den anderen
+	// both orders have to yield the same - neither overwrites the other
 	for _, seq := range [][]Op{append(append([]Op{}, a...), b...), append(append([]Op{}, b...), a...)} {
 		d := clone(t, out)
 		for _, op := range seq {
@@ -131,7 +131,7 @@ func TestTwoMachines(t *testing.T) {
 		e := d.Get("m1")
 		for _, tag := range []string{"start", "von-A", "von-B"} {
 			if !contains(e.Tags, tag) {
-				t.Errorf("Tag %q verloren, m1 hat %v", tag, e.Tags)
+				t.Errorf("tag %q lost, m1 has %v", tag, e.Tags)
 			}
 		}
 		if !e.Star {
@@ -148,13 +148,13 @@ func TestTagFarbenDerReihenach(t *testing.T) {
 	for i, tag := range []string{"a", "b", "c"} {
 		Apply(d, Op{T: "tags", Mids: []string{"m1"}, Add: []string{tag}})
 		if d.Tags[tag] != TagColors[i] {
-			t.Errorf("%s: %s, erwartet %s", tag, d.Tags[tag], TagColors[i])
+			t.Errorf("%s: %s, expected %s", tag, d.Tags[tag], TagColors[i])
 		}
 	}
-	// bestehender Tag behaelt seine Farbe
+	// an existing tag keeps its colour
 	Apply(d, Op{T: "tags", Mids: []string{"m2"}, Add: []string{"a"}})
 	if d.Tags["a"] != TagColors[0] {
-		t.Error("Farbe eines bestehenden Tags wurde ueberschrieben")
+		t.Error("the colour of an existing tag was overwritten")
 	}
 }
 
@@ -167,10 +167,10 @@ func TestMergeMissing(t *testing.T) {
 
 	MergeMissing(base, local)
 	if contains(base.Get("m1").Tags, "lokal") {
-		t.Error("bekannter Eintrag wurde ueberschrieben statt stehengelassen")
+		t.Error("a known entry was overwritten instead of left alone")
 	}
 	if !contains(base.Get("m9").Tags, "nur-lokal") {
-		t.Error("unbekannter Eintrag wurde nicht uebernommen")
+		t.Error("an unknown entry was not taken over")
 	}
 }
 

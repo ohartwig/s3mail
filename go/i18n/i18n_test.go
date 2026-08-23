@@ -73,12 +73,12 @@ func TestUnknownLanguageFallsBackToEnglish(t *testing.T) {
 
 func TestHeaderPicksTheHighestQuality(t *testing.T) {
 	cases := map[string]string{
-		"de-AT,de;q=0.9,en;q=0.8": "de", // Region wird ignoriert
+		"de-AT,de;q=0.9,en;q=0.8": "de", // the region is ignored
 		"en-US,en;q=0.9":          "en",
-		"fr-FR,fr;q=0.9,es;q=0.8": "es", // Franzoesisch gibt es nicht
+		"fr-FR,fr;q=0.9,es;q=0.8": "es", // French does not exist
 		"fr,it":                   "en", // gar nichts davon
 		"":                        "en",
-		"es;q=0.4,de;q=0.9":       "de", // Reihenfolge entscheidet nicht, q tut es
+		"es;q=0.4,de;q=0.9":       "de", // the order does not decide, q does
 		"*":                       "en",
 	}
 	for header, want := range cases {

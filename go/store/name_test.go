@@ -6,9 +6,9 @@ import (
 	"time"
 )
 
-// TestOpNamesSort - die lexikografische Ordnung der Op-Namen muss der
-// Schreibreihenfolge entsprechen, sonst spielt ein Rechner die Aenderungen eines
-// anderen in der falschen Reihenfolge ab.
+// TestOpNamesSort - the lexicographic order of the op names has to match the
+// write order, or one machine replays another machine's changes in the wrong
+// order.
 func TestOpNamesSort(t *testing.T) {
 	s := &State{instance: "aaaaaaaaaaaa"}
 	n := 0
@@ -20,14 +20,14 @@ func TestOpNamesSort(t *testing.T) {
 			t.Fatalf("%q", name)
 		}
 		if name <= before {
-			t.Fatalf("nicht aufsteigend: %q nach %q", name, before)
+			t.Fatalf("not ascending: %q after %q", name, before)
 		}
 		before = name
 	}
 }
 
-// TestInstanceIDIsUnique - ohne das koennten zwei Rechner in derselben
-// Mikrosekunde denselben Op-Namen erzeugen, und einer waere weg.
+// TestInstanceIDIsUnique - without it two machines could produce the same op
+// name in the same microsecond, and one would be gone.
 func TestInstanceIDIsUnique(t *testing.T) {
 	seen := map[string]bool{}
 	for i := 0; i < 200; i++ {

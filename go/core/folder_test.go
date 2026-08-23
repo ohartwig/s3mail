@@ -42,37 +42,37 @@ func TestKeysAndFolders(t *testing.T) {
 	}
 	for _, f := range cases {
 		if got := s.Mid(f.key); got != f.mid {
-			t.Errorf("Mid(%q)=%q, erwartet %q", f.key, got, f.mid)
+			t.Errorf("Mid(%q)=%q, expected %q", f.key, got, f.mid)
 		}
 		if got := s.FolderOf(f.key); got != f.folder {
-			t.Errorf("FolderOf(%q)=%q, erwartet %q", f.key, got, f.folder)
+			t.Errorf("FolderOf(%q)=%q, expected %q", f.key, got, f.folder)
 		}
 		back, err := s.KeyFor(f.mid, f.folder)
 		if err != nil || back != f.key {
-			t.Errorf("KeyFor(%q,%q)=%q,%v - erwartet %q", f.mid, f.folder, back, err, f.key)
+			t.Errorf("KeyFor(%q,%q)=%q,%v - expected %q", f.mid, f.folder, back, err, f.key)
 		}
 	}
-	// Wurzel ohne Schraegstrich wird ergaenzt
+	// a root without a slash gets one
 	if NewStore("mail").Root != "mail/" {
-		t.Error("Root wurde nicht normalisiert")
+		t.Error("Root was not normalised")
 	}
 }
 
-// TestSicherheitsgrenze - hier haengt dran, dass ueber die API niemand an den
-// Zustand oder an fremde Prefixe kommt.
-func TestSicherheitsgrenze(t *testing.T) {
+// TestSecurityBoundary - this is what keeps anybody from reaching the state or
+// foreign prefixes through the API.
+func TestSecurityBoundary(t *testing.T) {
 	s := NewStore("mail/")
 	allowed := []string{"mail/m1", "mail/archiv/a", "mail/kunden/x.eml"}
 	forbidden := []string{
-		"andere/nicht-meins",                // ausserhalb des Prefix
+		"andere/nicht-meins",                // outside the prefix
 		"mail/.s3mail-state.json",           // Snapshot
 		"mail/.s3mail-state/2026-abc.json",  // Op-Objekt
 		"mail/.versteckt",                   // Punktdatei
-		"mail/.s3mail-state/tief/drin.json", // im Ops-Ordner
+		"mail/.s3mail-state/tief/drin.json", // in the ops folder
 	}
 	for _, k := range allowed {
 		if err := s.Own(k); err != nil {
-			t.Errorf("%q sollte erlaubt sein: %v", k, err)
+			t.Errorf("%q should be allowed: %v", k, err)
 		}
 	}
 	for _, k := range forbidden {
@@ -90,7 +90,7 @@ func TestFolderCounts(t *testing.T) {
 	}
 	for i, sf := range SystemFolders {
 		if f[i].Name != sf.Name || !f[i].System {
-			t.Errorf("Position %d: %q, erwartet %q", i, f[i].Name, sf.Name)
+			t.Errorf("position %d: %q, expected %q", i, f[i].Name, sf.Name)
 		}
 	}
 	to := map[string]FolderInfo{}
@@ -98,13 +98,13 @@ func TestFolderCounts(t *testing.T) {
 		to[x.Name] = x
 	}
 	if to[Inbox].Count != 3 {
-		t.Errorf("Posteingang: %d, erwartet 3", to[Inbox].Count)
+		t.Errorf("inbox: %d, expected 3", to[Inbox].Count)
 	}
 	if to[Archive].Count != 2 {
-		t.Errorf("Archiv: %d, erwartet 2", to[Archive].Count)
+		t.Errorf("archive: %d, expected 2", to[Archive].Count)
 	}
-	// m2 wurde gelesen markiert und liegt im Archiv
+	// m2 was marked read and lies in the archive
 	if to[Archive].Unread != 1 {
-		t.Errorf("Archiv ungelesen: %d, erwartet 1", to[Archive].Unread)
+		t.Errorf("archive unread: %d, expected 1", to[Archive].Unread)
 	}
 }

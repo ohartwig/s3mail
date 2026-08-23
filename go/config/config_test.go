@@ -36,7 +36,7 @@ func TestSaveAndLoad(t *testing.T) {
 		t.Errorf("%+v", back)
 	}
 	if back.Prefix != "mail/" {
-		t.Errorf("Prefix nicht normalisiert: %q", back.Prefix)
+		t.Errorf("prefix not normalised: %q", back.Prefix)
 	}
 	if _, err := Save(Config{}); err == nil {
 		t.Error("ohne Bucket gespeichert")
@@ -49,13 +49,13 @@ func TestPrefixNormalisieren(t *testing.T) {
 		" mail ": "mail/", "/mail/unter": "mail/unter/",
 	} {
 		if got := NormalizePrefix(in); got != want {
-			t.Errorf("%q -> %q, erwartet %q", in, got, want)
+			t.Errorf("%q -> %q, expected %q", in, got, want)
 		}
 	}
 }
 
-// TestCredentialsAreAdditive - der Assistent darf ein bestehendes Profil, das
-// ganz anders arbeitet, nicht anfassen.
+// TestCredentialsAreAdditive - the wizard must not touch an existing profile
+// that works completely differently.
 func TestCredentialsAreAdditive(t *testing.T) {
 	dir := sandbox(t)
 	awsDir := filepath.Join(dir, "aws")
@@ -77,17 +77,17 @@ func TestCredentialsAreAdditive(t *testing.T) {
 	}
 	conf, _ := os.ReadFile(filepath.Join(awsDir, "config"))
 	if !strings.Contains(string(conf), "login_session = mein-login") {
-		t.Errorf("bestehendes default-Profil beschaedigt:\n%s", conf)
+		t.Errorf("existing default profile damaged:\n%s", conf)
 	}
 	if !strings.Contains(string(conf), "[profile arbeit]") {
-		t.Errorf("fremdes Profil verloren:\n%s", conf)
+		t.Errorf("foreign profile lost:\n%s", conf)
 	}
 	if !strings.Contains(string(conf), "[profile s3mail]") {
-		t.Errorf("neues Profil fehlt:\n%s", conf)
+		t.Errorf("new profile missing:\n%s", conf)
 	}
 	creds, _ := os.ReadFile(filepath.Join(awsDir, "credentials"))
 	if !strings.Contains(string(creds), "AKIAEXAMPLE1234567") {
-		t.Errorf("Schluessel fehlt:\n%s", creds)
+		t.Errorf("key missing:\n%s", creds)
 	}
 	if runtime.GOOS != "windows" {
 		info, _ := os.Stat(filepath.Join(awsDir, "credentials"))
@@ -107,7 +107,7 @@ func TestCredentialsTwiceOverwriteOnlyThatProfile(t *testing.T) {
 	}
 	creds, _ := os.ReadFile(filepath.Join(dir, "aws", "credentials"))
 	if strings.Contains(string(creds), "AKIAALT") {
-		t.Errorf("alter Schluessel steht noch da:\n%s", creds)
+		t.Errorf("the old key is still there:\n%s", creds)
 	}
 	if strings.Count(string(creds), "[s3mail]") != 1 {
 		t.Errorf("Abschnitt doppelt angelegt:\n%s", creds)
@@ -139,19 +139,19 @@ func TestProfileLesen(t *testing.T) {
 	p := Profiles()
 	for _, must := range []string{"default", "s3mail", "arbeit"} {
 		if !contains(p, must) {
-			t.Errorf("%q fehlt in %v", must, p)
+			t.Errorf("%q missing from %v", must, p)
 		}
 	}
 	if contains(p, "sso-session firma") || contains(p, "firma") {
-		t.Errorf("sso-session als Profil gelesen: %v", p)
+		t.Errorf("sso-session read as a profile: %v", p)
 	}
 	if len(p) != 3 {
-		t.Errorf("Duplikate: %v", p)
+		t.Errorf("duplicates: %v", p)
 	}
 }
 
-// TestPathsSuitThePlatform - unter Windows darf nichts in einem ~/.config
-// landen, das dort niemand sucht.
+// TestPathsSuitThePlatform - on Windows nothing may land in a ~/.config that
+// nobody looks in there.
 func TestPathsSuitThePlatform(t *testing.T) {
 	os.Unsetenv("S3MAIL_CONFIG_DIR")
 	os.Unsetenv("S3MAIL_CACHE_DIR")
@@ -160,7 +160,7 @@ func TestPathsSuitThePlatform(t *testing.T) {
 		t.Errorf("Verzeichnisse: %q %q", k, c)
 	}
 	if k == c {
-		t.Error("Konfiguration und Zwischenspeicher im selben Verzeichnis")
+		t.Error("configuration and cache in the same directory")
 	}
 	if runtime.GOOS == "windows" && !strings.Contains(k, "AppData") {
 		t.Errorf("Windows-Pfad: %q", k)

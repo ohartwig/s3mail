@@ -36,7 +36,7 @@ func buildServer(t *testing.T) (*httptest.Server, *store.Mailbox) {
 		"bucket": "test-bucket", "root": "mail/", "can_send": false})
 	ts := httptest.NewServer(srv)
 	t.Cleanup(ts.Close)
-	// Port aus der Testadresse uebernehmen, sonst schlaegt die Host-Pruefung zu
+	// Take the port from the test address, or the host check kicks in
 	srv.Port = portOf(ts.URL)
 	return ts, mb
 }
@@ -64,7 +64,7 @@ func (r call) json(t *testing.T) map[string]any {
 	t.Helper()
 	var m map[string]any
 	if err := json.Unmarshal(r.Body, &m); err != nil {
-		t.Fatalf("keine JSON-Antwort (%d): %s", r.Code, r.Body)
+		t.Fatalf("no JSON answer (%d): %s", r.Code, r.Body)
 	}
 	return m
 }
@@ -105,10 +105,10 @@ func TestMailboxRoutes(t *testing.T) {
 	d := callServer(t, ts, "GET", "/api/messages?folder=", "", nil).json(t)
 	msgs, _ := d["messages"].([]any)
 	if len(msgs) != 2 {
-		t.Errorf("%d Mails im Posteingang, erwartet 2", len(msgs))
+		t.Errorf("%d messages in the inbox, expected 2", len(msgs))
 	}
 	if d["allow_delete"] != true || d["folders"] == nil {
-		t.Errorf("Uebersicht fehlt in der Antwort: %v", d)
+		t.Errorf("overview missing from the answer: %v", d)
 	}
 
 	callServer(t, ts, "POST", "/api/flag", `{"keys":["mail/m1"],"star":true}`, nil)
@@ -120,7 +120,7 @@ func TestMailboxRoutes(t *testing.T) {
 	callServer(t, ts, "POST", "/api/tag", `{"keys":["mail/m1"],"add":["wichtig"]}`, nil)
 	d = callServer(t, ts, "GET", "/api/messages?folder=*&tag=wichtig", "", nil).json(t)
 	if msgs, _ := d["messages"].([]any); len(msgs) != 1 {
-		t.Errorf("Tag-Filter: %d Treffer", len(msgs))
+		t.Errorf("tag filter: %d hits", len(msgs))
 	}
 
 	d = callServer(t, ts, "POST", "/api/move", `{"keys":["mail/m2"],"folder":"spam"}`, nil).json(t)
@@ -129,14 +129,14 @@ func TestMailboxRoutes(t *testing.T) {
 		t.Fatalf("Verschieben: %v", d)
 	}
 
-	// endgueltig loeschen nur aus dem Papierkorb
+	// deleting for good only from the trash
 	if r := callServer(t, ts, "POST", "/api/delete", `{"keys":["mail/spam/m2"]}`, nil); r.Code != 403 {
 		t.Errorf("Loeschen ausserhalb des Papierkorbs: HTTP %d", r.Code)
 	}
 	callServer(t, ts, "POST", "/api/move", `{"keys":["mail/spam/m2"],"folder":"trash"}`, nil)
 	d = callServer(t, ts, "POST", "/api/delete", `{"keys":["mail/trash/m2"]}`, nil).json(t)
 	if d["deleted"] != float64(1) {
-		t.Errorf("Loeschen aus dem Papierkorb: %v", d)
+		t.Errorf("delete from the trash: %v", d)
 	}
 	_ = mb
 }
@@ -147,16 +147,16 @@ func TestErrorCodes(t *testing.T) {
 		name, method, path, body string
 		code                     int
 	}{
-		{"ungueltiger Ordner", "POST", "/api/move", `{"keys":["mail/m1"],"folder":"../boese"}`, 400},
-		{"fremder Key", "GET", "/api/message?key=andere/nicht-meins", "", 400},
+		{"invalid folder", "POST", "/api/move", `{"keys":["mail/m1"],"folder":"../boese"}`, 400},
+		{"foreign key", "GET", "/api/message?key=andere/nicht-meins", "", 400},
 		{"interner Key", "GET", "/api/message?key=mail/.s3mail-state.json", "", 400},
 		{"unbekannte Route", "GET", "/api/gibtsnicht", "", 404},
-		{"kaputtes JSON", "POST", "/api/flag", `{kaputt`, 400},
-		{"unbekannte Tag-Aktion", "POST", "/api/tags", `{"action":"quatsch","name":"x"}`, 400},
+		{"broken JSON", "POST", "/api/flag", `{kaputt`, 400},
+		{"unknown tag action", "POST", "/api/tags", `{"action":"quatsch","name":"x"}`, 400},
 	}
 	for _, f := range cases {
 		if r := callServer(t, ts, f.method, f.path, f.body, nil); r.Code != f.code {
-			t.Errorf("%s: HTTP %d, erwartet %d (%s)", f.name, r.Code, f.code, r.Body)
+			t.Errorf("%s: HTTP %d, expected %d (%s)", f.name, r.Code, f.code, r.Body)
 		}
 	}
 }
@@ -189,7 +189,7 @@ func TestReadMailAndAttachment(t *testing.T) {
 		t.Fatalf("Anhaenge: %v", anh)
 	}
 	if d["read"] != true || !mb.State.Get("m1").Read {
-		t.Error("Oeffnen hat nicht als gelesen markiert")
+		t.Error("opening did not mark it read")
 	}
 
 	r := callServer(t, ts, "GET", "/api/attachment?key=mail/m1&index=1", "", nil)
@@ -202,29 +202,29 @@ func TestReadMailAndAttachment(t *testing.T) {
 	}
 }
 
-// TestAccessControl - dieselben drei Pruefungen wie in der Python-Fassung.
+// TestAccessControl - the same three checks as in the Python version.
 func TestAccessControl(t *testing.T) {
 	ts, _ := buildServer(t)
 	without := map[string]string{"X-S3mail-Token": ""}
 
 	if r := callServer(t, ts, "GET", "/api/overview", "", without); r.Code != 403 {
-		t.Errorf("ohne Token: HTTP %d", r.Code)
+		t.Errorf("without a token: HTTP %d", r.Code)
 	}
 	if r := callServer(t, ts, "GET", "/api/overview", "", map[string]string{"X-S3mail-Token": "falsch"}); r.Code != 403 {
-		t.Errorf("falsches Token: HTTP %d", r.Code)
+		t.Errorf("wrong token: HTTP %d", r.Code)
 	}
 	if r := callServer(t, ts, "GET", "/", "", without); r.Code != 403 {
-		t.Errorf("Postfachseite ohne Token: HTTP %d", r.Code)
+		t.Errorf("mailbox page without a token: HTTP %d", r.Code)
 	}
 	if r := callServer(t, ts, "GET", "/api/overview", "", map[string]string{"Cookie": "s3mail=" + testToken,
 		"X-S3mail-Token": ""}); r.Code != 200 {
-		t.Errorf("Token per Cookie: HTTP %d", r.Code)
+		t.Errorf("token by cookie: HTTP %d", r.Code)
 	}
 
-	// CSRF: fremde Seite schickt einen POST, das Token-Cookie faehrt mit
+	// CSRF: a foreign page sends a POST, the token cookie rides along
 	if r := callServer(t, ts, "POST", "/api/empty-trash", "{}",
 		map[string]string{"Origin": "https://boese.example"}); r.Code != 403 {
-		t.Errorf("CSRF-POST von fremder Herkunft: HTTP %d", r.Code)
+		t.Errorf("CSRF POST from a foreign origin: HTTP %d", r.Code)
 	}
 	if r := callServer(t, ts, "POST", "/api/empty-trash", "{}",
 		map[string]string{"Origin": "http://localhost:1234"}); r.Code != 403 {
@@ -237,7 +237,7 @@ func TestAccessControl(t *testing.T) {
 	}
 }
 
-// TestPageSetsCookie - daran haengen die Download-Links.
+// TestPageSetsCookie - the download links hang on this.
 func TestPageSetsCookie(t *testing.T) {
 	ts, _ := buildServer(t)
 	req, _ := http.NewRequest("GET", ts.URL+"/?t="+testToken, nil)
@@ -252,17 +252,17 @@ func TestPageSetsCookie(t *testing.T) {
 	}
 	blob, _ := io.ReadAll(resp.Body)
 	if strings.Contains(string(blob), "__CONFIG__") {
-		t.Error("Platzhalter __CONFIG__ nicht ersetzt")
+		t.Error("placeholder __CONFIG__ not replaced")
 	}
 	if !strings.Contains(string(blob), "test-bucket") {
-		t.Error("Konfiguration nicht in die Seite eingesetzt")
+		t.Error("configuration not put into the page")
 	}
 }
 
 func TestInterfaceIsComplete(t *testing.T) {
-	// Die Tokenseite ist seit der Uebersetzung ein Geruest: ihre Saetze stehen
-	// in den Katalogen, nicht in der Datei. Fuer sie zaehlt, dass die Vorlage
-	// da ist, nicht wie lang sie ist.
+	// Since the translation the token page is a skeleton: its sentences live
+	// in the catalogues, not in the file. What counts for it is that the
+	// template is there, not how long it is.
 	for name, page := range map[string]string{
 		"Postfach":  PageMailbox,
 		"Assistent": PageWizard,
@@ -273,19 +273,19 @@ func TestInterfaceIsComplete(t *testing.T) {
 			atLeast = 200
 		}
 		if len(page) < atLeast {
-			t.Errorf("%s: nur %d Zeichen - eingebettet?", name, len(page))
+			t.Errorf("%s: only %d characters - embedded?", name, len(page))
 		}
 		if !strings.Contains(page, "<!doctype html>") && !strings.Contains(page, "<!DOCTYPE html>") {
-			t.Errorf("%s: kein Dokumentkopf", name)
+			t.Errorf("%s: no document head", name)
 		}
 	}
 	if !strings.Contains(PageMailbox, "__CONFIG__") {
-		t.Error("Postfachseite hat keinen Platzhalter fuer die Konfiguration")
+		t.Error("the mailbox page has no placeholder for the configuration")
 	}
 }
 
-// TestWithoutMailbox - vor der Einrichtung gibt es kein Postfach. Die Routen
-// duerfen dann nicht in einen Nil-Zeiger laufen.
+// TestWithoutMailbox - before the setup there is no mailbox. The routes
+// must not run into a nil pointer then.
 func TestWithoutMailbox(t *testing.T) {
 	srv := NewServer(nil, testToken, "127.0.0.1", 0, nil)
 	srv.WithWizard(&wizard.Wizard{})
@@ -297,7 +297,7 @@ func TestWithoutMailbox(t *testing.T) {
 		"/api/message?key=mail/m1", "/api/raw?key=mail/m1"} {
 		r := callServer(t, ts, "GET", path, "", nil)
 		if r.Code != 503 {
-			t.Errorf("%s: HTTP %d, erwartet 503", path, r.Code)
+			t.Errorf("%s: HTTP %d, expected 503", path, r.Code)
 		}
 	}
 	if r := callServer(t, ts, "POST", "/api/refresh", "{}", nil); r.Code != 503 {
@@ -305,10 +305,10 @@ func TestWithoutMailbox(t *testing.T) {
 	}
 	// Der Assistent muss erreichbar bleiben
 	if r := callServer(t, ts, "POST", "/api/setup/info", "{}", nil); r.Code == 503 {
-		t.Error("Assistent gesperrt, obwohl er gebraucht wird")
+		t.Error("wizard blocked although it is what is needed")
 	}
-	// Beenden muss gerade hier gehen - das ist der Zustand, in dem ein
-	// Erstnutzer steckt, und ohne Konsole ist der Knopf der einzige Ausweg.
+	// Quitting has to work right here - this is the state a first-time reader
+	// is in, and without a console the button is the only way out.
 	stopped := make(chan struct{}, 1)
 	srv.OnShutdown = func() { stopped <- struct{}{} }
 	if r := callServer(t, ts, "POST", "/api/quit", "{}", nil); r.Code != 200 {
@@ -317,21 +317,21 @@ func TestWithoutMailbox(t *testing.T) {
 	select {
 	case <-stopped:
 	case <-time.After(2 * time.Second):
-		t.Error("BeimBeenden wurde nicht gerufen")
+		t.Error("OnShutdown was not called")
 	}
 
-	// und die Startseite zeigt ihn. Geprueft wird ein Anker aus dem Markup und
-	// kein Satz: die Seite kommt seit der Uebersetzung in der Sprache des
-	// Fragenden, und ein Test, der an einem Wort haengt, geht beim naechsten
-	// Sprachwechsel kaputt, ohne dass etwas kaputt waere.
+	// and the start page shows it. What is checked is an anchor from the markup
+	// and not a sentence: since the translation the page comes in the language
+	// of the asker, and a test hanging on one word breaks at the next language
+	// switch without anything being broken.
 	r := callServer(t, ts, "GET", "/", "", nil)
 	if r.Code != 200 || !strings.Contains(string(r.Body), `id="saveCreds"`) {
 		t.Errorf("Startseite ohne Postfach: HTTP %d", r.Code)
 	}
 }
 
-// TestAutoRefreshIsShipped - der Takt kommt aus der Konfiguration; ohne
-// ihn stünde die Seite still und niemand saehe, dass es den Abgleich gibt.
+// TestAutoRefreshIsShipped - the interval comes from the configuration;
+// without it the page would stand still and nobody would see the refresh exists.
 func TestAutoRefreshIsShipped(t *testing.T) {
 	ctx := context.Background()
 	f := s3fake.New()
@@ -348,31 +348,31 @@ func TestAutoRefreshIsShipped(t *testing.T) {
 
 	page := string(callServer(t, ts, "GET", "/?t="+testToken, "", nil).Body)
 	if !strings.Contains(page, "autoAbgleichPlanen") {
-		t.Error("der automatische Abgleich fehlt in der ausgelieferten Seite")
+		t.Error("the automatic refresh is missing from the shipped page")
 	}
 	if !strings.Contains(page, `"refresh_seconds":45`) {
-		t.Error("das Intervall kommt nicht in der Seite an")
+		t.Error("the interval does not arrive in the page")
 	}
-	// Ohne Intervall muss der Takt ausbleiben, nicht auf einen Standardwert fallen
+	// Without an interval the refresh must stay away, not fall back to a default
 	srv.Config = map[string]any{"bucket": "test-bucket", "refresh_seconds": 0}
 	page = string(callServer(t, ts, "GET", "/?t="+testToken, "", nil).Body)
 	if !strings.Contains(page, `"refresh_seconds":0`) {
-		t.Error("abgeschalteter Abgleich wird nicht als 0 ausgeliefert")
+		t.Error("a switched-off refresh is not shipped as 0")
 	}
 }
 
-// TestComposeWithoutATemplate - Antworten und Weiterleiten gab es von Anfang an,
-// eine Mail ohne Vorlage nicht: der Server konnte es (mode "new"), nur fuehrte
-// kein Weg dorthin. Das faellt niemandem auf, der ein volles Postfach testet.
+// TestComposeWithoutATemplate - replying and forwarding existed from the start,
+// a message without a template did not: the server could do it (mode "new"),
+// only no path led there. Nobody testing a full mailbox notices that.
 func TestComposeWithoutATemplate(t *testing.T) {
 	for _, part := range []string{`id="new"`, `compose("new")`, `mode === "new" ? ""`} {
 		if !strings.Contains(PageMailbox, part) {
-			t.Errorf("Postfachseite ohne %s - neue Nachricht nicht erreichbar", part)
+			t.Errorf("mailbox page without %s - new message unreachable", part)
 		}
 	}
-	// Der Schluessel der offenen Mail darf nicht mitgehen, sonst haengt die neue
+	// The key of the open message must not ride along, or the new message hangs
 	// Nachricht am Faden einer fremden.
 	if strings.Contains(PageMailbox, `{mode, key: current`) {
-		t.Error("neue Nachricht schickt den Schluessel der offenen Mail mit")
+		t.Error("a new message carries the key of the open message")
 	}
 }
