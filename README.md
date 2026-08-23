@@ -161,7 +161,9 @@ lässt sich auch ein zweites Postfach anlegen, oder über **+ Postfach hinzufüg
 im Umschalter oben links.
 
 Wer lieber Argumente tippt, kann alles weiterhin per CLI setzen – die überschreiben die
-Konfigurationsdatei für den jeweiligen Start:
+Konfigurationsdatei für den jeweiligen Start. Bei mehreren Postfächern wirken
+`--bucket`, `--prefix`, `--region`, `--profile` und `--from` auf das **erste**;
+ein Schalter kann nicht sagen, welches von mehreren er meint:
 
 ```bash
 ./s3mail --bucket mein-mail-bucket --prefix mail/ \
@@ -181,6 +183,42 @@ Konfigurationsdatei für den jeweiligen Start:
 | `--no-browser` | Browser nicht automatisch öffnen |
 | `--refresh` | Sekunden zwischen automatischen Abgleichen, `0` schaltet ab (Standard 60) |
 | `--version` | Version ausgeben und beenden |
+| `--mcp` | Als MCP-Server über stdin/stdout laufen (siehe [unten](#für-ein-modell-erreichbar---mcp)) |
+
+## Wer darf ran
+
+s3mail bindet auf `127.0.0.1` und kennt keine Benutzer. Was den Zugang schützt,
+sind drei Prüfungen bei **jeder** Anfrage – jede gegen einen anderen Angriff:
+
+- **Das Token** gegen Mitleser auf demselben Rechner. Es steht in der Adresse
+  aus dem Terminal, und ohne es antwortet der Server nicht. Beim Ausliefern
+  einer Seite wird es als Cookie mit `SameSite=Strict` gesetzt – deshalb
+  funktionieren die Download-Links für Anhänge und `.eml`, ohne das Token in
+  jeder URL mitzuschleppen.
+- **Der `Host`-Header** gegen DNS-Rebinding. Eine fremde Domain, die auf
+  `127.0.0.1` zeigt, wäre für den Browser dieselbe Herkunft wie s3mail und
+  dürfte das Postfach auslesen – sie schickt aber ihren eigenen Namen im
+  `Host`-Header mit, und der passt nicht.
+- **Der `Origin`-Header** gegen CSRF. Eine fremde Seite kann per `fetch()` einen
+  POST hierher schicken (Content-Type `text/plain`, kein Preflight). Lesen kann
+  sie die Antwort nicht, aber Löschen und Versenden liefen trotzdem. Genau bei
+  solchen Anfragen setzt der Browser die `Origin`.
+
+Was das **nicht** ist: eine Anmeldung. Wer die Adresse mit dem Token hat, sieht
+das ganze Postfach. Das genügt für ein Programm, das neben dem Browser auf dem
+eigenen Rechner läuft – und trägt nicht weiter. `--host` auf eine öffentliche
+Adresse zu legen heißt, das Postfach ins Netz zu stellen; dann gehört ein
+Reverse-Proxy mit richtiger Auth davor.
+
+Und dann **schaltet sich die Host-Prüfung selbst ab**: sie ergibt nur Sinn,
+solange s3mail auf Loopback hört. Wer nach außen bindet, hat damit zwei der drei
+Prüfungen aufgegeben – es bleibt das Token.
+
+Zwei Dinge sind bewusst getrennt: **die Zugangsdaten zu AWS** liegen als
+benanntes Profil in `~/.aws/credentials` (chmod 600), nie in s3mails eigener
+Konfiguration. Und **die Adressdatei** `adresse.txt` im Konfigurationsverzeichnis
+trägt dasselbe Token wie das Terminal – sie wird beim Beenden gelöscht, damit
+keine abgelaufene Adresse liegen bleibt.
 
 ## Ordner sind echte S3-Prefixe
 
@@ -345,13 +383,63 @@ S3-Prefixe (`trash`, `spam`, `archiv`) und werden nur angezeigt, nicht übersetz
 
 ## Für ein Modell erreichbar: `--mcp`
 
+s3mail spricht das Model Context Protocol über stdin/stdout – kein Fenster, kein
+Webserver, kein Port. Damit kann Claude im Postfach suchen, lesen, einsortieren
+und einen Entwurf schreiben.
+
+**Voraussetzung:** s3mail muss einmal normal gelaufen und eingerichtet sein –
+`--mcp` liest dieselbe `config.json` und startet keinen Assistenten. Ohne
+Konfiguration bricht es mit einem Satz ab, der genau das sagt.
+
+### Claude Code
+
 ```bash
 claude mcp add s3mail -- /pfad/zu/s3mail --mcp
+claude mcp list          # muss „✔ Connected" zeigen
 ```
 
-s3mail spricht dann das Model Context Protocol über stdin/stdout – kein Fenster,
-kein Webserver. Werkzeuge: `search`, `read`, `folders`, `move`, `tag`, `flag`
-und `draft`.
+Wieder abhängen: `claude mcp remove s3mail`.
+
+### Claude Desktop
+
+In `claude_desktop_config.json` (macOS:
+`~/Library/Application Support/Claude/`, Windows: `%AppData%\Claude\`):
+
+```json
+{
+  "mcpServers": {
+    "s3mail": {
+      "command": "/pfad/zu/s3mail",
+      "args": ["--mcp"]
+    }
+  }
+}
+```
+
+Danach Claude Desktop neu starten.
+
+### Was Claude damit kann
+
+| Werkzeug | wofür |
+|---|---|
+| `search` | Suchen wie im Postfach: `from:`, `subject:`, `after:`, `is:unread`, `tag:` … |
+| `read` | Eine Mail ganz lesen, samt Namen der Anhänge |
+| `folders` | Ordner mit Anzahl und Ungelesenen |
+| `move` | Einsortieren – umkehrbar |
+| `tag`, `flag` | Verschlagworten, gelesen/ungelesen, Stern |
+| `draft` | Einen Entwurf in den Bucket legen |
+
+Mit mehreren Postfächern nimmt jedes Werkzeug ein `account`-Argument; ohne
+Angabe ist es das erste. Welche es gibt, steht in der Werkzeugbeschreibung, die
+Claude ohnehin sieht.
+
+Beispiele, die funktionieren: *„Was liegt seit einer Woche ungelesen im
+Posteingang?"* · *„Sortier alles von news@shop.io ins Archiv."* · *„Schreib einen
+Entwurf an den Kunden aus der letzten Rechnung, mit Terminvorschlag."*
+
+Der MCP-Server darf gleichzeitig mit dem normalen s3mail laufen. Beide teilen
+sich Index und Zustand – der Zustand liegt ohnehin als Op-Log im Bucket und
+verträgt zwei Schreiber, der Index wird atomar ersetzt.
 
 **Es gibt kein Werkzeug zum Senden, und das ist der Punkt.** Eine eingehende Mail
 ist fremder Text, der im Kontext des Modells landet; „schick das an…" passt in
