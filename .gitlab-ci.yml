@@ -27,7 +27,15 @@ variables:
   # devops/ci-cd-components. `development/s3mail` steht auf der
   # Job-Token-Allowlist von devops/ci-mirrors; ohne die kämen bot-getriggerte
   # Pipelines nicht an die Images, während von Hand angestoßene noch liefen.
-  GO_IMAGE: "registry.ole-hartwig.eu/devops/ci-mirrors/golang:1.25"
+  # Minimus since 2026-08-23 (mirrored as ci-mirrors/golang, the destination
+  # name is ours). `-dev` is required, not preferred: this job compiles, and the
+  # default Minimus variant is distroless -- verified by starting each candidate
+  # as a real job image first.
+  #
+  # This is Go 1.25 -> 1.27. With GOTOOLCHAIN=local below, that is what actually
+  # compiles rather than something the toolchain quietly downloads, which is why
+  # this pipeline is the check for the swap rather than a formality.
+  GO_IMAGE: "registry.ole-hartwig.eu/devops/ci-mirrors/golang:v1.27.0-dev"
   CURL_IMAGE: "registry.ole-hartwig.eu/devops/ci-mirrors/curl:8.19.0-dev"
   # Nicht heimlich eine andere Go-Version ziehen: was im Image ist, gilt.
   GOTOOLCHAIN: "local"
