@@ -147,7 +147,7 @@ Postfachs. Dort in drei Schritten:
    alle anderen AWS-Werkzeuge lesen. Dazu die Region.
 2. **Postfach** – Bucket aus einer Liste wählen (oder eintippen), Prefix aus der
    SES-Regel, Absenderadresse für Antworten (Dropdown zeigt die in SES verifizierten
-   Adressen).
+   Adressen). Dazu optional Signatur und ein Name für den Umschalter.
 3. **Prüfen** – legt kurz ein Testobjekt an und löscht es wieder. Ergebnis ist eine
    Checkliste: Bucket lesen, Mail lesen, Schreiben, Löschen, Zustand von mehreren
    Rechnern, SES-Absender. Was fehlt, steht im Klartext dabei, inklusive der IAM-Aktion.
@@ -156,7 +156,9 @@ Postfachs. Dort in drei Schritten:
 
 „Speichern und starten“ schreibt `~/.config/s3mail/config.json` (chmod 600) und lädt
 direkt das Postfach. Ab dann genügt `./s3mail`. Über den Knopf
-**Einstellungen** oben rechts kommt man jederzeit zurück in den Assistenten.
+**Einstellungen** oben rechts kommt man jederzeit zurück in den Assistenten – dort
+lässt sich auch ein zweites Postfach anlegen, oder über **+ Postfach hinzufügen**
+im Umschalter oben links.
 
 Wer lieber Argumente tippt, kann alles weiterhin per CLI setzen – die überschreiben die
 Konfigurationsdatei für den jeweiligen Start:
@@ -190,6 +192,8 @@ mail/                     ← Prefix aus der SES-Receipt-Rule   = Posteingang
 mail/archiv/              ← Archiv
 mail/spam/                ← Spam
 mail/trash/               ← Papierkorb
+mail/sent/                ← Kopie jeder verschickten Mail
+mail/drafts/              ← Entwürfe, samt Blindkopie und Anhängen
 mail/kunden/              ← selbst angelegt
 mail/.s3mail-state.json   ← Tags, gelesen/ungelesen, Stern, Regeln (Snapshot)
 mail/.s3mail-state/       ← die einzelnen Änderungen seit dem Snapshot
@@ -489,6 +493,8 @@ und zeigt das in der Seitenleiste an.
     { "Effect": "Allow", "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
       "Resource": "arn:aws:s3:::MEIN-BUCKET/mail/*" },
     { "Effect": "Allow", "Action": "ses:SendRawEmail", "Resource": "*" },
+    { "Effect": "Allow", "Action": ["sqs:ReceiveMessage", "sqs:DeleteMessage"],
+      "Resource": "arn:aws:sqs:REGION:KONTO:MEINE-QUEUE" },
     { "Effect": "Allow", "Action": ["kms:Decrypt", "kms:GenerateDataKey"],
       "Resource": "arn:aws:kms:REGION:KONTO:key/DEIN-SCHLUESSEL" }
   ]
@@ -497,9 +503,21 @@ und zeigt das in der Seitenleiste an.
 
 Der KMS-Teil entfällt, wenn weder der Bucket noch die SES-Regel verschlüsselt.
 
+Der SQS-Teil entfällt, wenn es keine Klingel gibt – dann läuft der Abgleich im
+Takt. **`sqs:GetQueueUrl` steht bewusst nicht dabei:** s3mail baut die URL aus
+dem ARN, den es ohnehin in der Policy liest. Ein Aufruf und ein Recht weniger.
+
+Damit dort etwas ankommt, braucht es die Gegenseite: die SES-Empfangsregel
+benachrichtigt ein SNS-Topic, das Topic schreibt in die Queue. **Nicht** über
+eine S3-Event-Notification auf dem Bucket – s3mail schreibt selbst ständig
+hinein (Gelesen-Haken, Gesendet-Kopien, Entwürfe), und jede davon löste einen
+Abgleich aus, der wieder schreibt. Über die Empfangsregel läuft nur eingehende
+Mail. Ein Topic je Postfach, denn die SES-Benachrichtigung trägt Absender,
+Empfänger und Betreff.
+
 ### Selbsteinrichtung: der Zugang beantwortet die Fragen des Assistenten
 
-Bucket, Ordner und Absenderadresse stehen bereits in der Policy oben – als
+Bucket, Ordner, Absenderadresse und Queue stehen bereits in der Policy oben – als
 genau die Angabe, an der AWS den Zugriff später misst. Darf der Zugang seine
 eigene Policy lesen, holt s3mail sie sich von dort, statt danach zu fragen:
 eintragen muss man dann nur noch Access Key und Secret.
