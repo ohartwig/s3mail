@@ -320,9 +320,12 @@ func TestOhnePostfach(t *testing.T) {
 		t.Error("BeimBeenden wurde nicht gerufen")
 	}
 
-	// und die Startseite zeigt ihn
+	// und die Startseite zeigt ihn. Geprueft wird ein Anker aus dem Markup und
+	// kein Satz: die Seite kommt seit der Uebersetzung in der Sprache des
+	// Fragenden, und ein Test, der an einem Wort haengt, geht beim naechsten
+	// Sprachwechsel kaputt, ohne dass etwas kaputt waere.
 	r := rufen(t, ts, "GET", "/", "", nil)
-	if r.Code != 200 || !strings.Contains(string(r.Body), "s3mail einrichten") {
+	if r.Code != 200 || !strings.Contains(string(r.Body), `id="saveCreds"`) {
 		t.Errorf("Startseite ohne Postfach: HTTP %d", r.Code)
 	}
 }

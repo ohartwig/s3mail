@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="de">
+<html lang="{{.Lang}}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>s3mail einrichten</title>
+<title>{{t "setup.title"}}</title>
 <style>
   :root { --bg:#0f1216; --panel:#161b22; --panel2:#1c232c; --line:#2a323d;
           --text:#e6edf3; --muted:#8b98a5; --accent:#4c8dff; --ok:#38b48b; --danger:#f2596b; }
@@ -47,83 +47,81 @@
 </style>
 </head>
 <body><div class="wrap">
-  <h1>s3mail einrichten</h1>
-  <div class="sub">Einmal ausfüllen – danach startet s3mail direkt ins Postfach.</div>
+  <div style="display:flex;align-items:center;gap:12px">
+    <h1 style="flex:1">{{t "setup.title"}}</h1>
+    <select id="lang" title="{{t "nav.language"}}" aria-label="{{t "nav.language"}}"></select>
+  </div>
+  <div class="sub">{{t "setup.sub"}}</div>
 
   <div class="card">
-    <h2><span class="num">1</span> AWS-Zugang</h2>
-    <div class="hint">s3mail braucht einen Zugang zu deinem AWS-Konto, um die Mails aus
-      S3 zu holen. Wenn auf diesem Rechner schon ein Profil eingerichtet ist, nimm das.</div>
+    <h2><span class="num">1</span> {{t "setup.step1"}}</h2>
+    <div class="hint">{{t "setup.step1.hint"}}</div>
     <div class="tabs">
-      <button id="tabExisting" class="on">Vorhandenes Profil</button>
-      <button id="tabNew">Neue Zugangsdaten</button>
+      <button id="tabExisting" class="on">{{t "setup.tab.existing"}}</button>
+      <button id="tabNew">{{t "setup.tab.new"}}</button>
     </div>
     <div id="paneExisting">
-      <label>Profil</label>
+      <label>{{t "setup.profile"}}</label>
       <select id="profile"></select>
     </div>
     <div id="paneNew" style="display:none">
-      <label>Name für das neue Profil</label>
+      <label>{{t "setup.newProfileName"}}</label>
       <input id="new_profile" value="s3mail" placeholder="s3mail">
       <label>Access Key ID</label>
       <input id="key_id" placeholder="AKIA…" autocomplete="off" spellcheck="false">
       <label>Secret Access Key</label>
       <input id="secret" type="password" autocomplete="off" spellcheck="false">
-      <div class="hint">Wird als AWS-Profil in <code>~/.aws/credentials</code> gespeichert
-        (nur für dich lesbar) – dem Standardort, den auch die AWS-Werkzeuge nutzen.</div>
-      <button id="saveCreds">Zugangsdaten speichern</button>
+      <div class="hint">{{t "setup.credentials.hint"}}</div>
+      <button id="saveCreds">{{t "setup.saveCredentials"}}</button>
       <div id="credMsg" class="msg"></div>
     </div>
-    <label>Region</label>
+    <label>{{t "setup.region"}}</label>
     <select id="region"></select>
-    <div class="hint">Die Region, in der dein Bucket liegt und SES die Mails annimmt.</div>
+    <div class="hint">{{t "setup.region.hint"}}</div>
   </div>
 
   <div class="card">
-    <h2><span class="num">2</span> Postfach</h2>
-    <div class="hint">Der Bucket, in den deine SES-Regel die Mails schreibt.
-      „Buckets laden“ geht erst, wenn Schritt 1 steht – vorher weiß s3mail nicht,
-      in welchem Konto es nachsehen soll.</div>
+    <h2><span class="num">2</span> {{t "setup.step2"}}</h2>
+    <div class="hint">{{t "setup.step2.hint"}}</div>
     <div id="fundMsg" class="msg" style="margin:0 0 12px"></div>
-    <label>Bucket</label>
+    <label>{{t "setup.bucket"}}</label>
     <div class="row">
-      <select id="bucketSel"><option value="">– Buckets laden –</option></select>
-      <button id="loadBuckets" style="flex:none">Buckets laden</button>
+      <select id="bucketSel"><option value="">{{t "setup.buckets.placeholder"}}</option></select>
+      <button id="loadBuckets" style="flex:none">{{t "setup.loadBuckets"}}</button>
     </div>
-    <input id="bucket" placeholder="oder Bucket-Namen hier eintippen" style="margin-top:8px">
+    <input id="bucket" placeholder="{{t "setup.bucket.placeholder"}}" style="margin-top:8px">
     <div id="bucketMsg" class="msg"></div>
-    <label>Ordner im Bucket (Prefix)</label>
+    <label>{{t "setup.prefix"}}</label>
     <input id="prefix" placeholder="mail/">
-    <div class="hint">Genau das Prefix aus deiner SES-Regel. Darunter legt s3mail
-      <code>spam/</code>, <code>trash/</code> und <code>archiv/</code> an.</div>
-    <label>Absender für Antworten</label>
+    <div class="hint">{{t "setup.prefix.hint"}}</div>
+    <label>{{t "setup.sender"}}</label>
     <div class="row">
-      <select id="identSel"><option value="">– verifizierte Adressen –</option></select>
+      <select id="identSel"><option value="">{{t "setup.sender.placeholder"}}</option></select>
     </div>
-    <input id="from" placeholder="oder Adresse eintippen – muss in SES verifiziert sein" style="margin-top:8px">
+    <input id="from" placeholder="{{t "setup.sender.hint"}}" style="margin-top:8px">
     <div id="fromMsg" class="msg"></div>
     <label style="display:flex;gap:8px;align-items:center;margin-top:14px">
       <input type="checkbox" id="allow_delete" checked style="width:auto">
-      <span style="color:var(--text)">Endgültiges Löschen erlauben (aus dem Papierkorb heraus)</span>
+      <span style="color:var(--text)">{{t "setup.allowDelete"}}</span>
     </label>
   </div>
 
   <div class="card">
-    <h2><span class="num">3</span> Prüfen</h2>
+    <h2><span class="num">3</span> {{t "setup.step3"}}</h2>
     <div class="hint">Legt kurz ein Testobjekt an und löscht es wieder – so siehst du
       sofort, ob alle Rechte da sind.</div>
-    <button class="primary" id="test">Verbindung testen</button>
+    <button class="primary" id="test">{{t "setup.testConnection"}}</button>
     <div id="checks" style="margin-top:12px"></div>
     <div id="lifeBox" style="display:none;margin-top:14px">
-      <label>Papierkorb automatisch leeren nach</label>
+      <label>{{t "setup.lifecycle"}}</label>
       <div class="row">
         <select id="days">
-          <option value="0">gar nicht</option>
-          <option value="7">7 Tagen</option>
-          <option value="30" selected>30 Tagen</option>
-          <option value="90">90 Tagen</option>
+          <option value="0">{{t "setup.lifecycle.never"}}</option>
+          <option value="7">{{t "setup.lifecycle.7"}}</option>
+          <option value="30" selected>{{t "setup.lifecycle.30"}}</option>
+          <option value="90">{{t "setup.lifecycle.90"}}</option>
         </select>
-        <button id="setLife" style="flex:none">Regel setzen</button>
+        <button id="setLife" style="flex:none">{{t "setup.setRule"}}</button>
       </div>
       <div class="hint">Setzt eine S3-Lifecycle-Regel auf <code>…/trash/</code>.
         AWS räumt dann selbst auf, ohne dass s3mail laufen muss.</div>
@@ -132,7 +130,7 @@
   </div>
 
   <div class="bar">
-    <button class="primary" id="save" style="padding:10px 20px">Speichern und starten</button>
+    <button class="primary" id="save" style="padding:10px 20px">{{t "setup.saveAndStart"}}</button>
     <span id="saveMsg" class="msg"></span>
   </div>
   <div class="foot" id="foot"></div>
@@ -140,6 +138,8 @@
 
 <script>
 const $ = s => document.querySelector(s);
+const T = __I18N__;
+const LANGS = __LANGUAGES__;
 let info = {};
 
 const api = async (path, body) => {
@@ -167,14 +167,14 @@ async function boot() {
   fillProfiles(c.profile);
   $("#bucket").value = c.bucket; $("#prefix").value = c.prefix || "mail/";
   $("#from").value = c.from; $("#allow_delete").checked = c.allow_delete !== false;
-  $("#foot").textContent = "Wird gespeichert in " + info.config_file;
+  $("#foot").textContent = T["setup.savedIn"].replace("%s", info.config_file);
   if (!info.profiles.length && !info.has_env_keys) $("#tabNew").click();
 }
 function fillProfiles(sel) {
   const opts = info.profiles.map(p =>
     `<option value="${p}"${p === sel ? " selected" : ""}>${p}</option>`).join("");
   $("#profile").innerHTML = (info.has_env_keys || !info.profiles.length
-      ? `<option value="">(Umgebungsvariablen / Standard)</option>` : "") + opts;
+      ? `<option value="">${T["setup.envDefault"]}</option>` : "") + opts;
 }
 
 $("#tabExisting").onclick = () => {
@@ -195,38 +195,37 @@ $("#saveCreds").onclick = async () => {
     fillProfiles(d.profile);
     $("#secret").value = "";
     $("#tabExisting").click();
-    say("#credMsg", "Profil „" + d.profile + "“ gespeichert.");
+    say("#credMsg", T["setup.profileSaved"].replace("%s", d.profile));
     $("#loadBuckets").click();          // ein Klick weniger
   } catch (e) { say("#credMsg", e.message, true); }
 };
 
 $("#loadBuckets").onclick = async () => {
-  const b = $("#loadBuckets"); b.disabled = true; b.textContent = "lädt…";
+  const b = $("#loadBuckets"); b.disabled = true; b.textContent = T["list.loading"];
   try {
     const d = await api("/api/setup/buckets", collect());
-    $("#bucketSel").innerHTML = '<option value="">– auswählen –</option>' +
+    $("#bucketSel").innerHTML = `<option value="">${T["setup.choose"]}</option>` +
       (d.buckets || []).map(x => `<option${x === $("#bucket").value ? " selected" : ""}>${x}</option>`).join("");
     // Eine verifizierte DOMAIN erlaubt jede Adresse darunter - deshalb gehoert
     // sie in dieselbe Liste, nur als Vorlage statt als fertige Adresse.
     const adressen = (d.identities || []).map(x => `<option>${x}</option>`);
     const domains = (d.domains || []).map(x =>
-      `<option value="@${x}">@${x} – jede Adresse darunter</option>`);
-    $("#identSel").innerHTML = '<option value="">– verifizierte Absender –</option>' +
+      `<option value="@${x}">@${x} – ${T["setup.anyAddressBelow"]}</option>`);
+    $("#identSel").innerHTML = `<option value="">${T["setup.sender.placeholder"]}</option>` +
       adressen.join("") + domains.join("");
     if (!adressen.length && domains.length) {
-      say("#fromMsg", "Die Domain " + (d.domains || [])[0] + " ist verifiziert – "
-        + "jede Adresse darunter darf senden. Trag deine ein, z. B. vorname@"
-        + (d.domains || [])[0] + ".");
+      say("#fromMsg", T["setup.domainVerified"]
+        .replace("%s", (d.domains || [])[0]).replace("%s", (d.domains || [])[0]));
     }
     // Kein "true": das ist ein Hinweis, kein Fehlschlag. Fuer jeden
     // Postfach-Benutzer ist die leere Liste der Normalfall.
     if (d.found) uebernehmen(d.found);
     if (d.note) say("#bucketMsg", d.note);
     else if (!(d.buckets || []).length) say("#bucketMsg",
-      "Keine Buckets gefunden – Namen bitte direkt eintippen.", true);
-    else say("#bucketMsg", (d.buckets || []).length + " Bucket(s) gefunden.");
+      T["setup.noBuckets"], true);
+    else say("#bucketMsg", T["setup.bucketsFound"].replace("%d", (d.buckets || []).length));
   } catch (e) { say("#bucketMsg", e.message, true); }
-  finally { b.disabled = false; b.textContent = "Buckets laden"; }
+  finally { b.disabled = false; b.textContent = T["setup.loadBuckets"]; }
 };
 // uebernehmen traegt ein, was s3mail aus der eigenen IAM-Policy des Zugangs
 // gelesen hat. Leere Felder und der Vorgabewert "mail/" gelten als unbesetzt -
@@ -238,16 +237,16 @@ function uebernehmen(f) {
     e.value = wert; return true;
   };
   const teile = [];
-  if (setzen("#bucket", f.bucket, "")) teile.push("Bucket <code>" + f.bucket + "</code>");
-  if (setzen("#prefix", f.prefix, "mail/")) teile.push("Ordner <code>" + f.prefix + "</code>");
-  if (setzen("#from", f.from, "")) teile.push("Absender <code>" + f.from + "</code>");
+  if (setzen("#bucket", f.bucket, "")) teile.push(T["setup.bucket"] + " <code>" + f.bucket + "</code>");
+  if (setzen("#prefix", f.prefix, "mail/")) teile.push(T["setup.found.folder"] + " <code>" + f.prefix + "</code>");
+  if (setzen("#from", f.from, "")) teile.push(T["setup.found.sender"] + " <code>" + f.from + "</code>");
   if (f.region && $("#region").value !== f.region) {
     $("#region").value = f.region;
-    teile.push("Region <code>" + f.region + "</code>");
+    teile.push(T["setup.region"] + " <code>" + f.region + "</code>");
   }
   if (!teile.length) return;
-  $("#fundMsg").innerHTML = '<span class="ok">\u2713</span> Aus deinem Zugang gelesen: '
-    + teile.join(", ") + ". Anpassen kannst du das unten jederzeit.";
+  $("#fundMsg").innerHTML = '<span class="ok">\u2713</span> '
+    + T["setup.readFromAccess"].replace("%s", teile.join(", "));
   // Alles beisammen: dann gleich pruefen, statt es den Nutzer anklicken zu lassen.
   if ($("#bucket").value.trim() && $("#prefix").value.trim()) $("#test").click();
 }
@@ -255,7 +254,7 @@ $("#bucketSel").onchange = e => { if (e.target.value) $("#bucket").value = e.tar
 $("#identSel").onchange = e => { if (e.target.value) $("#from").value = e.target.value; };
 
 $("#test").onclick = async () => {
-  const b = $("#test"); b.disabled = true; b.textContent = "prüft…";
+  const b = $("#test"); b.disabled = true; b.textContent = T["setup.checking"];
   $("#checks").innerHTML = "";
   try {
     const d = await api("/api/setup/test", collect());
@@ -268,7 +267,7 @@ $("#test").onclick = async () => {
     $("#lifeBox").style.display = "";
     if (d.lifecycle_days) $("#days").value = String(d.lifecycle_days);
   } catch (e) { say("#checks", e.message, true); }
-  finally { b.disabled = false; b.textContent = "Verbindung testen"; }
+  finally { b.disabled = false; b.textContent = T["setup.testConnection"]; }
 };
 
 $("#setLife").onclick = async () => {
@@ -279,16 +278,23 @@ $("#setLife").onclick = async () => {
 };
 
 $("#save").onclick = async () => {
-  const b = $("#save"); b.disabled = true; b.textContent = "speichert…";
+  const b = $("#save"); b.disabled = true; b.textContent = T["setup.saving"];
   try {
     await api("/api/setup/save", collect());
-    say("#saveMsg", "Gespeichert – Postfach wird geladen…");
+    say("#saveMsg", T["setup.saved"]);
     setTimeout(() => location.href = "/", 700);
   } catch (e) {
     say("#saveMsg", e.message, true);
-    b.disabled = false; b.textContent = "Speichern und starten";
+    b.disabled = false; b.textContent = T["setup.saveAndStart"];
   }
 };
+
+{
+  const sel = $("#lang");
+  sel.innerHTML = LANGS.map(l =>
+    `<option value="${l.code}"${l.code === document.documentElement.lang ? " selected" : ""}>${l.name}</option>`).join("");
+  sel.onchange = () => { location.href = "/language/" + sel.value; };
+}
 
 boot().catch(e => say("#saveMsg", e.message, true));
 </script>
