@@ -1,5 +1,5 @@
-// Package assistent bedient die /api/setup/*-Aufrufe: AWS-Zugang einrichten,
-// Bucket waehlen, Verbindung pruefen, Papierkorb-Automatik setzen, speichern.
+// Package wizard serves the /api/setup/* calls: set up AWS access, pick a
+// bucket, test the connection, set the trash lifecycle rule, save.
 package wizard
 
 import (
@@ -13,12 +13,12 @@ import (
 	"s3mail/i18n"
 )
 
-// Regionen, in denen SES eingehende Mail entgegennimmt. Andere anzubieten waere
-// eine Falle - der Bucket laesst sich ueberall anlegen, die Receipt-Rule nicht.
+// Regions in which SES accepts incoming mail. Offering others would be a trap -
+// the bucket can be created anywhere, the receipt rule cannot.
 //
-// Die Namen stehen englisch da und werden nicht uebersetzt: so heissen sie bei
-// AWS, und wer sie in der Konsole wiederfinden will, sucht nach genau diesem
-// Wort.
+// The names are English and are not translated: that is what they are called at
+// AWS, and somebody looking for a region in the console searches for exactly
+// that word.
 var Regionen = [][2]string{
 	{"eu-central-1", "Europe (Frankfurt)"}, {"eu-west-1", "Europe (Ireland)"},
 	{"eu-west-2", "Europe (London)"}, {"eu-west-3", "Europe (Paris)"},
@@ -32,7 +32,7 @@ var Regionen = [][2]string{
 	{"af-south-1", "Africa (Cape Town)"}, {"me-south-1", "Middle East (Bahrain)"},
 }
 
-// Data ist, was die Assistentenseite schickt.
+// Data is what the wizard page sends.
 type Data struct {
 	Profil      string `json:"profile"`
 	NeuesProfil string `json:"new_profile"`
@@ -45,22 +45,22 @@ type Data struct {
 	AllowDelete *bool  `json:"allow_delete"`
 	Tage        int    `json:"days"`
 
-	// Sprache setzt die HTTP-Schicht aus der Anfrage, nicht der Browser aus
-	// dem Formular: sie steht dort schon im Cookie, und zwei Quellen fuer
-	// dieselbe Angabe gehen irgendwann auseinander.
+	// Language is set by the HTTP layer from the request, not by the browser
+	// from the form: it is already in the cookie there, and two sources for
+	// the same fact drift apart eventually.
 	Sprache string `json:"-"`
 }
 
-// Activator wird nach dem Speichern gerufen, damit der laufende Prozess ohne
-// Neustart ins Postfach wechselt.
+// Activator is called after saving, so the running process switches into the
+// mailbox without a restart.
 type Activator func(k config.Config) error
 
 type Wizard struct {
 	Aktivieren Activator
 }
 
-// InputError ist ein Fehler, den der Nutzer selbst beheben kann - die
-// HTTP-Schicht macht daraus ein 400 statt eines 500.
+// InputError is a fault the user can fix themselves - the HTTP layer turns it
+// into a 400 rather than a 500.
 type InputError struct{ Text string }
 
 func (e InputError) Error() string { return e.Text }
@@ -69,7 +69,7 @@ func inputError(format string, a ...any) error {
 	return InputError{fmt.Sprintf(format, a...)}
 }
 
-// Info liefert alles, was die Seite beim Laden braucht.
+// Info returns everything the page needs while loading.
 func (a *Wizard) Info(_ context.Context, _ Data) (map[string]any, error) {
 	regionen := make([]map[string]string, 0, len(Regionen))
 	for _, r := range Regionen {
@@ -83,7 +83,7 @@ func (a *Wizard) Info(_ context.Context, _ Data) (map[string]any, error) {
 	}, nil
 }
 
-// Credentials schreibt Access Key und Secret als benanntes AWS-Profil.
+// Credentials writes access key and secret as a named AWS profile.
 func (a *Wizard) Credentials(_ context.Context, d Data) (map[string]any, error) {
 	name, err := config.WriteCredentials(d.NeuesProfil, d.KeyID, d.Secret, d.Region)
 	if err != nil {
@@ -92,7 +92,7 @@ func (a *Wizard) Credentials(_ context.Context, d Data) (map[string]any, error) 
 	return map[string]any{"profile": name, "profiles": config.Profiles()}, nil
 }
 
-// Buckets fuellt die beiden Auswahllisten.
+// Buckets fills the two picker lists.
 func (a *Wizard) Buckets(ctx context.Context, d Data) (map[string]any, error) {
 	cfg, err := awsx.Session(ctx, d.Profil, d.Region)
 	if err == nil {
@@ -106,32 +106,32 @@ func (a *Wizard) Buckets(ctx context.Context, d Data) (map[string]any, error) {
 	if err != nil {
 		return nil, InputError{awsx.PlainText(err, d.Profil, i18n.Get(d.Sprache))}
 	}
-	// Nie nil an die Oberflaeche geben: ein nil-Slice wird zu JSON `null`, und
-	// `null.map(...)` beendet das Skript der Seite - der Nutzer sieht dann nicht
-	// "kein Recht zum Auflisten", sondern gar nichts mehr.
+	// Never hand nil to the interface: a nil slice marshals to JSON `null`, and
+	// `null.map(...)` ends the page's script - the user then does not see "not
+	// allowed to list", they see nothing at all.
 	ses := awsx.NewSES(cfg, "")
 	out := map[string]any{
 		"buckets":    notNil(buckets),
 		"identities": notNil(ses.Identitaeten(ctx)),
 		"domains":    notNil(ses.VerifizierteDomains(ctx)),
 	}
-	// Was der Zugang ueber sich selbst verraet, muss niemand abtippen. Scheitert
-	// das (aeltere Postfaecher duerfen ihre Policy nicht lesen), bleibt der
-	// Assistent bei der Handeingabe - deshalb hier kein Fehler nach aussen.
+	// What the access reveals about itself, nobody has to retype. If that fails
+	// (older mailboxes may not read their own policy), the wizard falls back to
+	// typing - hence no error surfaces here.
 	if f, err := awsx.Discover(ctx, cfg); err == nil && (f.Bucket != "" || f.Absender != "") {
 		out["found"] = f
 	}
 	if len(buckets) == 0 {
-		// Fuer die Postfach-Benutzer ist das der Normalfall und kein Mangel: ihre
-		// Policy gibt bewusst kein s3:ListAllMyBuckets, sonst saehe jeder alle
-		// Buckets des Kontos. Der Text fuehrt deshalb mit dem, was zu tun ist,
-		// und nicht mit dem, was fehlt.
+		// For mailbox users this is the normal case and not a shortcoming: their
+		// policy deliberately withholds s3:ListAllMyBuckets, or everyone would
+		// see every bucket in the account. The text therefore leads with what to
+		// do, not with what is missing.
 		out["note"] = i18n.Get(d.Sprache).T("setup.note.noListBuckets")
 	}
 	return out, nil
 }
 
-// Test ist Schritt 3: die Checkliste.
+// Test is step 3: the checklist.
 func (a *Wizard) Test(ctx context.Context, d Data) (map[string]any, error) {
 	if strings.TrimSpace(d.Bucket) == "" {
 		return nil, inputError("%s", i18n.Get(d.Sprache).T("setup.error.noBucket"))
@@ -154,7 +154,7 @@ func (a *Wizard) Test(ctx context.Context, d Data) (map[string]any, error) {
 	}, nil
 }
 
-// Lifecycle setzt oder entfernt die Papierkorb-Automatik.
+// Lifecycle sets or removes the automatic emptying of the trash.
 func (a *Wizard) Lifecycle(ctx context.Context, d Data) (map[string]any, error) {
 	cfg, err := awsx.Session(ctx, d.Profil, d.Region)
 	if err != nil {
@@ -168,7 +168,7 @@ func (a *Wizard) Lifecycle(ctx context.Context, d Data) (map[string]any, error) 
 	return map[string]any{"message": msg}, nil
 }
 
-// Save schreibt die Konfiguration und schaltet das Postfach scharf.
+// Save writes the configuration and arms the mailbox.
 func (a *Wizard) Save(_ context.Context, d Data) (map[string]any, error) {
 	k := config.Load()
 	k.Profil, k.Region = d.Profil, d.Region
@@ -189,7 +189,7 @@ func (a *Wizard) Save(_ context.Context, d Data) (map[string]any, error) {
 	return map[string]any{"config": k, "path": path}, nil
 }
 
-// Route waehlt den Handler zum Pfad.
+// Route picks the handler for a path.
 func (a *Wizard) Route(path string) (func(context.Context, Data) (map[string]any, error), bool) {
 	switch strings.TrimPrefix(path, "/api/setup/") {
 	case "info":

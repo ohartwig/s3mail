@@ -1,7 +1,7 @@
-// Package pruefung ist der Verbindungstest aus Schritt 3 des Assistenten: er geht
-// der Reihe nach durch, was s3mail braucht, und schreibt zu jedem fehlenden Punkt
-// die IAM-Aktion dazu, die dafuer noetig waere. Das ist die Stelle, an der jemand
-// ohne AWS-Vorwissen erfaehrt, woran es liegt.
+// Package check is the connection test from step 3 of the wizard: it walks
+// through what s3mail needs, in order, and names the IAM action behind every
+// item that is missing. This is where somebody without prior AWS knowledge
+// finds out what the problem actually is.
 package check
 
 import (
@@ -12,7 +12,7 @@ import (
 	"s3mail/store"
 )
 
-// Item ist ein Eintrag der Checkliste.
+// Item is one entry of the checklist.
 type Item struct {
 	Name    string `json:"name"`
 	OK      bool   `json:"ok"`
@@ -21,20 +21,20 @@ type Item struct {
 	Skipped bool   `json:"skipped"`
 }
 
-// Environment ist, was der Test braucht. Als Schnittstelle, damit er ohne AWS laeuft.
+// Environment is what the test needs. An interface, so it runs without AWS.
 type Environment interface {
 	store.S3
 	Buckets(ctx context.Context) ([]string, error)
 	LifecycleTage(ctx context.Context, bucket string) int
 }
 
-// SESChecker meldet, ob eine Absenderadresse in SES freigeschaltet ist.
+// SESChecker reports whether a sender address is verified in SES.
 type SESChecker interface {
 	Verifiziert(ctx context.Context, address, domain string) ([]string, error)
 }
 
-// Run geht die Liste durch. probeSchreiben legt ein Testobjekt an und
-// loescht es wieder - nur so laesst sich das Schreibrecht ehrlich pruefen.
+// Run walks the list. It creates a test object and deletes it again - the only
+// honest way to check the write permission.
 func Run(ctx context.Context, s3 store.S3, kms store.KMS, ses SESChecker,
 	bucket, prefix, sender string, cat i18n.Catalog) []Item {
 	var items []Item
@@ -63,7 +63,7 @@ func Run(ctx context.Context, s3 store.S3, kms store.KMS, ses SESChecker,
 			Hint:   cat.T("check.listBucket.emptyHint")})
 	}
 
-	// 2. Eine echte Mail lesen - und dabei sehen, wie sie verschluesselt ist
+	// 2. Read a real message - and see how it is encrypted while doing so
 	if beispiel == "" {
 		add(Item{Name: cat.T("check.readMail"), OK: true, Detail: cat.T("check.skipped.noMail"),
 			Skipped: true})
@@ -79,7 +79,7 @@ func Run(ctx context.Context, s3 store.S3, kms store.KMS, ses SESChecker,
 		}
 	}
 
-	// 3./4. Schreiben und Loeschen an einem Testobjekt
+	// 3./4. Writing and deleting, on a test object
 	probe := prefix + ".s3mail-probe"
 	if err := s3.Put(ctx, bucket, probe, []byte("s3mail"), "text/plain"); err != nil {
 		add(Item{Name: cat.T("check.write"), Detail: short(err),
@@ -95,7 +95,7 @@ func Run(ctx context.Context, s3 store.S3, kms store.KMS, ses SESChecker,
 		}
 	}
 
-	// 5. Der Ordner, in dem die Zustandsaenderungen liegen
+	// 5. The folder holding the state changes
 	if _, err := s3.List(ctx, bucket, prefix+store.StateOps); err != nil {
 		add(Item{Name: cat.T("check.sharedState"), Detail: short(err),
 			Hint: cat.Tf("check.sharedState.hint", prefix, store.StateOps)})
@@ -130,11 +130,11 @@ func Run(ctx context.Context, s3 store.S3, kms store.KMS, ses SESChecker,
 	return items
 }
 
-// encryption schaut sich eine echte Mail an und sagt, womit man es zu tun hat.
+// encryption looks at a real message and says what one is dealing with.
 func encryption(ctx context.Context, s3 store.S3, kms store.KMS,
 	bucket, key string, obj store.Object, cat i18n.Catalog) Item {
 	if store.IsEnvelope(obj.Meta) {
-		// Ein Teilstueck laesst sich nicht entschluesseln - also ganz holen.
+		// A partial fetch cannot be decrypted - so fetch the whole thing.
 		voll, err := s3.Get(ctx, bucket, key, "")
 		if err == nil {
 			_, err = store.Decrypt(voll.Body, voll.Meta, kms)
@@ -163,7 +163,7 @@ func encryption(ctx context.Context, s3 store.S3, kms store.KMS,
 	}
 }
 
-// AllOK sagt, ob die Liste insgesamt in Ordnung ist.
+// AllOK says whether the list as a whole is in order.
 func AllOK(items []Item) bool {
 	for _, p := range items {
 		if !p.OK && !p.Skipped {
@@ -207,15 +207,13 @@ func short(err error) string {
 	return s
 }
 
-// listHint nennt die drei Ursachen in der Reihenfolge ihrer
-// Wahrscheinlichkeit - und die haeufigste zuerst.
+// listHint names the three causes in order of likelihood - the commonest first.
 //
-// Ist der Zugang auf ein eigenes Prefix beschraenkt (ein Postfach pro Person),
-// dann scheitert das Auflisten an einem Prefix, das auch nur eine Ebene zu weit
-// oben liegt: die Bedingung s3:prefix vergleicht die Zeichenkette, nicht den
-// Pfad. "mail/" passt nicht auf "mail/person/*", und "mail/person" ohne
-// abschliessenden Schraegstrich ebenfalls nicht. Das sieht wie ein fehlendes
-// Recht aus und ist eine fehlende Stelle.
+// When an access is restricted to its own prefix (one mailbox per person),
+// listing fails on a prefix that sits even one level too high: the s3:prefix
+// condition compares the string, not the path. "mail/" does not match
+// "mail/person/*", and neither does "mail/person" without the trailing slash.
+// It looks like a missing permission and is a missing character.
 func listHint(prefix string, cat i18n.Catalog) string {
 	if prefix == "" {
 		return cat.T("check.listBucket.hintNoPrefix")

@@ -52,7 +52,7 @@ func snapshot(t *testing.T, f *s3fake.Fake) *core.Data {
 // sondern die Aenderung.
 func TestOneChangeOneSmallOp(t *testing.T) {
 	ctx := context.Background()
-	f := s3fake.Neu()
+	f := s3fake.New()
 	s := zustandBauen(t, f)
 
 	if err := s.Mutate(ctx, core.Op{T: "flags", Mids: []string{"m1"}, Read: core.Ptr(true)}); err != nil {
@@ -76,7 +76,7 @@ func TestOneChangeOneSmallOp(t *testing.T) {
 // TestTwoMachinesNoConflict - beide schreiben, keiner ueberschreibt.
 func TestTwoMachinesNoConflict(t *testing.T) {
 	ctx := context.Background()
-	f := s3fake.Neu()
+	f := s3fake.New()
 	a, b := zustandBauen(t, f), zustandBauen(t, f)
 
 	if err := a.Mutate(ctx, core.Op{T: "tags", Mids: []string{"m1"}, Add: []string{"von-A"}}); err != nil {
@@ -100,7 +100,7 @@ func TestTwoMachinesNoConflict(t *testing.T) {
 
 func TestZusammenfassen(t *testing.T) {
 	ctx := context.Background()
-	f := s3fake.Neu()
+	f := s3fake.New()
 	s := zustandBauen(t, f)
 	for i := 0; i < store.CompactAfter+2; i++ {
 		if err := s.Mutate(ctx, core.Op{T: "tags", Mids: []string{"m1"},
@@ -125,7 +125,7 @@ func TestZusammenfassen(t *testing.T) {
 // Wasserstand: ein liegengebliebenes Op darf nicht ein zweites Mal wirken.
 func TestWatermarkSkipsWhatIsAlreadyIn(t *testing.T) {
 	ctx := context.Background()
-	f := s3fake.Neu()
+	f := s3fake.New()
 	s := zustandBauen(t, f)
 
 	if err := s.Mutate(ctx, core.Op{T: "flags", Mids: []string{"m1"}, Read: core.Ptr(true)}); err != nil {
@@ -151,7 +151,7 @@ func TestWatermarkSkipsWhatIsAlreadyIn(t *testing.T) {
 
 func TestBatchWritesOnce(t *testing.T) {
 	ctx := context.Background()
-	f := s3fake.Neu()
+	f := s3fake.New()
 	s := zustandBauen(t, f)
 
 	err := s.Batch(ctx, func() error {
@@ -179,7 +179,7 @@ func TestBatchWritesOnce(t *testing.T) {
 
 func TestSchreibfehlerBehaeltAenderung(t *testing.T) {
 	ctx := context.Background()
-	f := s3fake.Neu()
+	f := s3fake.New()
 	s := zustandBauen(t, f)
 	f.PutErr = errors.New("AccessDenied")
 
@@ -208,7 +208,7 @@ func TestSchreibfehlerBehaeltAenderung(t *testing.T) {
 
 func TestLocalFallback(t *testing.T) {
 	ctx := context.Background()
-	f := s3fake.Neu()
+	f := s3fake.New()
 	lokal := filepath.Join(t.TempDir(), "state.json")
 	s := store.NewState(ctx, f, "test-bucket", "mail/", lokal)
 	f.PutErr = errors.New("AccessDenied")

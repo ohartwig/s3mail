@@ -1,7 +1,7 @@
-// Package mailer baut die ausgehende Mail und uebergibt sie an SES. Das Bauen ist
-// von der Zustellung getrennt, damit die Kopfzeilen ohne AWS pruefbar sind - an
-// ihnen haengt, ob eine Antwort im Postfach des Empfaengers am richtigen Faden
-// haengt oder einen neuen Strang aufmacht.
+// Package mailer builds the outgoing message and hands it to SES. Building is
+// separated from delivery so the headers can be checked without AWS - they
+// decide whether a reply lands on the right thread in the recipient's mailbox
+// or starts a new one.
 package mailer
 
 import (
@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-// Draft ist, was die Oberflaeche schickt.
+// Draft is what the interface sends.
 type Draft struct {
 	Mode    string `json:"mode"` // "reply", "forward" oder "new"
 	Key     string `json:"key"`
@@ -29,7 +29,7 @@ type Draft struct {
 	Body    string `json:"body"`
 }
 
-// Original sind die Kopfzeilen der Mail, auf die geantwortet wird.
+// Original are the headers of the message being replied to.
 type Original struct {
 	MessageID  string
 	References string
@@ -37,7 +37,7 @@ type Original struct {
 	Roh        []byte // fuer das Weiterleiten als .eml
 }
 
-// Message ist die fertige Mail samt Empfaengerliste.
+// Message is the finished mail together with its recipient list.
 type Message struct {
 	Roh        []byte
 	Absender   string
@@ -49,7 +49,7 @@ var (
 	ErrKeinEmpfaenger = errors.New("kein Empfaenger angegeben")
 )
 
-// Build setzt die Mail zusammen.
+// Build assembles the message.
 func Build(e Draft, standardAbsender string, o Original, jetzt time.Time) (Message, error) {
 	sender := strings.TrimSpace(e.From)
 	if sender == "" {
@@ -81,8 +81,8 @@ func Build(e Draft, standardAbsender string, o Original, jetzt time.Time) (Messa
 	header.Set("Message-Id", newMessageID(sender))
 	header.Set("MIME-Version", "1.0")
 
-	// Beim Antworten die Faeden zusammenhalten: ohne In-Reply-To und References
-	// macht die Antwort im Postfach des Empfaengers einen neuen Strang auf.
+	// Keep the thread together when replying: without In-Reply-To and
+	// References the answer starts a new strand in the recipient's mailbox.
 	if e.Mode == "reply" && o.MessageID != "" {
 		header.Set("In-Reply-To", o.MessageID)
 		refs := strings.TrimSpace(o.References + " " + o.MessageID)
@@ -109,7 +109,7 @@ func Build(e Draft, standardAbsender string, o Original, jetzt time.Time) (Messa
 		Empfaenger: append(append([]string{}, an...), kopie...)}, nil
 }
 
-// withAttachment haengt die weitergeleitete Mail als .eml an.
+// withAttachment attaches the forwarded message as an .eml file.
 func withAttachment(body *bytes.Buffer, header textproto.MIMEHeader, text string, o Original) error {
 	mw := multipart.NewWriter(body)
 	header.Set("Content-Type", `multipart/mixed; boundary="`+mw.Boundary()+`"`)
@@ -146,7 +146,7 @@ func withAttachment(body *bytes.Buffer, header textproto.MIMEHeader, text string
 }
 
 func writeHeader(w *bytes.Buffer, header textproto.MIMEHeader) {
-	// feste Reihenfolge, damit die Ausgabe reproduzierbar ist
+	// fixed order, so the output is reproducible
 	for _, name := range []string{"From", "To", "Cc", "Subject", "Date", "Message-Id",
 		"In-Reply-To", "References", "MIME-Version", "Content-Type",
 		"Content-Transfer-Encoding"} {
@@ -156,7 +156,7 @@ func writeHeader(w *bytes.Buffer, header textproto.MIMEHeader) {
 	}
 }
 
-// addresses zerlegt eine Empfaengerliste und liefert die reinen Adressen.
+// addresses splits a recipient list and returns the bare addresses.
 func addresses(s string) ([]string, error) {
 	if strings.TrimSpace(s) == "" {
 		return nil, nil
@@ -172,7 +172,7 @@ func addresses(s string) ([]string, error) {
 	return out, nil
 }
 
-// encodeWord macht aus einem Betreff mit Umlauten einen RFC-2047-Header.
+// encodeWord turns a subject with non-ASCII characters into an RFC 2047 header.
 func encodeWord(s string) string {
 	for _, r := range s {
 		if r > 127 {

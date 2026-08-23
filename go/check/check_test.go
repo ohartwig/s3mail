@@ -26,8 +26,8 @@ func nach(items []check.Item) map[string]check.Item {
 }
 
 func TestEverythingOK(t *testing.T) {
-	f := s3fake.Neu()
-	f.Setzen("mail/m1", []byte("From: a@b.de\r\nSubject: x\r\n\r\nText\r\n"))
+	f := s3fake.New()
+	f.Store("mail/m1", []byte("From: a@b.de\r\nSubject: x\r\n\r\nText\r\n"))
 	p := check.Run(context.Background(), f, nil, nil, "test-bucket", "mail/", "", i18n.Get("de"))
 	if !check.AllOK(p) {
 		t.Errorf("nicht alles gruen: %+v", p)
@@ -46,15 +46,15 @@ func TestEverythingOK(t *testing.T) {
 		t.Errorf("Schreiben/Loeschen: %+v %+v", k["Schreiben"], k["Löschen"])
 	}
 	// Das Testobjekt muss wieder weg sein
-	if f.Hat("mail/.s3mail-probe") {
+	if f.Has("mail/.s3mail-probe") {
 		t.Error("Testobjekt liegen gelassen")
 	}
 }
 
 // TestMissingPermissionNamesTheAction - das ist der ganze Zweck der Liste.
 func TestMissingPermissionNamesTheAction(t *testing.T) {
-	f := s3fake.Neu()
-	f.Setzen("mail/m1", []byte("From: a@b.de\r\n\r\nText\r\n"))
+	f := s3fake.New()
+	f.Store("mail/m1", []byte("From: a@b.de\r\n\r\nText\r\n"))
 	f.PutErr = errors.New("AccessDenied")
 
 	p := check.Run(context.Background(), f, nil, nil, "test-bucket", "mail/", "", i18n.Get("de"))
@@ -71,7 +71,7 @@ func TestMissingPermissionNamesTheAction(t *testing.T) {
 }
 
 func TestEmptyMailboxIsNoError(t *testing.T) {
-	f := s3fake.Neu()
+	f := s3fake.New()
 	p := check.Run(context.Background(), f, nil, nil, "test-bucket", "mail/", "", i18n.Get("de"))
 	k := nach(p)
 	if !k["Bucket lesen"].OK || !strings.Contains(k["Bucket lesen"].Detail, "noch nichts") {
@@ -87,9 +87,9 @@ func TestEmptyMailboxIsNoError(t *testing.T) {
 
 // TestInternalObjectsAreNotMail - sonst prueft der Test den Zustand statt einer Mail.
 func TestInternalObjectsAreNotMail(t *testing.T) {
-	f := s3fake.Neu()
-	f.Setzen("mail/"+store.StateObject, []byte(`{"messages":{}}`))
-	f.Setzen("mail/"+store.StateOps+"x.json", []byte(`{"ops":[]}`))
+	f := s3fake.New()
+	f.Store("mail/"+store.StateObject, []byte(`{"messages":{}}`))
+	f.Store("mail/"+store.StateOps+"x.json", []byte(`{"ops":[]}`))
 	p := nach(check.Run(context.Background(), f, nil, nil, "test-bucket", "mail/", "", i18n.Get("de")))
 	if !p["Mail lesen"].Skipped {
 		t.Errorf("Zustandsdatei als Mail geprueft: %+v", p["Mail lesen"])
@@ -135,9 +135,9 @@ func envelope(t *testing.T) ([]byte, map[string]string, []byte) {
 func TestEncryptionIsDetected(t *testing.T) {
 	body, meta, key := envelope(t)
 
-	f := s3fake.Neu()
-	f.Setzen("mail/enc", body)
-	f.MetaSetzen("mail/enc", meta)
+	f := s3fake.New()
+	f.Store("mail/enc", body)
+	f.SetMeta("mail/enc", meta)
 	p := nach(check.Run(context.Background(), f, &kmsFake{key: key}, nil,
 		"test-bucket", "mail/", "", i18n.Get("de")))
 	if !p["Verschlüsselung"].OK || !strings.Contains(p["Verschlüsselung"].Detail, "klappt") {
@@ -155,9 +155,9 @@ func TestEncryptionIsDetected(t *testing.T) {
 	}
 
 	// serverseitig verschluesselt: nur ein Hinweis, kein Fehler
-	g := s3fake.Neu()
-	g.Setzen("mail/m1", []byte("From: a@b.de\r\n\r\nText\r\n"))
-	g.SSESetzen("mail/m1", store.CopyOpts{ServerSideEncryption: "aws:kms"})
+	g := s3fake.New()
+	g.Store("mail/m1", []byte("From: a@b.de\r\n\r\nText\r\n"))
+	g.SetSSE("mail/m1", store.CopyOpts{ServerSideEncryption: "aws:kms"})
 	p = nach(check.Run(context.Background(), g, nil, nil, "test-bucket", "mail/", "", i18n.Get("de")))
 	if !p["Verschlüsselung"].OK || !strings.Contains(p["Verschlüsselung"].Detail, "serverseitig") {
 		t.Errorf("%+v", p["Verschlüsselung"])
@@ -177,8 +177,8 @@ func (s *sesFake) Verifiziert(_ context.Context, _, _ string) ([]string, error) 
 }
 
 func TestSESSender(t *testing.T) {
-	f := s3fake.Neu()
-	f.Setzen("mail/m1", []byte("From: a@b.de\r\n\r\nText\r\n"))
+	f := s3fake.New()
+	f.Store("mail/m1", []byte("From: a@b.de\r\n\r\nText\r\n"))
 	ctx := context.Background()
 
 	p := nach(check.Run(ctx, f, nil, &sesFake{gut: []string{"support@firma.de"}},
@@ -205,7 +205,7 @@ func TestSESSender(t *testing.T) {
 // sondern ein Prefix eine Ebene zu weit oben. Die alte Fassung nannte genau das
 // nicht und schickte den Nutzer zur IAM-Konsole statt ins Feld darueber.
 func TestHintNamesThePrefixFirst(t *testing.T) {
-	f := s3fake.Neu()
+	f := s3fake.New()
 	f.ListErr = errors.New("AccessDenied")
 	p := nach(check.Run(context.Background(), f, nil, nil,
 		"test-bucket", "mail/ole/", "", i18n.Get("de")))

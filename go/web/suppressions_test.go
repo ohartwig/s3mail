@@ -17,7 +17,7 @@ import (
 func serverMitSperrliste(t *testing.T, l Sperrliste) (*httptest.Server, *Server) {
 	t.Helper()
 	ctx := context.Background()
-	f := s3fake.Neu()
+	f := s3fake.New()
 	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), true)
 	srv := NewServer(mb, testToken, "127.0.0.1", 0,
 		map[string]any{"bucket": "test-bucket", "root": "mail/", "can_send": true})

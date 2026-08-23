@@ -1,11 +1,11 @@
 //go:build ignore
 
-// Packt Dateien in ein ZIP und behaelt dabei das Ausfuehrungs-Bit.
+// Packs files into a ZIP and keeps the executable bit.
 //
-// Warum nicht /usr/bin/zip: das golang-Image bringt es nicht mit, und ein
-// apt-get dafuer waere ein zweiter Paketkanal in einer Pipeline, die sonst nur
-// Go braucht. Das Ausfuehrungs-Bit muss mit, weil eine roh heruntergeladene
-// Datei ohne +x ankommt und sich nicht starten laesst.
+// Why not /usr/bin/zip: the golang image does not ship it, and an apt-get for
+// it would be a second package channel in a pipeline that otherwise needs
+// nothing but Go. The executable bit has to travel, because a file downloaded
+// raw arrives without +x and cannot be started.
 //
 //	go run tools/zippen.go ziel.zip datei [datei…]
 package main
@@ -37,8 +37,8 @@ func main() {
 			abbruch(err)
 		}
 		if info.IsDir() {
-			// Ein macOS-App-Bundle ist ein Verzeichnis. Die Struktur darunter muss
-			// erhalten bleiben, sonst ist es kein Bundle mehr, sondern ein Ordner.
+			// A macOS app bundle is a directory. The structure below it has to
+			// survive, or it stops being a bundle and becomes a folder.
 			wurzel := filepath.Dir(strings.TrimSuffix(name, string(filepath.Separator)))
 			err = filepath.WalkDir(name, func(path string, d os.DirEntry, err error) error {
 				if err != nil || d.IsDir() {
@@ -48,7 +48,7 @@ func main() {
 				if err != nil {
 					return err
 				}
-				return schreibe(w, path, filepath.ToSlash(rel), d)
+				return write(w, path, filepath.ToSlash(rel), d)
 			})
 			if err != nil {
 				abbruch(err)
@@ -59,7 +59,7 @@ func main() {
 		if err != nil {
 			abbruch(err)
 		}
-		if err := schreibe(w, name, filepath.Base(name), fsEintrag{entry}); err != nil {
+		if err := write(w, name, filepath.Base(name), fsEintrag{entry}); err != nil {
 			abbruch(err)
 		}
 	}
@@ -68,8 +68,8 @@ func main() {
 	}
 }
 
-// schreibe legt eine Datei ins Archiv und behaelt ihre Rechte.
-func schreibe(w *zip.Writer, path, name string, d os.DirEntry) error {
+// write puts a file into the archive and keeps its permissions.
+func write(w *zip.Writer, path, name string, d os.DirEntry) error {
 	info, err := d.Info()
 	if err != nil {
 		return err
@@ -80,8 +80,8 @@ func schreibe(w *zip.Writer, path, name string, d os.DirEntry) error {
 	}
 	header.Name = name
 	header.Method = zip.Deflate
-	// Alles, was ausfuehrbar war, bleibt es - und das Startprogramm eines Bundles
-	// muss es sein, sonst startet der Doppelklick nichts.
+	// Whatever was executable stays executable - and a bundle's launcher has to
+	// be, or the double click starts nothing.
 	modus := info.Mode()
 	if modus&0o111 != 0 || filepath.Ext(name) == "" {
 		modus |= 0o111

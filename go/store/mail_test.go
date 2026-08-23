@@ -19,7 +19,7 @@ func mailBauen(from, to, subject, body, date, mid string) []byte {
 
 func postfachBauen(t *testing.T) (*s3fake.Fake, *store.Mailbox) {
 	t.Helper()
-	f := s3fake.Neu()
+	f := s3fake.New()
 	f.Objs["mail/m1"] = mailBauen("Anna <anna@kunde.de>", "post@firma.de",
 		"Rechnung 1", "Anbei die Rechnung.", "Mon, 03 Aug 2026 09:00:00 +0000", "<m1@x>")
 	f.Objs["mail/m2"] = mailBauen("Shop <news@shop.io>", "post@firma.de",
@@ -196,7 +196,7 @@ func TestDeleteOnlyFromTrash(t *testing.T) {
 
 func TestDeleteBlocked(t *testing.T) {
 	ctx := context.Background()
-	f := s3fake.Neu()
+	f := s3fake.New()
 	f.Objs["mail/trash/m1"] = mailBauen("a@b.de", "c@d.de", "x", "y",
 		"Mon, 03 Aug 2026 09:00:00 +0000", "<m1@x>")
 	m := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), false)
@@ -213,7 +213,7 @@ func TestDeleteBlocked(t *testing.T) {
 func TestEncryptedMeansNoRangeGet(t *testing.T) {
 	ctx := context.Background()
 	plain, faelle := umschlaegeLaden(t)
-	f := s3fake.Neu()
+	f := s3fake.New()
 	body, key := entpacken(t, faelle["gcm"])
 	f.Objs["mail/enc1"] = body
 	f.Meta["mail/enc1"] = faelle["gcm"].Meta
@@ -230,7 +230,7 @@ func TestEncryptedMeansNoRangeGet(t *testing.T) {
 		t.Error("Postfach nicht als verschluesselt gemerkt")
 	}
 	// zweiter Zugriff darf gar keinen Range mehr schicken
-	f.AufrufeLeeren()
+	f.ClearCalls()
 	if _, err := m.Fetch(ctx, "mail/enc1", store.HeaderChunk); err != nil {
 		t.Fatal(err)
 	}
@@ -244,7 +244,7 @@ func TestEncryptedMeansNoRangeGet(t *testing.T) {
 func TestEncryptedWithoutPermissionFailsOnlyThatMail(t *testing.T) {
 	ctx := context.Background()
 	_, faelle := umschlaegeLaden(t)
-	f := s3fake.Neu()
+	f := s3fake.New()
 	body, _ := entpacken(t, faelle["gcm"])
 	f.Objs["mail/enc1"] = body
 	f.Meta["mail/enc1"] = faelle["gcm"].Meta
@@ -307,7 +307,7 @@ func TestCacheSavesRequests(t *testing.T) {
 	if _, err := m.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
-	f.AufrufeLeeren()
+	f.ClearCalls()
 	erg, err := m.Refresh(ctx) // nichts hat sich geaendert
 	if err != nil {
 		t.Fatal(err)
@@ -335,7 +335,7 @@ func TestBodyFromTheCache(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.AufrufeLeeren()
+	f.ClearCalls()
 
 	roh2, err := m.Fetch(ctx, "mail/m1", 0)
 	if err != nil {
@@ -344,7 +344,7 @@ func TestBodyFromTheCache(t *testing.T) {
 	if string(roh1) != string(roh2) {
 		t.Error("zwischengespeicherter Inhalt weicht ab")
 	}
-	for _, a := range f.Mitschnitt() {
+	for _, a := range f.Calls() {
 		if strings.HasPrefix(a, "get mail/m1") {
 			t.Errorf("trotz Zwischenspeicher erneut geholt: %s", a)
 		}
@@ -362,7 +362,7 @@ func TestCacheHangsOnTheETag(t *testing.T) {
 	if _, err := m.Fetch(ctx, "mail/m1", 0); err != nil {
 		t.Fatal(err)
 	}
-	f.Setzen("mail/m1", mailBauen("Neu <neu@x.de>", "post@firma.de", "Anderer Inhalt",
+	f.Store("mail/m1", mailBauen("Neu <neu@x.de>", "post@firma.de", "Anderer Inhalt",
 		"Voellig andere Mail.", "Fri, 07 Aug 2026 09:00:00 +0000", "<neu@x>"))
 	if _, err := m.Refresh(ctx); err != nil { // neues ETag landet im Index
 		t.Fatal(err)
@@ -384,12 +384,12 @@ func TestPartialFetchesAreNotCached(t *testing.T) {
 	if _, err := m.Refresh(ctx); err != nil { // holt nur HeaderChunk
 		t.Fatal(err)
 	}
-	f.AufrufeLeeren()
+	f.ClearCalls()
 	if _, err := m.Fetch(ctx, "mail/m1", 0); err != nil {
 		t.Fatal(err)
 	}
 	geholt := false
-	for _, a := range f.Mitschnitt() {
+	for _, a := range f.Calls() {
 		if strings.HasPrefix(a, "get mail/m1") {
 			geholt = true
 		}

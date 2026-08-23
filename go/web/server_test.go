@@ -20,12 +20,12 @@ const testToken = "test-token-123"
 func serverBauen(t *testing.T) (*httptest.Server, *store.Mailbox) {
 	t.Helper()
 	ctx := context.Background()
-	f := s3fake.Neu()
-	f.Setzen("mail/m1", mailRoh("Anna <anna@kunde.de>", "Rechnung 1", "Anbei die Rechnung.",
+	f := s3fake.New()
+	f.Store("mail/m1", mailRoh("Anna <anna@kunde.de>", "Rechnung 1", "Anbei die Rechnung.",
 		"Mon, 03 Aug 2026 09:00:00 +0000"))
-	f.Setzen("mail/m2", mailRoh("Shop <news@shop.io>", "Angebot", "Neu im Sortiment.",
+	f.Store("mail/m2", mailRoh("Shop <news@shop.io>", "Angebot", "Neu im Sortiment.",
 		"Tue, 04 Aug 2026 09:00:00 +0000"))
-	f.Setzen("mail/archiv/alt1", mailRoh("Alt <alt@firma.de>", "Altes", "Alter Text.",
+	f.Store("mail/archiv/alt1", mailRoh("Alt <alt@firma.de>", "Altes", "Alter Text.",
 		"Wed, 01 Jul 2026 08:00:00 +0000"))
 
 	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), true)
@@ -163,8 +163,8 @@ func TestErrorCodes(t *testing.T) {
 
 func TestReadMailAndAttachment(t *testing.T) {
 	ctx := context.Background()
-	f := s3fake.Neu()
-	f.Setzen("mail/m1", []byte("From: a@b.de\r\nTo: c@d.de\r\nSubject: Mit Anhang\r\n"+
+	f := s3fake.New()
+	f.Store("mail/m1", []byte("From: a@b.de\r\nTo: c@d.de\r\nSubject: Mit Anhang\r\n"+
 		"Date: Mon, 03 Aug 2026 09:00:00 +0000\r\nMIME-Version: 1.0\r\n"+
 		"Content-Type: multipart/mixed; boundary=\"B\"\r\n\r\n"+
 		"--B\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nHallo mit Ümlaut.\r\n"+
@@ -334,8 +334,8 @@ func TestWithoutMailbox(t *testing.T) {
 // ihn stünde die Seite still und niemand saehe, dass es den Abgleich gibt.
 func TestAutoRefreshIsShipped(t *testing.T) {
 	ctx := context.Background()
-	f := s3fake.Neu()
-	f.Setzen("mail/m1", mailRoh("a@b.de", "x", "y", "Mon, 03 Aug 2026 09:00:00 +0000"))
+	f := s3fake.New()
+	f.Store("mail/m1", mailRoh("a@b.de", "x", "y", "Mon, 03 Aug 2026 09:00:00 +0000"))
 	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), true)
 	if _, err := mb.Refresh(ctx); err != nil {
 		t.Fatal(err)

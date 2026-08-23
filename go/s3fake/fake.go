@@ -1,6 +1,6 @@
-// Package s3fake bildet so viel von S3 nach, wie s3mail benutzt: Praefix-Listing,
-// ETags, Metadaten und serverseitige Verschluesselung. Nur fuer Tests gedacht -
-// deshalb ein eigenes Paket, damit nichts davon ins Binary wandert.
+// Package s3fake mimics as much of S3 as s3mail uses: prefix listing, ETags,
+// metadata and server-side encryption. Meant for tests only - hence a package
+// of its own, so none of it can wander into the binary.
 package s3fake
 
 import (
@@ -14,9 +14,8 @@ import (
 	"s3mail/store"
 )
 
-// fakeS3 bildet so viel von S3 nach, wie s3mail benutzt - Praefix-Listing, ETags,
-// Metadaten, serverseitige Verschluesselung. Entspricht dem FakeS3 der
-// Python-Testsuite.
+// Fake mimics as much of S3 as s3mail uses - prefix listing, ETags, metadata,
+// server-side encryption. The counterpart of FakeS3 in the Python test suite.
 type Fake struct {
 	mu      sync.Mutex
 	Objs    map[string][]byte
@@ -27,7 +26,7 @@ type Fake struct {
 	ListErr error // wenn gesetzt, scheitert jedes List
 }
 
-func Neu() *Fake {
+func New() *Fake {
 	return &Fake{
 		Objs: map[string][]byte{},
 		Meta: map[string]map[string]string{},
@@ -43,12 +42,12 @@ func (f *Fake) etag(key string) string {
 	return fmt.Sprintf("%08x", h&0xffffffff)
 }
 
-func (f *Fake) merken(was string) { f.Aufrufe = append(f.Aufrufe, was) }
+func (f *Fake) record(was string) { f.Aufrufe = append(f.Aufrufe, was) }
 
 func (f *Fake) List(_ context.Context, _, prefix string) ([]store.ObjectInfo, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.merken("list " + prefix)
+	f.record("list " + prefix)
 	if f.ListErr != nil {
 		return nil, f.ListErr
 	}
@@ -66,7 +65,7 @@ func (f *Fake) List(_ context.Context, _, prefix string) ([]store.ObjectInfo, er
 func (f *Fake) Get(_ context.Context, _, key, byteRange string) (store.Object, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.merken("get " + key + " " + byteRange)
+	f.record("get " + key + " " + byteRange)
 	body, da := f.Objs[key]
 	if !da {
 		return store.Object{}, store.ErrNichtGefunden
@@ -82,19 +81,19 @@ func (f *Fake) Get(_ context.Context, _, key, byteRange string) (store.Object, e
 		}
 	}
 	return store.Object{Body: append([]byte(nil), body...), ETag: f.etag(key),
-		Meta: kopieMeta(f.Meta[key])}, nil
+		Meta: copyMeta(f.Meta[key])}, nil
 }
 
 func (f *Fake) Head(_ context.Context, _, key string) (store.Head, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.merken("head " + key)
+	f.record("head " + key)
 	body, da := f.Objs[key]
 	if !da {
 		return store.Head{}, store.ErrNichtGefunden
 	}
 	o := f.SSE[key]
-	return store.Head{Meta: kopieMeta(f.Meta[key]), ContentLength: int64(len(body)),
+	return store.Head{Meta: copyMeta(f.Meta[key]), ContentLength: int64(len(body)),
 		ETag: f.etag(key), ServerSideEncryption: o.ServerSideEncryption,
 		SSEKMSKeyID: o.SSEKMSKeyID, BucketKeyEnabled: o.BucketKeyEnabled,
 		StorageClass: o.StorageClass}, nil
@@ -103,7 +102,7 @@ func (f *Fake) Head(_ context.Context, _, key string) (store.Head, error) {
 func (f *Fake) Put(_ context.Context, _, key string, body []byte, _ string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.merken("put " + key)
+	f.record("put " + key)
 	if f.PutErr != nil {
 		return f.PutErr
 	}
@@ -114,7 +113,7 @@ func (f *Fake) Put(_ context.Context, _, key string, body []byte, _ string) erro
 func (f *Fake) Delete(_ context.Context, _, key string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.merken("delete " + key)
+	f.record("delete " + key)
 	delete(f.Objs, key)
 	delete(f.Meta, key)
 	delete(f.SSE, key)
@@ -124,14 +123,14 @@ func (f *Fake) Delete(_ context.Context, _, key string) error {
 func (f *Fake) Copy(_ context.Context, _, src, dst string, o store.CopyOpts) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.merken("copy " + src + " -> " + dst)
+	f.record("copy " + src + " -> " + dst)
 	body, da := f.Objs[src]
 	if !da {
 		return store.ErrNichtGefunden
 	}
 	f.Objs[dst] = append([]byte(nil), body...)
 	if m := f.Meta[src]; m != nil {
-		f.Meta[dst] = kopieMeta(m) // Krypto-Umschlag mitkopieren
+		f.Meta[dst] = copyMeta(m) // Krypto-Umschlag mitkopieren
 	}
 	f.SSE[dst] = o
 	return nil
@@ -150,7 +149,7 @@ func (f *Fake) Keys(prefix string) []string {
 	return out
 }
 
-func (f *Fake) PutZaehler(part string) int {
+func (f *Fake) PutCount(part string) int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	n := 0
@@ -162,7 +161,7 @@ func (f *Fake) PutZaehler(part string) int {
 	return n
 }
 
-func kopieMeta(m map[string]string) map[string]string {
+func copyMeta(m map[string]string) map[string]string {
 	if m == nil {
 		return nil
 	}
@@ -173,51 +172,51 @@ func kopieMeta(m map[string]string) map[string]string {
 	return out
 }
 
-// Setzen legt ein Objekt ab, ohne den Aufrufzaehler zu beruehren.
-func (f *Fake) Setzen(key string, body []byte) {
+// Put stores an object without touching the call log.
+func (f *Fake) Store(key string, body []byte) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.Objs[key] = append([]byte(nil), body...)
 }
 
-// MetaSetzen haengt Nutzer-Metadaten an ein Objekt (dort steckt der Krypto-Umschlag).
-func (f *Fake) MetaSetzen(key string, meta map[string]string) {
+// SetMeta attaches user metadata to an object (that is where the crypto envelope lives).
+func (f *Fake) SetMeta(key string, meta map[string]string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.Meta[key] = kopieMeta(meta)
+	f.Meta[key] = copyMeta(meta)
 }
 
-// SSESetzen legt die serverseitige Verschluesselung eines Objekts fest.
-func (f *Fake) SSESetzen(key string, o store.CopyOpts) {
+// SetSSE defines an object's server-side encryption.
+func (f *Fake) SetSSE(key string, o store.CopyOpts) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.SSE[key] = o
 }
 
-// SSEVon liest sie zurueck - fuer die Pruefung, ob sie beim Kopieren mitkam.
-func (f *Fake) SSEVon(key string) store.CopyOpts {
+// SSEOf reads it back - to check whether it survived a copy.
+func (f *Fake) SSEOf(key string) store.CopyOpts {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.SSE[key]
 }
 
-// Hat sagt, ob es das Objekt gibt.
-func (f *Fake) Hat(key string) bool {
+// Has says whether the object exists.
+func (f *Fake) Has(key string) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	_, da := f.Objs[key]
 	return da
 }
 
-// AufrufeLeeren setzt den Mitschnitt zurueck.
-func (f *Fake) AufrufeLeeren() {
+// ClearCalls resets the recording.
+func (f *Fake) ClearCalls() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.Aufrufe = nil
 }
 
-// Mitschnitt liefert die bisherigen Aufrufe.
-func (f *Fake) Mitschnitt() []string {
+// Calls returns what has been recorded so far.
+func (f *Fake) Calls() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]string(nil), f.Aufrufe...)
