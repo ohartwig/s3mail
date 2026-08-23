@@ -1,6 +1,6 @@
-// Package web ist der lokale Server: Routen, Zugangskontrolle und die
-// Oberflaeche. Die Seiten liegen als echte Dateien daneben und werden
-// einkompiliert - kein Generator, kein Zusammenkleben von Zeichenketten.
+// Package web is the local server: routes, access control and the interface. The
+// pages lie next to it as real files and are compiled in - no generator, no
+// gluing of strings.
 package web
 
 import _ "embed"

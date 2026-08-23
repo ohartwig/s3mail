@@ -19,8 +19,8 @@ import (
 	"s3mail/wizard"
 )
 
-// Server ist der lokale Webserver. Er bindet an 127.0.0.1 und kennt keine
-// Benutzer - der Zugang haengt an einem Token, siehe zugangPruefen.
+// Server is the local web server. It binds to 127.0.0.1 and knows no users - the
+// access hangs on a token, see guard.
 type Server struct {
 	Mailbox *store.Mailbox
 	Token   string
@@ -33,8 +33,8 @@ type Server struct {
 	defaultFrom  string
 	wizard       *wizard.Wizard
 
-	// OnShutdown wird von /api/quit gerufen. Ohne das laeuft der Server nach
-	// dem Schliessen des Fensters weiter, und niemand sieht, dass er noch da ist.
+	// OnShutdown is called by /api/quit. Without it the server keeps running after
+	// the window is closed, and nobody sees that it is still there.
 	OnShutdown func()
 
 	mux *http.ServeMux
@@ -55,10 +55,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !s.checkAccess(w, r) {
 		return
 	}
-	// Ohne Konfiguration gibt es noch kein Postfach - dann bedienen nur der
-	// Assistent und /api/quit. Sonst liefen die Postfach-Routen in einen
-	// Nil-Zeiger; und ohne die Ausnahme fuer quit koennte man ausgerechnet im
-	// Assistenten nicht beenden, also in dem Zustand, in dem ein Erstnutzer steckt.
+	// Without a configuration there is no mailbox yet - then only the wizard and
+	// /api/quit answer. Otherwise the mailbox routes would run into a nil pointer;
+	// and without the exception for quit, quitting would be impossible in the
+	// wizard of all places, the state a first-time reader is in.
 	if s.Mailbox == nil && strings.HasPrefix(r.URL.Path, "/api/") &&
 		!strings.HasPrefix(r.URL.Path, "/api/setup/") && r.URL.Path != "/api/quit" {
 		s.writeError(w, http.StatusServiceUnavailable, s.text(r, "error.notSetUp"))
@@ -71,12 +71,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 var loopback = map[string]bool{"127.0.0.1": true, "localhost": true, "::1": true}
 
-// hostOK schuetzt gegen DNS-Rebinding: eine fremde Domain, die auf 127.0.0.1
-// zeigt, waere sonst dieselbe Herkunft wie s3mail und duerfte das Postfach
-// auslesen. Der Browser schickt in dem Fall aber ihren Namen im Host-Header mit.
+// hostOK guards against DNS rebinding: a foreign domain pointing at 127.0.0.1
+// would otherwise be the same origin as s3mail and could read the mailbox out.
+// In that case, though, the browser sends its name in the Host header.
 func (s *Server) hostOK(r *http.Request) bool {
 	if !loopback[s.Bind] {
-		return true // nach aussen gebunden: Auth macht der Reverse-Proxy
+		return true // bound outwards: authentication is the reverse proxy's job
 	}
 	name, port := r.Host, ""
 	if h, p, err := net.SplitHostPort(r.Host); err == nil {
@@ -85,10 +85,10 @@ func (s *Server) hostOK(r *http.Request) bool {
 	return loopback[name] && (port == "" || port == strconv.Itoa(s.Port))
 }
 
-// originOK schuetzt gegen CSRF: eine fremde Seite kann per fetch() einen POST
-// hierher schicken (Content-Type text/plain, kein Preflight). Lesen kann sie die
-// Antwort nicht, aber Loeschen und Versenden liefen trotzdem. Bei genau solchen
-// Anfragen setzt der Browser die Origin.
+// originOK guards against CSRF: a foreign page can send a POST here via fetch()
+// (content type text/plain, no preflight). It cannot read the answer, but
+// deleting and sending would happen all the same. On exactly those requests the
+// browser sets the Origin.
 func (s *Server) originOK(r *http.Request) bool {
 	o := r.Header.Get("Origin")
 	if o == "" || o == "null" {
@@ -101,7 +101,7 @@ func (s *Server) originOK(r *http.Request) bool {
 	return loopback[u.Hostname()] && (u.Port() == "" || u.Port() == strconv.Itoa(s.Port))
 }
 
-// token holt das Token aus Header, Query oder Cookie.
+// token takes the token from header, query or cookie.
 func (s *Server) token(r *http.Request) string {
 	if t := r.Header.Get("X-S3mail-Token"); t != "" {
 		return t
@@ -154,7 +154,8 @@ func (s *Server) writeError(w http.ResponseWriter, code int, text string) {
 	s.json(w, code, map[string]string{"error": text})
 }
 
-// translate bildet Fehler aus der Logik auf Statuscodes ab - damit die Schichten
+// translate maps errors from the logic onto status codes - so the layers below
+// throw exceptions instead of building status codes.
 // darunter passende Fehler werfen koennen statt Statuscodes zu bauen.
 func (s *Server) translate(w http.ResponseWriter, err error) {
 	switch {
@@ -173,9 +174,9 @@ func (s *Server) translate(w http.ResponseWriter, err error) {
 	}
 }
 
-// writePage liefert eine Seite aus und setzt dabei das Token als Cookie - dadurch
-// funktionieren die Download-Links fuer Anhaenge und .eml, die keinen eigenen
-// Header setzen koennen.
+// writePage serves a page and sets the token as a cookie while doing so - which
+// is what makes the download links for attachments and .eml work without a token
+// of their own.
 func (s *Server) writePage(w http.ResponseWriter, content string) {
 	http.SetCookie(w, &http.Cookie{Name: "s3mail", Value: s.Token, Path: "/",
 		HttpOnly: true, SameSite: http.SameSiteStrictMode})
@@ -183,11 +184,11 @@ func (s *Server) writePage(w http.ResponseWriter, content string) {
 	_, _ = w.Write([]byte(content))
 }
 
-// overview haengt an den meisten Antworten mit dran, damit die Seitenleiste
-// ohne zweiten Request aktuell ist.
+// overview rides along on most answers, so the sidebar is current without a
+// second request.
 //
-// Die Ordner kommen mit ihrem Uebersetzungsschluessel aus core und werden hier
-// zu Text - erst hier ist bekannt, welche Sprache der Fragende liest.
+// The folders come from core with their translation key and become text here -
+// only here is it known which language the asker reads.
 func (s *Server) overview(r *http.Request) map[string]any {
 	d := s.Mailbox.State.Data()
 	return map[string]any{
@@ -241,7 +242,7 @@ func (a request) allKeys() []string {
 func (s *Server) routes() {
 	s.mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		if s.Mailbox == nil {
-			s.writePage(w, page("setup", PageWizard, s.language(r), nil)) // noch nicht eingerichtet
+			s.writePage(w, page("setup", PageWizard, s.language(r), nil)) // not set up yet
 			return
 		}
 		s.writePage(w, page("inbox", PageMailbox, s.language(r), s.Config))
@@ -428,8 +429,8 @@ func (s *Server) routes() {
 	s.post("/api/quit", func(w http.ResponseWriter, r *http.Request, a request) {
 		s.json(w, http.StatusOK, map[string]any{"ok": true})
 		if s.OnShutdown != nil {
-			// Erst antworten, dann herunterfahren - sonst sieht die Oberflaeche
-			// einen Verbindungsabbruch statt einer Bestaetigung.
+			// Answer first, shut down after - otherwise the interface sees a dropped
+			// connection instead of a confirmation.
 			go func() {
 				time.Sleep(150 * time.Millisecond)
 				s.OnShutdown()
@@ -477,7 +478,7 @@ func (s *Server) mutate(w http.ResponseWriter, r *http.Request, op core.Op) {
 	s.json(w, http.StatusOK, with(s.overview(r), map[string]any{"ok": true}))
 }
 
-// readMail holt eine Mail und markiert sie auf Wunsch als gelesen.
+// readMail fetches a message and marks it read on request.
 func (s *Server) readMail(r *http.Request, key string, asRead bool) (mimeparse.Full, error) {
 	if err := s.Mailbox.Own(key); err != nil {
 		return mimeparse.Full{}, err
@@ -505,9 +506,9 @@ var unsafeChars = regexp.MustCompile(`[^\w.\- ]`)
 
 func cleanName(s string) string { return unsafeChars.ReplaceAllString(s, "_") }
 
-// localizedFolders ersetzt den Uebersetzungsschluessel der Systemordner
-// durch Text. Selbst angelegte Ordner tragen ihren Namen und bleiben, wie sie
-// sind - sie hat jemand so genannt.
+// localizedFolders replaces the translation key of the system folders with text.
+// Folders somebody created carry their own name and stay as they are - somebody
+// called them that.
 func (s *Server) localizedFolders(r *http.Request) []core.FolderInfo {
 	cat := i18n.Get(s.language(r))
 	folder := s.Mailbox.Folders()
@@ -519,8 +520,8 @@ func (s *Server) localizedFolders(r *http.Request) []core.FolderInfo {
 	return folder
 }
 
-// text holt einen Satz in der Sprache der Anfrage. Fuer die Handvoll Meldungen,
-// die der Server selbst erzeugt - alles andere kommt aus den Seiten.
+// text takes a sentence in the language of the request. For the handful of
+// messages the server produces itself - everything else comes from the pages.
 func (s *Server) text(r *http.Request, key string) string {
 	return i18n.Get(s.language(r)).T(key)
 }

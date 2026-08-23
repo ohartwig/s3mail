@@ -16,32 +16,31 @@ import (
 )
 
 const (
-	// StateObject ist der Snapshot, StateOps das Prefix mit den einzelnen
-	// Aenderungen. Beide beginnen mit einem Punkt und gelten damit als intern.
+	// StateObject is the snapshot, StateOps the prefix with the individual
+	// changes. Both start with a dot and therefore count as internal.
 	StateObject = ".s3mail-state.json"
 	StateOps    = ".s3mail-state/"
 
-	// CompactAfter ist die Zahl offener Ops, ab der zusammengefasst wird.
+	// CompactAfter is the number of open ops from which they get merged.
 	CompactAfter = 50
 
 	fetchWorkers = 8
 )
 
-// State ist der geteilte Zustand im Bucket.
+// State is the shared state in the bucket.
 //
-// Geschrieben wird nicht das ganze Dokument, sondern die einzelne Aenderung: jedes
-// Save legt ein kleines Objekt unter <root>.s3mail-state/ ab, auf dessen Schluessel
-// nur dieser eine Schreibvorgang schreibt. Zwei Rechner koennen sich dabei nicht
-// ins Gehege kommen - es gibt keinen gemeinsamen Schluessel, auf den beide zeigen,
-// und damit weder Sperre noch If-Match noch 412.
+// What gets written is not the whole document but the single change: every write
+// gets a key of its own, and only that one write writes it. Two machines cannot
+// get in each other's way - there is no shared key both point at, and therefore
+// neither a lock nor an If-Match nor a 412.
 //
-// Gelesen wird der Snapshot und darauf alle Ops, die neuer sind als sein
-// Wasserstand (Upto), in Schluesselreihenfolge. Ab CompactAfter offenen Ops wird
-// zusammengefasst.
+// What gets read is the snapshot plus every op newer than its watermark (Upto),
+// in key order. From CompactAfter open ops on, they are merged into a new
+// snapshot.
 //
-// Der Wasserstand macht das Aufraeumen unkritisch: bleibt ein Op liegen, weil das
-// Loeschen scheitert, wird es beim naechsten Laden uebersprungen statt ein zweites
-// Mal angewandt.
+// The watermark makes cleaning up uncritical: if an op stays behind because the
+// delete failed, it is skipped on the next load instead of applied a second
+// time.
 type State struct {
 	s3        S3
 	bucket    string
@@ -59,12 +58,12 @@ type State struct {
 	dirty    bool
 	seq      int
 
-	// instance unterscheidet diesen Prozess von jedem anderen, der auf denselben
-	// Bucket schreibt. Ohne das koennten zwei Rechner in derselben Mikrosekunde
-	// denselben Op-Namen erzeugen - und einer der beiden waere weg.
+	// instance tells this process apart from every other one writing to the same
+	// bucket. Without it two machines could produce the same op name in the same
+	// microsecond - and one of the two would be gone.
 	instance string
 
-	// austauschbar, damit Tests deterministisch laufen
+	// exchangeable, so tests run deterministically
 	Now     func() time.Time
 	Workers int
 }
@@ -85,9 +84,8 @@ func NewState(ctx context.Context, s3 S3, bucket, root, localFile string) *State
 	return st
 }
 
-// InstanceID ist pro State einmalig. Sechs Zufallsbytes aus crypto/rand -
-// damit stossen zwei Rechner auch dann nicht zusammen, wenn ihre Uhren auf die
-// Mikrosekunde genau gleich stehen.
+// InstanceID is unique per State. Six random bytes from crypto/rand - so two
+// machines do not collide even when their clocks agree to the microsecond.
 func InstanceID() string {
 	b := make([]byte, 6)
 	if _, err := rand.Read(b); err != nil {
@@ -96,10 +94,10 @@ func InstanceID() string {
 	return hex.EncodeToString(b)
 }
 
-// SetInstance ist fuer Tests, die zwei Rechner nachstellen.
+// SetInstance is for tests that stage two machines.
 func (s *State) SetInstance(k string) { s.instance = k }
 
-// Data gibt eine Momentaufnahme heraus. Aufrufer duerfen sie lesen, nicht aendern.
+// Data hands out a snapshot. Callers may read it, not change it.
 func (s *State) Data() *core.Data {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -112,8 +110,8 @@ func (s *State) Get(mid string) core.Entry {
 	return s.data.Get(mid)
 }
 
-// RemoteOK ist falsch, sobald ein Schreibvorgang nach S3 gescheitert ist - dann
-// laeuft s3mail auf der lokalen Datei weiter und zeigt das in der Seitenleiste.
+// RemoteOK is false as soon as a write to S3 has failed - s3mail then carries on
+// with the local file and says so in the sidebar.
 func (s *State) RemoteOK() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -152,7 +150,7 @@ func (s *State) readLocal() *core.Data {
 	return d.Normalize()
 }
 
-// listOps liefert die Schluessel aller abgelegten Ops, aelteste zuerst.
+// listOps returns the keys of all stored ops, oldest first.
 func (s *State) listOps(ctx context.Context) []string {
 	objs, err := s.s3.List(ctx, s.bucket, s.opsPrefix)
 	if err != nil {
@@ -166,7 +164,7 @@ func (s *State) listOps(ctx context.Context) []string {
 	return keys
 }
 
-// fetchOps laedt die Op-Objekte nebenlaeufig; die Reihenfolge bleibt die der Schluessel.
+// fetchOps loads the op objects concurrently; the order stays that of the keys.
 func (s *State) fetchOps(ctx context.Context, keys []string) [][]core.Op {
 	out := make([][]core.Op, len(keys))
 	if len(keys) == 0 {
@@ -182,7 +180,7 @@ func (s *State) fetchOps(ctx context.Context, keys []string) [][]core.Op {
 			defer func() { <-sem }()
 			obj, err := s.s3.Get(ctx, s.bucket, key, "")
 			if err != nil {
-				return // ein kaputtes Op kippt nicht den Rest
+				return // one broken op does not topple the rest
 			}
 			var h struct {
 				Ops []core.Op `json:"ops"`
@@ -197,7 +195,7 @@ func (s *State) fetchOps(ctx context.Context, keys []string) [][]core.Op {
 	return out
 }
 
-// Load holt Snapshot und Ops und baut daraus den aktuellen Stand.
+// Load fetches snapshot and ops and builds the current state from them.
 func (s *State) Load(ctx context.Context) {
 	local := s.readLocal()
 	snap := s.fetchSnapshot(ctx)
@@ -207,7 +205,7 @@ func (s *State) Load(ctx context.Context) {
 	if snap != nil {
 		base, upto = snap, snap.Upto
 		if local != nil {
-			core.MergeMissing(base, local) // offline Gemachtes nicht verlieren
+			core.MergeMissing(base, local) // do not lose what was done offline
 		}
 	} else if local != nil {
 		base = local
@@ -244,9 +242,9 @@ func (s *State) Load(ctx context.Context) {
 
 // -- Schreiben -------------------------------------------------------------- //
 
-// opName ist eindeutig und nach Schreibzeit sortierbar: Zeitstempel zuerst,
-// damit die lexikografische Ordnung der Schreibreihenfolge entspricht, danach die
-// Kennung dieses Prozesses und eine laufende Nummer darin.
+// opName is unique and sortable by write time: the timestamp first, so the
+// lexicographic order matches the write order, then this process's identifier
+// and a running number within it.
 func (s *State) opName() string {
 	s.seq++
 	return fmt.Sprintf("%s-%s-%04d.json",
@@ -264,7 +262,7 @@ func (s *State) writeLocal(payload []byte) {
 	}
 }
 
-// Mutate wendet eine Aenderung an und schreibt sie weg.
+// Mutate applies a change and writes it away.
 func (s *State) Mutate(ctx context.Context, ops ...core.Op) error {
 	s.mu.Lock()
 	for _, op := range ops {
@@ -276,8 +274,8 @@ func (s *State) Mutate(ctx context.Context, ops ...core.Op) error {
 	return s.Save(ctx)
 }
 
-// Save legt die offenen Ops als ein Objekt ab. Innerhalb eines Batch passiert
-// nichts - dann schreibt erst das Ende des Batch.
+// Save stores the open ops as one object. Inside a batch nothing happens - the
+// end of the batch writes then.
 func (s *State) Save(ctx context.Context) error {
 	s.mu.Lock()
 	if s.defers > 0 {
@@ -302,7 +300,7 @@ func (s *State) Save(ctx context.Context) error {
 	}{ops})
 	if err := s.s3.Put(ctx, s.bucket, s.opsPrefix+name, body, "application/json"); err != nil {
 		s.mu.Lock()
-		s.pending = append(ops, s.pending...) // nichts verlieren
+		s.pending = append(ops, s.pending...) // lose nothing
 		s.remoteOK = false
 		s.mu.Unlock()
 		return err
@@ -315,17 +313,17 @@ func (s *State) Save(ctx context.Context) error {
 	s.mu.Unlock()
 
 	if due {
-		s.Load(ctx) // holt fremde Ops mit dazu und fasst zusammen
+		s.Load(ctx) // brings foreign ops along and merges
 	}
 	return nil
 }
 
-// Compact schreibt einen Snapshot mit neuem Wasserstand und raeumt die
-// eingearbeiteten Ops weg.
+// Compact writes a snapshot with a new watermark and clears away the ops it
+// covers.
 //
-// merged sind genau die Ops, die in s.data stecken - nur bis dorthin darf der
-// Wasserstand steigen, sonst gingen fremde Aenderungen verloren. Deshalb bekommt
-// Compact die Liste uebergeben und ermittelt sie nicht selbst.
+// merged are exactly the ops that sit in s.data - the watermark may only be
+// raised that far, which is why Load hands Compact the list instead of letting
+// it find the list itself.
 func (s *State) Compact(ctx context.Context, merged []string) {
 	if len(merged) == 0 {
 		return
@@ -338,7 +336,7 @@ func (s *State) Compact(ctx context.Context, merged []string) {
 	s.mu.Unlock()
 
 	if err := s.s3.Put(ctx, s.bucket, s.key, payload, "application/json"); err != nil {
-		return // bleibt eben liegen, beim naechsten Mal wieder
+		return // it just stays behind, and comes round again next time
 	}
 	s.mu.Lock()
 	s.upto, s.openOps = clone.Upto, 0
@@ -352,13 +350,13 @@ func (s *State) Compact(ctx context.Context, merged []string) {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			_ = s.s3.Delete(ctx, s.bucket, key) // der Wasserstand faengt Fehler ab
+			_ = s.s3.Delete(ctx, s.bucket, key) // the watermark catches errors
 		}(key)
 	}
 	wg.Wait()
 }
 
-// Batch sammelt mehrere Aenderungen und schreibt am Ende ein einziges Op-Objekt.
+// Batch collects several changes and writes a single op object at the end.
 func (s *State) Batch(ctx context.Context, fn func() error) error {
 	s.mu.Lock()
 	s.defers++
@@ -378,7 +376,7 @@ func (s *State) Batch(ctx context.Context, fn func() error) error {
 	return err
 }
 
-// Upto ist der aktuelle Wasserstand - fuer Tests und die Anzeige.
+// Upto is the current watermark - for tests and the display.
 func (s *State) Upto() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

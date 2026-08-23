@@ -9,18 +9,18 @@ import (
 	"s3mail/wizard"
 )
 
-// Sender ist der Ausschnitt von SES, den der Server braucht.
+// Sender is the slice of SES the server needs.
 type Sender interface {
 	Send(ctx context.Context, n mailer.Message) (string, error)
 }
 
-// WithSender schaltet Antworten und Weiterleiten frei. Ohne das laeuft s3mail im
+// WithSender enables replying and forwarding. Without it s3mail runs read-only.
 // reinen Lesemodus (--no-send).
 func (s *Server) WithSender(v Sender, defaultFrom string) {
 	s.sender, s.defaultFrom = v, defaultFrom
 }
 
-// WithWizard haengt die /api/setup/*-Routen an.
+// WithWizard attaches the /api/setup/* routes.
 func (s *Server) WithWizard(a *wizard.Wizard) { s.wizard = a }
 
 func (s *Server) sendRoute() {
@@ -36,8 +36,8 @@ func (s *Server) sendRoute() {
 		}
 		var o mailer.Original
 		if e.Key != "" {
-			// Beim Antworten die Kopfzeilen des Originals holen, damit der Faden
-			// haelt - und beim Weiterleiten die Rohmail fuer den Anhang.
+			// On a reply, fetch the original's headers so the thread holds - and on a
+			// forward the raw message for the attachment.
 			obj, err := s.readMail(r, e.Key, false)
 			if err != nil {
 				s.translate(w, err)

@@ -11,23 +11,23 @@ import (
 	"strings"
 )
 
-// SES kann eingehende Mail client-seitig mit KMS verschluesseln, bevor sie in S3
-// landet. Dann liegt im Bucket kein MIME, sondern ein Umschlag: der Datenschluessel
-// steckt (von KMS verpackt) in den Objekt-Metadaten, der Inhalt ist AES-verschluesselt.
-// Serverseitige Verschluesselung (SSE-S3, SSE-KMS) braucht davon nichts - die macht
-// S3 beim GET selbst rueckgaengig.
+// SES can encrypt incoming mail client-side with KMS before it lands in S3. What
+// lies in the bucket then is not MIME but an envelope: the data key sits (wrapped
+// by KMS) in the object metadata, the content is AES encrypted. Server-side
+// encryption (SSE-S3, SSE-KMS) needs none of this - S3 undoes that itself on GET.
 const (
 	cseKeyV2 = "x-amz-key-v2"
 	cseKeyV1 = "x-amz-key"
 )
 
-// KMS ist der Ausschnitt, den s3mail braucht. Als Schnittstelle, damit die Tests
+// KMS is the slice of it s3mail needs. An interface, so the tests get by without
+// an account.
 // ohne AWS auskommen.
 type KMS interface {
 	Decrypt(ciphertext []byte, context map[string]string) ([]byte, error)
 }
 
-// ErrNoKMS meldet, dass die Mail verschluesselt ist, aber kein Zugriff besteht.
+// ErrNoKMS reports that the message is encrypted but no access exists.
 var ErrNoKMS = errors.New("diese Mail ist mit KMS verschluesselt, aber es ist kein KMS-Zugriff eingerichtet")
 
 // LowerMeta senkt alle Schluessel auf Kleinschreibung - S3 gibt Metadaten je nach
@@ -40,17 +40,16 @@ func LowerMeta(meta map[string]string) map[string]string {
 	return out
 }
 
-// IsEnvelope erkennt ein client-seitig verschluesseltes Objekt an den Metadaten.
+// IsEnvelope recognises a client-side encrypted object by its metadata.
 func IsEnvelope(meta map[string]string) bool {
 	m := LowerMeta(meta)
 	return m[cseKeyV2] != "" || m[cseKeyV1] != ""
 }
 
-// Decrypt macht den Umschlag auf: KMS entpackt den Datenschluessel, damit
-// wird der Inhalt entschluesselt - AES-GCM beim aktuellen Format, AES-CBC beim
-// aelteren.
+// Decrypt opens the envelope: KMS unwraps the data key, and with it the content
+// is decrypted - AES-GCM for the current format, AES-CBC for the older one.
 //
-// Der Encryption Context aus x-amz-matdesc muss an KMS mit, sonst lehnt KMS ab.
+// The encryption context from x-amz-matdesc has to go to KMS, or KMS refuses.
 func Decrypt(body []byte, meta map[string]string, kms KMS) ([]byte, error) {
 	m := LowerMeta(meta)
 	wrapped := m[cseKeyV2]
@@ -58,7 +57,7 @@ func Decrypt(body []byte, meta map[string]string, kms KMS) ([]byte, error) {
 		wrapped = m[cseKeyV1]
 	}
 	if wrapped == "" {
-		return body, nil // nicht verschluesselt
+		return body, nil // not encrypted
 	}
 	if kms == nil {
 		return nil, ErrNoKMS
@@ -70,7 +69,7 @@ func Decrypt(body []byte, meta map[string]string, kms KMS) ([]byte, error) {
 
 	encContext := map[string]string{}
 	if md := m["x-amz-matdesc"]; md != "" {
-		_ = json.Unmarshal([]byte(md), &encContext) // kaputter Context: dann eben leer
+		_ = json.Unmarshal([]byte(md), &encContext) // a broken context: then an empty one
 	}
 	key, err := kms.Decrypt(raw, encContext)
 	if err != nil {
@@ -120,14 +119,14 @@ func Decrypt(body []byte, meta map[string]string, kms KMS) ([]byte, error) {
 	return plain, nil
 }
 
-// unpad entfernt die PKCS#7-Polsterung, ohne bei Murks durchzudrehen.
+// unpad removes the PKCS#7 padding without losing its mind over garbage.
 func unpad(data []byte) ([]byte, error) {
 	if len(data) == 0 {
 		return data, nil
 	}
 	n := int(data[len(data)-1])
 	if n == 0 || n > aes.BlockSize || n > len(data) {
-		return data, nil // sieht nicht nach Polsterung aus - so lassen, wie Python
+		return data, nil // does not look like padding - leave it, the way Python does
 	}
 	for _, b := range data[len(data)-n:] {
 		if int(b) != n {

@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 )
 
-// NewToken wuerfelt das Sitzungs-Token.
+// NewToken rolls the session token.
 func NewToken() string {
 	b := make([]byte, 24)
 	if _, err := rand.Read(b); err != nil {
@@ -22,12 +22,11 @@ func equal(a, b string) bool {
 	return len(a) > 0 && subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }
 
-// WriteTokenFile legt die Startadresse in einer nur fuer den Benutzer
-// lesbaren Datei ab.
+// WriteTokenFile puts the start address into a file readable only by the user.
 //
-// Unter Windows startet s3mail per Doppelklick, und wer das Konsolenfenster
-// schliesst, kommt an die Adresse nicht mehr heran - der Server laeuft dann noch,
-// ist aber unerreichbar. Deshalb steht sie zusaetzlich hier.
+// On Windows s3mail starts by double click, and whoever closes the console window
+// has no way back to the address - the server then still runs but is
+// unreachable. So it is written here as well.
 func WriteTokenFile(dir, url string) (string, error) {
 	if dir == "" {
 		return "", nil
@@ -44,8 +43,8 @@ func WriteTokenFile(dir, url string) (string, error) {
 	return path, nil
 }
 
-// RemoveTokenFile raeumt beim Beenden auf - eine abgelaufene Adresse in einer
-// Datei stiftet nur Verwirrung.
+// RemoveTokenFile cleans up on exit - an address that has expired only causes
+// confusion when it lies around in a file.
 func RemoveTokenFile(dir string) {
 	if dir != "" {
 		_ = os.Remove(filepath.Join(dir, "adresse.txt"))

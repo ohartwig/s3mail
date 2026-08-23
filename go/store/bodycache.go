@@ -10,21 +10,20 @@ import (
 	"time"
 )
 
-// CacheMax ist die Obergrenze des Inhalts-Zwischenspeichers. Ein Postfach mit
-// vielen Anhaengen soll die Platte nicht vollschreiben.
+// CacheMax is the upper bound of the content cache. A mailbox with many
+// attachments should not fill the disk.
 const CacheMax = 256 << 20 // 256 MB
 
-// bodyCache haelt ganze Mails auf der Platte.
+// bodyCache keeps whole messages on disk.
 //
-// Der Index liegt ohnehin schon lokal - deshalb kostet "Neu laden" bei
-// unveraenderten Mails nichts. Der Inhalt tat es bisher nicht: eine Mail zum
-// dritten Mal zu oeffnen hiess, sie zum dritten Mal aus S3 zu holen, samt
-// Anhaengen.
+// The index is local anyway - which is why "reload" costs nothing for unchanged
+// messages. The content did not behave that way: opening a message a third time
+// meant fetching it from S3 a third time, attachments and all.
 //
-// Geschluesselt wird ueber das ETag, nicht ueber den Key. Eine zugestellte Mail
-// aendert sich nicht mehr, und beim Verschieben zwischen Ordnern wechselt der
-// Key - der Inhalt aber nicht. So ueberlebt der Eintrag das Verschieben, und ein
-// tatsaechlich veraendertes Objekt faellt automatisch heraus.
+// The key is the ETag, not the object key. A delivered message does not change
+// any more, and moving between folders changes the key - but not the content.
+// That way the entry survives a move, and an object that really did change drops
+// out by itself.
 type bodyCache struct {
 	dir string
 	mu  sync.Mutex
@@ -41,8 +40,8 @@ func newBodyCache(dir string) *bodyCache {
 }
 
 func (c *bodyCache) path(etag string) string {
-	// Das ETag kann Zeichen enthalten, die in einem Dateinamen nichts zu suchen
-	// haben - also hashen statt hoffen.
+	// The ETag can hold characters that have no business in a file name - so hash
+	// instead of hope.
 	sum := sha256.Sum256([]byte(etag))
 	return filepath.Join(c.dir, hex.EncodeToString(sum[:16])+".eml")
 }
@@ -56,8 +55,8 @@ func (c *bodyCache) read(etag string) ([]byte, bool) {
 	if err != nil {
 		return nil, false
 	}
-	// Zugriffszeit anfassen, damit die Verdraengung die selten genutzten trifft
-	// und nicht die zuletzt geschriebenen.
+	// Touch the access time, so eviction hits the rarely used entries and not the
+	// most recently written ones.
 	n := time.Now()
 	_ = os.Chtimes(p, n, n)
 	return b, true
@@ -81,8 +80,8 @@ func (c *bodyCache) put(etag string, body []byte) {
 	c.cleanup()
 }
 
-// cleanup wirft die am laengsten unbenutzten Eintraege weg, bis die Grenze
-// wieder eingehalten ist.
+// cleanup throws away the entries unused for longest, until the limit holds
+// again.
 func (c *bodyCache) cleanup() {
 	entries, err := os.ReadDir(c.dir)
 	if err != nil {
@@ -117,7 +116,7 @@ func (c *bodyCache) cleanup() {
 	}
 }
 
-// Clear wirft den ganzen Zwischenspeicher weg.
+// Clear throws the whole cache away.
 func (c *bodyCache) Clear() {
 	if c == nil {
 		return

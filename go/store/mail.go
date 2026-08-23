@@ -17,18 +17,18 @@ import (
 	"s3mail/mimeparse"
 )
 
-// HeaderChunk ist, wieviel pro Mail fuer den Index geholt wird - reicht fuer
-// Header und Vorschautext.
+// HeaderChunk is how much is fetched per message for the index - enough for the
+// headers and the preview text.
 const HeaderChunk = 65536
 
 var (
-	// ErrTrashOnly: endgueltig loeschen geht nur von dort aus.
+	// ErrTrashOnly: deleting for good works only from there.
 	ErrTrashOnly = errors.New("endgueltig loeschen geht nur aus dem Papierkorb")
-	// ErrDeleteBlocked: mit --no-delete gar nicht.
+	// ErrDeleteBlocked: with --no-delete not at all.
 	ErrDeleteBlocked = errors.New("endgueltiges loeschen ist deaktiviert")
 )
 
-// Mailbox ist der Index ueber den Bucket samt Zustand.
+// Mailbox is the index over the bucket, state included.
 type Mailbox struct {
 	s3     S3
 	kms    KMS
@@ -41,9 +41,9 @@ type Mailbox struct {
 
 	mu    sync.RWMutex
 	index map[string]core.Message
-	// encrypted merkt sich, ob im Postfach client-seitig verschluesselte
-	// Objekte liegen. Sobald ja, faellt der Range-GET weg - ein halbes Chiffrat
-	// laesst sich nicht entschluesseln.
+	// encrypted remembers whether client-side encrypted objects lie in the
+	// mailbox. Once they do, the range GET falls away - half a ciphertext cannot
+	// be decrypted.
 	encrypted bool
 
 	State   *State
@@ -76,7 +76,7 @@ func NewMailbox(ctx context.Context, s3 S3, kms KMS, bucket, root, cacheDir stri
 	return m
 }
 
-// Index gibt die Eintraege als Liste heraus, nach Key sortiert.
+// Index hands the entries out as a list, sorted by key.
 func (m *Mailbox) Index() []core.Message {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -98,12 +98,13 @@ func (m *Mailbox) Folders() []core.FolderInfo {
 
 // -- Holen ------------------------------------------------------------------ //
 
-// Fetch holt ein Objekt und macht es bei Bedarf auf. headBytes > 0 holt nur den
-// Anfang - ausser das Postfach ist client-seitig verschluesselt, dann immer ganz.
+// Fetch gets an object and opens it if needed. headBytes > 0 fetches only the
+// beginning - unless the mailbox is client-side encrypted, then always the whole
+// thing.
 //
-// Ganze Mails kommen aus dem Zwischenspeicher, wenn sie dort liegen. Nur ganze:
-// ein Teilstueck zu speichern hiesse, beim naechsten Oeffnen den Rest zu
-// vermissen, ohne es zu merken.
+// Whole messages come from the cache when they lie there. Only whole ones:
+// storing a fragment would mean missing the rest on the next open without
+// noticing.
 func (m *Mailbox) Fetch(ctx context.Context, key string, headBytes int) ([]byte, error) {
 	m.mu.RLock()
 	partial := headBytes > 0 && !m.encrypted
@@ -130,8 +131,8 @@ func (m *Mailbox) Fetch(ctx context.Context, key string, headBytes int) ([]byte,
 		}
 		return obj.Body, nil
 	}
-	// Erste verschluesselte Mail: ab jetzt keine Teilstuecke mehr, und dieses
-	// hier noch einmal ganz holen.
+	// First encrypted message: no fragments from here on, and fetch this one
+	// again in full.
 	m.mu.Lock()
 	firstTime := !m.encrypted
 	m.encrypted = true
@@ -143,16 +144,15 @@ func (m *Mailbox) Fetch(ctx context.Context, key string, headBytes int) ([]byte,
 	}
 	plain, err := Decrypt(obj.Body, obj.Meta, m.kms)
 	if err == nil && headBytes == 0 {
-		// Entschluesselt zwischenspeichern: das spart beim naechsten Oeffnen den
-		// KMS-Aufruf mit, nicht nur den S3-GET. Der Zwischenspeicher liegt dafuer
-		// im Klartext auf der Platte - genau wie der Index, der Absender und
-		// Vorschautext ohnehin schon dort haelt.
+		// Cache it decrypted: that saves the KMS call on the next open, not only the
+		// S3 GET. In exchange the cache lies in plain text on the disk - exactly like
+		// the index, which holds sender and preview text there anyway.
 		m.content.put(etag, plain)
 	}
 	return plain, err
 }
 
-// ClearCache wirft die zwischengespeicherten Inhalte weg.
+// ClearCache throws the cached contents away.
 func (m *Mailbox) ClearCache() { m.content.Clear() }
 
 // Encrypted sagt, ob im Postfach client-seitig verschluesselte Objekte liegen.
@@ -170,9 +170,9 @@ type RefreshResult struct {
 	Removed int `json:"removed"`
 }
 
-// Refresh listet den Bucket, holt zu jeder neuen oder geaenderten Mail den Anfang
-// und baut daraus den Index. Abgeglichen wird ueber ETags, es wird also nur
-// geholt, was sich wirklich geaendert hat.
+// Refresh lists the bucket, fetches the beginning of every new or changed
+// message and builds the index from it. Comparison runs over ETags, so only what
+// really changed is fetched.
 func (m *Mailbox) Refresh(ctx context.Context) (RefreshResult, error) {
 	m.State.Load(ctx)
 
@@ -183,7 +183,7 @@ func (m *Mailbox) Refresh(ctx context.Context) (RefreshResult, error) {
 	listed := make(map[string]ObjectInfo, len(objs))
 	for _, o := range objs {
 		if strings.HasSuffix(o.Key, "/") || o.Size == 0 || m.Internal(o.Key) {
-			continue // Snapshot, Ops und Ordnermarkierungen sind keine Mail
+			continue // snapshot, ops and folder markers are not mail
 		}
 		listed[o.Key] = o
 	}
@@ -229,8 +229,8 @@ func (m *Mailbox) Refresh(ctx context.Context) (RefreshResult, error) {
 	return RefreshResult{Checked: len(listed), New: len(todo), Removed: removed}, nil
 }
 
-// summarize baut den Indexeintrag. Eine kaputte Mail kippt nicht den Lauf -
-// sie landet als Platzhalter im Index, damit sie sichtbar und verschiebbar bleibt.
+// summarize builds the index entry. A broken message does not topple the run -
+// it lands in the index as a placeholder, so it stays visible and movable.
 func (m *Mailbox) summarize(ctx context.Context, o ObjectInfo) core.Message {
 	base := core.Message{
 		Key: o.Key, Mid: m.Mid(o.Key), Folder: m.FolderOf(o.Key),
@@ -265,9 +265,9 @@ type MoveResult struct {
 	Skipped bool   `json:"skipped,omitempty"`
 }
 
-// Move kopiert und loescht - S3 kennt kein Umbenennen. Verschluesselung und
-// Speicherklasse des Originals werden dabei mitgenommen, sonst landete die Kopie
-// unter dem Standardschluessel des Buckets.
+// Move copies and deletes - S3 knows no rename. Encryption and storage class of
+// the original come along, or the copy would land under the bucket's default
+// key.
 func (m *Mailbox) Move(ctx context.Context, keys []string, folder string) ([]MoveResult, error) {
 	target, err := core.ValidFolder(folder)
 	if err != nil {
@@ -317,7 +317,7 @@ func (m *Mailbox) Move(ctx context.Context, keys []string, folder string) ([]Mov
 	return out, err
 }
 
-// freeKey entschaerft eine Namenskollision im Zielordner.
+// freeKey defuses a name collision in the target folder.
 func (m *Mailbox) freeKey(mid, target string) (string, string) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -334,7 +334,7 @@ func (m *Mailbox) freeKey(mid, target string) (string, string) {
 	}
 }
 
-// copyOpts liest die Verschluesselungseinstellung des Originals.
+// copyOpts reads the encryption setting of the original.
 func (m *Mailbox) copyOpts(ctx context.Context, key string) CopyOpts {
 	head, err := m.s3.Head(ctx, m.bucket, key)
 	if err != nil {
@@ -351,8 +351,8 @@ func (m *Mailbox) copyOpts(ctx context.Context, key string) CopyOpts {
 	return o
 }
 
-// Delete loescht endgueltig - nur aus dem Papierkorb und nur, wenn erlaubt.
-// Die Pruefung sitzt hier und nicht in der Oberflaeche.
+// Delete deletes for good - only from the trash and only when allowed. The check
+// sits here and not in the interface.
 func (m *Mailbox) Delete(ctx context.Context, keys []string, force bool) (int, error) {
 	if !m.AllowDelete {
 		return 0, ErrDeleteBlocked
@@ -383,7 +383,7 @@ func (m *Mailbox) Delete(ctx context.Context, keys []string, force bool) (int, e
 	return n, err
 }
 
-// EmptyTrash raeumt den Papierkorb.
+// EmptyTrash clears the trash.
 func (m *Mailbox) EmptyTrash(ctx context.Context) (int, error) {
 	var keys []string
 	for _, msg := range m.Index() {
@@ -396,7 +396,7 @@ func (m *Mailbox) EmptyTrash(ctx context.Context) (int, error) {
 
 // -- Regeln ----------------------------------------------------------------- //
 
-// ApplyRules laesst die Regeln laufen und fuehrt aus, was PlanRules entscheidet.
+// ApplyRules runs the rules and carries out what PlanRules decides.
 func (m *Mailbox) ApplyRules(ctx context.Context, pool []core.Message, force bool) (int, error) {
 	if pool == nil {
 		pool = m.Index()

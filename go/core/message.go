@@ -8,7 +8,7 @@ type Message struct {
 	Folder        string `json:"folder"`
 	ETag          string `json:"etag"`
 	Size          int64  `json:"size"`
-	Date          string `json:"date"` // RFC 3339 in UTC, sortierbar als Text
+	Date          string `json:"date"` // RFC 3339 in UTC, sortable as text
 	From          string `json:"from"`
 	FromAddr      string `json:"from_addr"`
 	To            string `json:"to"`

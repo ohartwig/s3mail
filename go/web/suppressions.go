@@ -6,22 +6,22 @@ import (
 	"strings"
 )
 
-// SuppressionList ist der Ausschnitt der SES-Unterdrueckungsliste, den der Server
-// braucht. Als Interface, damit die Tests ohne AWS auskommen.
+// SuppressionList is the slice of the SES suppression list the server needs. An
+// interface, so the tests get by without AWS.
 type SuppressionList interface {
 	Block(ctx context.Context, address string) error
 	Unblock(ctx context.Context, address string) error
 	List(ctx context.Context) ([]SuppressionEntry, error)
 }
 
-// SuppressionEntry ist eine gesperrte Adresse.
+// SuppressionEntry is a blocked address.
 type SuppressionEntry struct {
 	Address string `json:"address"`
 	Reason  string `json:"reason"`
 	Since   string `json:"since"`
 }
 
-// WithSuppressionList schaltet die Routen dafuer frei.
+// WithSuppressionList enables the routes for it.
 func (s *Server) WithSuppressionList(l SuppressionList) { s.suppressions = l }
 
 func (s *Server) suppressionRoutes() {
@@ -68,17 +68,17 @@ func (s *Server) changeSuppression(w http.ResponseWriter, r *http.Request, a req
 	}
 	list, err := s.suppressions.List(r.Context())
 	if err != nil {
-		// Eingetragen ist eingetragen - dass die Liste danach nicht zu lesen war,
-		// darf die Handlung nicht als gescheitert erscheinen lassen.
+		// Entered is entered - that the list could not be read afterwards must not
+		// make the action look like it failed.
 		s.json(w, http.StatusOK, map[string]any{"address": address})
 		return
 	}
 	s.json(w, http.StatusOK, map[string]any{"address": address, "blocked": list})
 }
 
-// addressFrom holt die nackte Adresse aus einer Kopfzeile: aus
-// `Vorname Nachname <a@x.de>` wird `a@x.de`. Ohne das landete der Anzeigename
-// auf der Sperrliste, und SES lehnte den Eintrag ab.
+// addressFrom takes the bare address out of a header: `First Last <a@x.com>`
+// becomes `a@x.com`. Without it the display name would land on the suppression
+// list, and SES would refuse the entry.
 func addressFrom(s string) string {
 	s = strings.TrimSpace(s)
 	if i := strings.LastIndex(s, "<"); i >= 0 {
