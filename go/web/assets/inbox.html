@@ -157,11 +157,18 @@
   <div><label>{{t "compose.from"}}</label><input id="c_from"></div>
   <div><label>{{t "compose.to"}}</label><input id="c_to"></div>
   <div><label>Cc</label><input id="c_cc"></div>
+  <div><label>{{t "compose.bcc"}}</label><input id="c_bcc"></div>
   <div><label>{{t "compose.subject"}}</label><input id="c_subject"></div>
   <div><label>{{t "compose.body"}}</label><textarea id="c_body"></textarea></div>
+  <div><label>{{t "compose.attachments"}}</label><div>
+    <button id="c_attach" type="button">📎 {{t "compose.attach"}}</button>
+    <input id="c_files" type="file" multiple hidden>
+    <div id="c_atts" class="atts"></div>
+  </div></div>
   <div id="c_err" class="err"></div>
   <div class="bar" style="justify-content:flex-end;margin:0">
-    <button value="cancel">{{t "action.cancel"}}</button>
+    <button value="cancel" id="c_cancel">{{t "action.cancel"}}</button>
+    <button id="c_draft" type="button">{{t "compose.saveDraft"}}</button>
     <button class="primary" id="c_send" type="button">{{t "compose.send"}}</button>
   </div>
 </form></dialog>
@@ -524,17 +531,21 @@ const open = guard(async key => {
 
   $("#view").innerHTML = `
     <h2>${esc(m.subject)}</h2>
-    <div class="meta"><b>Von:</b> ${esc(m.from)}</div>
-    <div class="meta"><b>An:</b> ${esc(m.to)}${m.cc ? " · <b>Cc:</b> " + esc(m.cc) : ""}</div>
+    <div class="meta"><b>${T["compose.from"]}:</b> ${esc(m.from)}</div>
+    <div class="meta"><b>${T["compose.to"]}:</b> ${esc(m.to)}${m.cc ? ` · <b>Cc:</b> ${esc(m.cc)}` : ""}${
+      m.bcc ? ` · <b>${T["compose.bcc"]}:</b> ${esc(m.bcc)}` : ""}</div>
     <div class="meta">${new Date(m.date).toLocaleString()} · ${esc(folderLabel(m.folder))}
       ${m.spam ? `<span class="flag bad">${T["view.spamFail"]}</span>` : ""}
       ${m.virus ? `<span class="flag bad">${T["view.virusFail"]}</span>` : ""}</div>
     <div class="tag-line" style="margin-top:8px">${(m.tags||[]).map(t =>
       `<span class="chip" style="background:${esc(over.tags[t]||"#888")}">${esc(t)}</span>`).join("")}</div>
     <div class="bar">
-      ${CFG.can_send ? `<button class="primary" id="reply">${T["compose.reply"]}</button>` +
-                       `<button id="replyall">${T["compose.replyAll"]}</button>` +
-                       `<button id="forward">${T["compose.forward"]}</button>` : ""}
+      ${!CFG.can_send ? ""
+        : m.folder === "drafts"
+          ? `<button class="primary" id="editDraft">${T["compose.editDraft"]}</button>`
+          : `<button class="primary" id="reply">${T["compose.reply"]}</button>` +
+            `<button id="replyall">${T["compose.replyAll"]}</button>` +
+            `<button id="forward">${T["compose.forward"]}</button>`}
       <button id="vStar">${m.star ? "★ " + T["view.starred"] : "☆ " + T["view.star"]}</button>
       <button id="vTag">${T["tools.tag"]} ▾</button>
       <button id="vMove">${T["tools.move"]} ▾</button>
@@ -555,6 +566,7 @@ const open = guard(async key => {
   on("#reply", () => compose("reply", false));
   on("#replyall", () => compose("reply", true));
   on("#forward", () => compose("forward", false));
+  on("#editDraft", () => editDraft(key, m));
   on("#vTrash", () => move([key], "trash"));
   on("#vSpam", () => move([key], "spam"));
   on("#vHam", () => move([key], ""));
@@ -577,6 +589,9 @@ function quote(m) {
 function compose(kind, all) {
   const m = msg; mode = kind;
   $("#c_err").textContent = "";
+  attachments = []; draftKey = "";
+  renderAtts();
+  $("#c_bcc").value = "";
   $("#c_from").value = CFG.default_from || "";
   // Eine neue Nachricht hat keine Vorlage - alles andere unten liest aus m,
   // das dann gar nicht da ist (nichts ausgewaehlt, leeres Postfach).
@@ -584,6 +599,7 @@ function compose(kind, all) {
     mode = "new";
     $("#c_title").textContent = T["compose.new"];
     for (const f of ["#c_to", "#c_cc", "#c_subject", "#c_body"]) $(f).value = "";
+    composeStart = composeState();
     $("#dlgCompose").showModal();
     $("#c_to").focus();
     return;
@@ -598,18 +614,133 @@ function compose(kind, all) {
   $("#c_body").value = kind === "forward"
     ? "\n\n--- " + T["compose.forwardedMessage"] + " ---\n" + T["compose.from"] + ": " + m.from + "\n" + T["compose.to"] + ": " + m.to + "\n" + T["compose.date"] + ": " + new Date(m.date).toLocaleString() + "\n" + T["compose.subject"] + ": " + sub + "\n\n" + (m.text || "")
     : quote(m);
+  composeStart = composeState();
   $("#dlgCompose").showModal();
   $("#c_body").setSelectionRange(0, 0);
   $("#c_body").focus();
 }
+/* Anhaenge des offenen Entwurfs: hier liegen sie als Bytes, genau wie frisch
+   ausgewaehlte Dateien. Das kostet einen Weg ueber die Schleife (Server →
+   Browser → Server), spart dafuer jede Sonderbehandlung beim Senden - fuer den
+   Server ist ein weitergeschriebener Entwurf dasselbe wie eine neue Mail. */
+let attachments = [];
+let draftKey = "";
+let composeStart = "";
+
+const MAX_MAIL = 10 * 1024 * 1024;
+
+function renderAtts() {
+  $("#c_atts").innerHTML = attachments.map((a, i) => `
+    <span class="att">📎 ${esc(a.filename)} <span class="date">${fmtSize(a.size)}</span>
+      <button type="button" data-i="${i}" title="${T["compose.remove"]}">✕</button></span>`).join("");
+  for (const b of $("#c_atts").querySelectorAll("button")) {
+    b.onclick = () => { attachments.splice(+b.dataset.i, 1); renderAtts(); };
+  }
+}
+
+/* Der Browser liefert die Datei als ArrayBuffer; base64 ist, was JSON von einem
+   []byte auf der Go-Seite erwartet. */
+function toBase64(buf) {
+  let s = "";
+  const b = new Uint8Array(buf);
+  for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+function attBytes() {
+  return attachments.reduce((n, a) => n + a.content.length, 0);
+}
+async function addFiles(files) {
+  // Erst sammeln, dann eine Meldung setzen. Wer hier sofort schreibt, loescht
+  // sich die Zeile gleich wieder: eine abgelehnte Datei zaehlt nicht mit, die
+  // Summe ist danach klein, und der Hinweis auf die abgelehnte Datei ist weg.
+  let fehler = "";
+  for (const f of files) {
+    if (f.size > MAX_MAIL) { fehler = T["compose.attachmentTooLarge"].replace("%s", f.name); continue; }
+    const content = toBase64(await f.arrayBuffer());
+    // size ist die Datei, content die base64-Fassung davon: das eine steht im
+    // Chip, das andere zaehlt gegen die Grenze, die SES zieht.
+    attachments.push({filename: f.name, content_type: f.type || "application/octet-stream",
+      content, size: f.size});
+  }
+  renderAtts();
+  // Der Server lehnt zu grosse Mail ohnehin ab - nur erfaehrt es der Schreiber
+  // hier, bevor er auf "Senden" drueckt und den Text noch einmal tippen darf.
+  if (attBytes() > MAX_MAIL) fehler = T["compose.tooLarge"];
+  $("#c_err").textContent = fehler;
+}
+$("#c_attach").onclick = () => $("#c_files").click();
+$("#c_files").onchange = async e => { await addFiles(e.target.files); e.target.value = ""; };
+
+function draftBody() {
+  return {mode, key: mode === "new" ? "" : current, draft_key: draftKey,
+    from: $("#c_from").value, to: $("#c_to").value, cc: $("#c_cc").value, bcc: $("#c_bcc").value,
+    subject: $("#c_subject").value, body: $("#c_body").value, attachments};
+}
+// Woran sich erkennen laesst, ob seit dem Oeffnen etwas passiert ist. Ohne das
+// fragt der Dialog beim Schliessen auch dann nach, wenn niemand etwas getippt hat.
+function composeState() {
+  return JSON.stringify([$("#c_to").value, $("#c_cc").value, $("#c_bcc").value,
+    $("#c_subject").value, $("#c_body").value, attachments.length]);
+}
+
+async function saveDraft(quiet) {
+  const r = await api("/api/draft", draftBody());
+  draftKey = r.key;
+  composeStart = composeState();
+  if (!quiet) toast(T["compose.draftSaved"]);
+  over = r; renderSide();
+  if (folder === "drafts") await load();
+  return r.key;
+}
+
+$("#c_draft").onclick = guard(async () => {
+  try { await saveDraft(false); $("#dlgCompose").close(); }
+  catch (e) { $("#c_err").textContent = e.message; }
+});
+
+/* Beim Schliessen nicht wortlos wegwerfen: getippter Text ist Arbeit. Gesichert
+   wird nur, wenn seit dem Oeffnen wirklich etwas entstanden ist, und der Toast
+   sagt es - sonst haette jemand einen Entwurf, von dem er nichts weiss. */
+$("#dlgCompose").addEventListener("close", async () => {
+  if (composeState() === composeStart) return;
+  try { await saveDraft(false); } catch (e) { toast(e.message, true); }
+});
+
+async function editDraft(key, m) {
+  compose("new");
+  mode = "new";
+  draftKey = key;
+  $("#c_title").textContent = T["compose.editDraft"];
+  $("#c_from").value = m.from || CFG.default_from || "";
+  $("#c_to").value = m.to || "";
+  $("#c_cc").value = m.cc || "";
+  $("#c_bcc").value = m.bcc || "";
+  $("#c_subject").value = m.subject || "";
+  $("#c_body").value = m.text || "";
+  // Die Anhaenge zurueckholen, damit ein weitergeschriebener Entwurf sie behaelt.
+  for (const a of m.attachments || []) {
+    try {
+      const resp = await fetch(`/api/attachment?key=${encodeURIComponent(key)}&index=${a.index}`);
+      if (!resp.ok) continue;
+      const buf = await resp.arrayBuffer();
+      attachments.push({filename: a.filename, content_type: a.content_type || "application/octet-stream",
+        content: toBase64(buf), size: buf.byteLength});
+    } catch (e) { /* ein fehlender Anhang darf den Entwurf nicht blockieren */ }
+  }
+  renderAtts();
+  composeStart = composeState();
+}
+
 $("#c_send").onclick = async () => {
   const b = $("#c_send"); b.disabled = true; b.textContent = T["compose.sending"];
   try {
-    const r = await api("/api/send", {mode, key: mode === "new" ? "" : current, from: $("#c_from").value,
-      to: $("#c_to").value, cc: $("#c_cc").value,
-      subject: $("#c_subject").value, body: $("#c_body").value});
+    const r = await api("/api/send", draftBody());
+    composeStart = composeState();   // nichts mehr zu sichern, die Mail ist raus
     $("#dlgCompose").close();
     toast(T["compose.sent"].replace("%s", r.message_id));
+    if (r.warning) toast(r.warning, true);
+    if (r.folders) { over = r; renderSide(); }
+    if (folder === "drafts" || folder === "sent") await load();
   } catch (e) { $("#c_err").textContent = e.message; }
   finally { b.disabled = false; b.textContent = T["compose.send"]; }
 };

@@ -15,6 +15,8 @@ const (
 	Trash   = "trash"
 	Spam    = "spam"
 	Archive = "archiv"
+	Sent    = "sent"
+	Drafts  = "drafts"
 )
 
 // SystemFolder carries a translation key, not a label. The Name is an S3
@@ -30,6 +32,8 @@ type SystemFolder struct {
 
 var SystemFolders = []SystemFolder{
 	{Inbox, "folder.inbox", "\U0001F4E5"},
+	{Drafts, "folder.drafts", "\U0001F4DD"},
+	{Sent, "folder.sent", "\U0001F4E4"},
 	{Archive, "folder.archive", "\U0001F4E6"},
 	{Spam, "folder.spam", "⚠️"},
 	{Trash, "folder.trash", "\U0001F5D1️"},

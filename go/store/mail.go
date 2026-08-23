@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -243,7 +244,23 @@ func (m *Mailbox) summarize(ctx context.Context, o ObjectInfo) core.Message {
 		base.Snippet = err.Error()
 		return base
 	}
-	s := mimeparse.Summarize(raw, o.LastModified.UTC())
+	return m.fill(base, raw, o.LastModified.UTC())
+}
+
+// summarizeRaw builds the index entry for a message we hold in hand - our own,
+// just written. No ETag: the next refresh brings the one S3 assigned, and until
+// then a mismatch only means the message is fetched once more.
+func (m *Mailbox) summarizeRaw(key string, raw []byte) core.Message {
+	now := time.Now().UTC()
+	return m.fill(core.Message{
+		Key: key, Mid: m.Mid(key), Folder: m.FolderOf(key),
+		Size: int64(len(raw)), Date: now.Format(time.RFC3339),
+	}, raw, now)
+}
+
+// fill takes over what the header says.
+func (m *Mailbox) fill(base core.Message, raw []byte, fallback time.Time) core.Message {
+	s := mimeparse.Summarize(raw, fallback)
 	base.Date = s.Date
 	base.From, base.To, base.Cc = s.From, s.To, s.Cc
 	base.Subject = s.Subject
@@ -394,7 +411,78 @@ func (m *Mailbox) EmptyTrash(ctx context.Context) (int, error) {
 	return m.Delete(ctx, keys, false)
 }
 
-// -- Regeln ----------------------------------------------------------------- //
+// -- own mail ---------------------------------------------------------------- //
+
+// Put places a message we wrote ourselves into a folder of the mailbox and
+// takes it straight into the index - the sent copy and the draft both go this
+// way.
+//
+// The name comes from the Message-Id, so writing the same message twice cannot
+// leave two objects behind. Own mail counts as read: nobody needs to be told
+// about a message they just wrote.
+func (m *Mailbox) Put(ctx context.Context, folder, messageID string, raw []byte) (string, error) {
+	folder, err := core.ValidFolder(folder)
+	if err != nil {
+		return "", err
+	}
+	key, err := m.KeyFor(baseFromID(messageID), folder)
+	if err != nil {
+		return "", err
+	}
+	if err := m.s3.Put(ctx, m.bucket, key, raw, "message/rfc822"); err != nil {
+		return "", err
+	}
+	read := true
+	if err := m.State.Mutate(ctx, core.Op{T: "flags", Mids: []string{m.Mid(key)}, Read: &read}); err != nil {
+		return key, err
+	}
+	// Into the index right away: without this the message would be missing until
+	// the next refresh, and the folder it went into would look empty.
+	m.mu.Lock()
+	m.index[key] = m.summarizeRaw(key, raw)
+	m.mu.Unlock()
+	m.writeCache()
+	return key, nil
+}
+
+// DropDraft removes a stored draft.
+//
+// It goes past --no-delete on purpose. That switch protects received mail from
+// a wrong click; a draft is our own scratch paper, and if it could not be
+// removed, every sent message would leave its draft standing next to the copy
+// in the sent folder. The folder check stays: nothing outside the drafts folder
+// can be deleted this way.
+func (m *Mailbox) DropDraft(ctx context.Context, key string) error {
+	if err := m.Own(key); err != nil {
+		return err
+	}
+	if m.FolderOf(key) != core.Drafts {
+		return core.ErrBadInput
+	}
+	if err := m.s3.Delete(ctx, m.bucket, key); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	delete(m.index, key)
+	m.mu.Unlock()
+	m.writeCache()
+	return m.State.Mutate(ctx, core.Op{T: "drop", Mids: []string{m.Mid(key)}})
+}
+
+// baseFromID turns "<a1b2@example.org>" into the base name "a1b2.eml". The
+// domain drops out: it says nothing here and would only bring characters into
+// the key that mean something to S3.
+func baseFromID(messageID string) string {
+	id := strings.Trim(strings.TrimSpace(messageID), "<>")
+	if i := strings.Index(id, "@"); i > 0 {
+		id = id[:i]
+	}
+	id = regexp.MustCompile(`[^A-Za-z0-9_.-]`).ReplaceAllString(id, "")
+	if id == "" {
+		id = strconv.FormatInt(time.Now().UnixNano(), 36)
+	}
+	return id + ".eml"
+}
 
 // ApplyRules runs the rules and carries out what PlanRules decides.
 func (m *Mailbox) ApplyRules(ctx context.Context, pool []core.Message, force bool) (int, error) {

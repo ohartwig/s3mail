@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"s3mail/core"
 	"s3mail/mailer"
 	"s3mail/wizard"
 )
@@ -14,8 +15,8 @@ type Sender interface {
 	Send(ctx context.Context, n mailer.Message) (string, error)
 }
 
-// WithSender enables replying and forwarding. Without it s3mail runs read-only.
-// reinen Lesemodus (--no-send).
+// WithSender enables replying and forwarding. Without it s3mail runs read-only
+// (--no-send).
 func (s *Server) WithSender(v Sender, defaultFrom string) {
 	s.sender, s.defaultFrom = v, defaultFrom
 }
@@ -53,7 +54,7 @@ func (s *Server) sendRoute() {
 		}
 		n, err := mailer.Build(e, s.defaultFrom, o, time.Now())
 		if err != nil {
-			s.writeError(w, http.StatusBadRequest, err.Error())
+			s.translate(w, r, err)
 			return
 		}
 		id, err := s.sender.Send(r.Context(), n)
@@ -61,7 +62,49 @@ func (s *Server) sendRoute() {
 			s.translate(w, r, err)
 			return
 		}
-		s.json(w, http.StatusOK, map[string]any{"message_id": id})
+
+		// From here on the message is out of the house. Nothing that follows may
+		// turn the answer into an error - it would read as "not sent" and get
+		// sent a second time.
+		out := map[string]any{"message_id": id}
+		if _, err := s.Mailbox.Put(r.Context(), core.Sent, n.ID, n.Raw); err != nil {
+			out["warning"] = s.text(r, "compose.sentNotStored")
+		}
+		if e.DraftKey != "" {
+			if err := s.Mailbox.DropDraft(r.Context(), e.DraftKey); err != nil {
+				out["warning"] = s.text(r, "compose.draftNotRemoved")
+			}
+		}
+		s.json(w, http.StatusOK, with(s.overview(r), out))
+	})
+}
+
+// draftRoute stores what somebody has written without sending it. The draft is
+// a real message in the drafts folder - that way it survives the closed window,
+// is visible from a second machine, and needs no storage of its own.
+func (s *Server) draftRoute() {
+	s.mux.HandleFunc("POST /api/draft", func(w http.ResponseWriter, r *http.Request) {
+		var e mailer.Draft
+		if err := readJSON(r, &e); err != nil {
+			s.writeError(w, http.StatusBadRequest, s.text(r, "error.badJson"))
+			return
+		}
+		n, err := mailer.BuildDraft(e, s.defaultFrom, mailer.Original{}, time.Now())
+		if err != nil {
+			s.translate(w, r, err)
+			return
+		}
+		key, err := s.Mailbox.Put(r.Context(), core.Drafts, n.ID, n.Raw)
+		if err != nil {
+			s.translate(w, r, err)
+			return
+		}
+		// The previous version goes only once the new one lies there. The other
+		// way round a failed write would leave nothing behind at all.
+		if e.DraftKey != "" && e.DraftKey != key {
+			_ = s.Mailbox.DropDraft(r.Context(), e.DraftKey)
+		}
+		s.json(w, http.StatusOK, with(s.overview(r), map[string]any{"key": key}))
 	})
 }
 

@@ -217,9 +217,28 @@ S3-Konsole, und der Papierkorb lässt sich per Lifecycle-Regel automatisch leere
 - Anhänge einzeln herunterladbar, Rohmail als `.eml`.
 - SES-Verdicts (`X-SES-Spam-Verdict`, `X-SES-Virus-Verdict`) als Badge.
 
+**Schreiben**
+
+- Antworten, Weiterleiten und neue Nachricht. Antworten hängen per `In-Reply-To`
+  und `References` am Faden des Originals.
+- **Anhänge**: Dateien anhängen, Cc und Blindkopie. Die Blindkopie geht über die
+  Empfängerliste an SES und steht nie im Kopf der Mail – sonst hätten die
+  Empfänger sie vor Augen. Bei mehr als 10 MB lehnt s3mail ab, bevor hochgeladen
+  wird; das ist die Grenze, die SES zieht.
+- **Gesendet**: jede verschickte Mail wird als Kopie in `<prefix>sent/` abgelegt.
+  Schlägt das fehl, gilt die Mail trotzdem als verschickt – sie ist ja raus –,
+  und es gibt einen Hinweis.
+- **Entwürfe** liegen als echte Mail in `<prefix>drafts/`, samt Blindkopie und
+  Anhängen. Sie überleben damit das geschlossene Fenster und sind auch vom
+  zweiten Rechner aus zu sehen. Wer den Dialog mit getipptem Text schließt,
+  bekommt den Entwurf gesichert statt weggeworfen. Beim Senden verschwindet er.
+
 **Sortieren**
 
-- Ordner anlegen und verschieben, Papierkorb, Spam, Archiv.
+- Ordner anlegen und verschieben, Papierkorb, Spam, Archiv, Gesendet, Entwürfe.
+  Die Automatik fasst Papierkorb, Spam, Gesendet und Entwürfe nicht an – die
+  ersten beiden sind eine Entscheidung, die letzten beiden sind selbst
+  geschrieben.
 - Endgültiges Löschen nur aus dem Papierkorb heraus und nur nach Bestätigung
   (serverseitig erzwungen, nicht nur in der UI).
 - Tags mit Farben, mehrere pro Mail, Klick in der Seitenleiste filtert.
@@ -464,7 +483,11 @@ sie melden dann einen Rechtefehler im Klartext.
 
 ## Grenzen
 
-- Kein IMAP, kein Push – neue Mails kommen erst mit „Neu laden“.
+- Kein IMAP: ein normales Mailprogramm kann das Postfach nicht öffnen. Senden
+  ginge dort über den SMTP-Endpunkt von SES, lesen nicht – SES kennt keinen
+  Postfachdienst.
+- Kein Push. Der Abgleich läuft im Takt von `--refresh` (Standard 60 Sekunden);
+  eine Mail kann also bis zu einer Minute brauchen, bis sie auftaucht.
 - Der Zugang hängt an einem Token, nicht an Benutzern (siehe
   [Wer darf ran](#wer-darf-ran)). Wer die Adresse aus dem Terminal hat, sieht das
   ganze Postfach. `--host` auf eine öffentliche Adresse zu legen heißt weiterhin,

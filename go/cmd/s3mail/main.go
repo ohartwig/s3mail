@@ -79,7 +79,11 @@ func main() {
 	defer stop()
 
 	var startErr string
-	srv := web.NewServer(nil, web.NewToken(), k.Host, k.Port, nil)
+	// The language belongs in the configuration the server hands to the page,
+	// or a fresh browser gets the wizard in its own language instead of the one
+	// that was chosen here.
+	srv := web.NewServer(nil, web.NewToken(), k.Host, k.Port,
+		map[string]any{"language": k.Language})
 
 	// The wizard arms the mailbox inside the running process - after "save and
 	// start" nobody should have to restart the program.
@@ -158,6 +162,21 @@ func main() {
 	fmt.Println("\nTschuess.")
 }
 
+// serverConfig is what the page gets to see of the configuration.
+//
+// The language has to be in there: the server reads it from exactly this map
+// when a request carries no cookie. Without it the choice from the setup is
+// stored, used for the console and then ignored by the very page it was made
+// on - the browser's preference wins instead, and the setting looks broken
+// while it is only unread.
+func serverConfig(k config.Config, root string, noSend bool, refreshSeconds int) map[string]any {
+	return map[string]any{
+		"bucket": k.Bucket, "root": root, "default_from": k.From,
+		"can_send": !noSend, "config_file": config.File(),
+		"refresh_seconds": refreshSeconds, "language": k.Language,
+	}
+}
+
 // activate builds mailbox and sending from a configuration.
 func activate(ctx context.Context, srv *web.Server, k config.Config, noSend bool, refreshSeconds int) error {
 	cfg, err := awsx.Session(ctx, k.Profile, k.Region)
@@ -171,11 +190,7 @@ func activate(ctx context.Context, srv *web.Server, k config.Config, noSend bool
 	mb := store.NewMailbox(ctx, s3, awsx.NewKMS(cfg, ""), k.Bucket, k.Prefix,
 		config.CacheDir(), k.AllowDelete)
 	srv.Mailbox = mb
-	srv.Config = map[string]any{
-		"bucket": k.Bucket, "root": mb.Root, "default_from": k.From,
-		"can_send": !noSend, "config_file": config.File(),
-		"refresh_seconds": refreshSeconds,
-	}
+	srv.Config = serverConfig(k, mb.Root, noSend, refreshSeconds)
 	if !noSend {
 		srv.WithSender(awsx.NewSES(cfg, ""), k.From)
 		// The suppression list hangs off sending: whoever may not send need not be

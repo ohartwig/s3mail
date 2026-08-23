@@ -247,11 +247,14 @@ func walk(msg *message.Entity, idx *int, text, html *strings.Builder, s *Summary
 // Full is the whole message for the detail view - body text, HTML and the
 // attachments including their content.
 type Full struct {
-	Subject     string           `json:"subject"`
-	From        string           `json:"from"`
-	ReplyTo     string           `json:"reply_to"`
-	To          string           `json:"to"`
-	Cc          string           `json:"cc"`
+	Subject string `json:"subject"`
+	From    string `json:"from"`
+	ReplyTo string `json:"reply_to"`
+	To      string `json:"to"`
+	Cc      string `json:"cc"`
+	// Bcc appears in a draft only: a sent message never carries the header, or
+	// the recipients would have the blind copy in front of them.
+	Bcc         string           `json:"bcc"`
 	Date        string           `json:"date"`
 	MessageID   string           `json:"message_id"`
 	References  string           `json:"references"`
@@ -291,6 +294,7 @@ func Read(raw []byte, fallback time.Time) Full {
 	v.ReplyTo = AddrStr(h.Get("Reply-To"))
 	v.To = AddrStr(h.Get("To"))
 	v.Cc = AddrStr(h.Get("Cc"))
+	v.Bcc = AddrStr(h.Get("Bcc"))
 	v.Date = ParseDate(h.Get("Date"), fallback).UTC().Format(time.RFC3339)
 	v.MessageID = strings.TrimSpace(h.Get("Message-Id"))
 	v.References = strings.TrimSpace(h.Get("References"))

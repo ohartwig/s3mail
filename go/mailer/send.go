@@ -7,6 +7,7 @@ package mailer
 import (
 	"bytes"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -20,13 +21,26 @@ import (
 
 // Draft is what the interface sends.
 type Draft struct {
-	Mode    string `json:"mode"` // "reply", "forward" oder "new"
+	Mode    string `json:"mode"` // "reply", "forward" or "new"
 	Key     string `json:"key"`
 	From    string `json:"from"`
 	To      string `json:"to"`
 	Cc      string `json:"cc"`
+	Bcc     string `json:"bcc"`
 	Subject string `json:"subject"`
 	Body    string `json:"body"`
+	// DraftKey is the stored draft this was written in. After sending it is
+	// deleted - otherwise every sent message would leave its draft behind.
+	DraftKey    string       `json:"draft_key"`
+	Attachments []Attachment `json:"attachments"`
+}
+
+// Attachment is a file on its way out. Content arrives base64-encoded, which is
+// what encoding/json does with a []byte by itself.
+type Attachment struct {
+	Filename    string `json:"filename"`
+	ContentType string `json:"content_type"`
+	Content     []byte `json:"content"`
 }
 
 // Original are the headers of the message being replied to.
@@ -34,7 +48,7 @@ type Original struct {
 	MessageID  string
 	References string
 	Subject    string
-	Raw        []byte // fuer das Weiterleiten als .eml
+	Raw        []byte // for forwarding as an .eml
 }
 
 // Message is the finished mail together with its recipient list.
@@ -42,15 +56,35 @@ type Message struct {
 	Raw  []byte
 	From string
 	To   []string
+	// ID is the Message-Id we generated. The sent copy is stored under it, so
+	// storing the same message twice cannot produce two objects.
+	ID string
 }
+
+// MaxSize is what SES accepts per message, base64 overhead included. Checking
+// here instead of at the SDK means the reader learns it before the upload, not
+// after it.
+const MaxSize = 10 << 20
 
 var (
 	ErrNoSender    = errors.New("no sender set")
 	ErrNoRecipient = errors.New("no recipient given")
+	ErrTooLarge    = errors.New("message larger than SES accepts")
 )
 
-// Build assembles the message.
+// Build assembles the message ready for sending.
 func Build(e Draft, defaultFrom string, o Original, now time.Time) (Message, error) {
+	return build(e, defaultFrom, o, now, false)
+}
+
+// BuildDraft assembles the same message for storage. The one difference is Bcc:
+// a draft keeps the header, because whoever reopens it has to see whom they
+// meant to blind-copy. On the way out the header must be gone.
+func BuildDraft(e Draft, defaultFrom string, o Original, now time.Time) (Message, error) {
+	return build(e, defaultFrom, o, now, true)
+}
+
+func build(e Draft, defaultFrom string, o Original, now time.Time, keepBcc bool) (Message, error) {
 	sender := strings.TrimSpace(e.From)
 	if sender == "" {
 		sender = strings.TrimSpace(defaultFrom)
@@ -58,27 +92,35 @@ func Build(e Draft, defaultFrom string, o Original, now time.Time) (Message, err
 	if sender == "" {
 		return Message{}, ErrNoSender
 	}
-	an, err := addresses(e.To)
+	to, err := addresses(e.To)
 	if err != nil {
 		return Message{}, err
 	}
-	clone, err := addresses(e.Cc)
+	cc, err := addresses(e.Cc)
 	if err != nil {
 		return Message{}, err
 	}
-	if len(an) == 0 && len(clone) == 0 {
+	bcc, err := addresses(e.Bcc)
+	if err != nil {
+		return Message{}, err
+	}
+	if len(to) == 0 && len(cc) == 0 && len(bcc) == 0 && !keepBcc {
 		return Message{}, ErrNoRecipient
 	}
 
+	id := newMessageID(sender)
 	header := textproto.MIMEHeader{}
 	header.Set("From", sender)
-	header.Set("To", strings.Join(an, ", "))
-	if len(clone) > 0 {
-		header.Set("Cc", strings.Join(clone, ", "))
+	header.Set("To", strings.Join(to, ", "))
+	if len(cc) > 0 {
+		header.Set("Cc", strings.Join(cc, ", "))
+	}
+	if keepBcc && len(bcc) > 0 {
+		header.Set("Bcc", strings.Join(bcc, ", "))
 	}
 	header.Set("Subject", encodeWord(e.Subject))
 	header.Set("Date", now.Format(time.RFC1123Z))
-	header.Set("Message-Id", newMessageID(sender))
+	header.Set("Message-Id", id)
 	header.Set("MIME-Version", "1.0")
 
 	// Keep the thread together when replying: without In-Reply-To and
@@ -89,9 +131,10 @@ func Build(e Draft, defaultFrom string, o Original, now time.Time) (Message, err
 		header.Set("References", strings.Join(strings.Fields(refs), " "))
 	}
 
+	forwarded := e.Mode == "forward" && len(o.Raw) > 0
 	var body bytes.Buffer
-	if e.Mode == "forward" && len(o.Raw) > 0 {
-		if err := withAttachment(&body, header, e.Body, o); err != nil {
+	if forwarded || len(e.Attachments) > 0 {
+		if err := withAttachments(&body, header, e.Body, o, forwarded, e.Attachments); err != nil {
 			return Message{}, err
 		}
 	} else {
@@ -101,16 +144,23 @@ func Build(e Draft, defaultFrom string, o Original, now time.Time) (Message, err
 	}
 
 	var raw bytes.Buffer
-	writeHeader(&raw, header)
+	writeHeader(&raw, header, keepBcc)
 	raw.WriteString("\r\n")
 	raw.Write(body.Bytes())
 
-	return Message{Raw: raw.Bytes(), From: sender,
-		To: append(append([]string{}, an...), clone...)}, nil
+	if raw.Len() > MaxSize {
+		return Message{}, ErrTooLarge
+	}
+
+	// Bcc reaches SES through the recipient list, never through the header.
+	rcpt := append(append(append([]string{}, to...), cc...), bcc...)
+	return Message{Raw: raw.Bytes(), From: sender, To: rcpt, ID: id}, nil
 }
 
-// withAttachment attaches the forwarded message as an .eml file.
-func withAttachment(body *bytes.Buffer, header textproto.MIMEHeader, text string, o Original) error {
+// withAttachments builds the multipart body: the text first, then the forwarded
+// message as an .eml, then the files somebody picked.
+func withAttachments(body *bytes.Buffer, header textproto.MIMEHeader, text string,
+	o Original, forwarded bool, files []Attachment) error {
 	mw := multipart.NewWriter(body)
 	header.Set("Content-Type", `multipart/mixed; boundary="`+mw.Boundary()+`"`)
 
@@ -125,31 +175,102 @@ func withAttachment(body *bytes.Buffer, header textproto.MIMEHeader, text string
 		return err
 	}
 
-	name := o.Subject
-	if name == "" {
-		name = "mail"
+	if forwarded {
+		name := o.Subject
+		if name == "" {
+			name = "mail"
+		}
+		if r := []rune(name); len(r) > 60 {
+			name = string(r[:60])
+		}
+		if err := writePart(mw, "message/rfc822", name+".eml", o.Raw, false); err != nil {
+			return err
+		}
 	}
-	if r := []rune(name); len(r) > 60 {
-		name = string(r[:60])
-	}
-	attachment, err := mw.CreatePart(textproto.MIMEHeader{
-		"Content-Type":        {"message/rfc822"},
-		"Content-Disposition": {mime.FormatMediaType("attachment", map[string]string{"filename": name + ".eml"})},
-	})
-	if err != nil {
-		return err
-	}
-	if _, err := attachment.Write(o.Raw); err != nil {
-		return err
+
+	for _, f := range files {
+		ct := strings.TrimSpace(f.ContentType)
+		if ct == "" {
+			ct = "application/octet-stream"
+		}
+		if err := writePart(mw, ct, attachmentName(f.Filename), f.Content, true); err != nil {
+			return err
+		}
 	}
 	return mw.Close()
 }
 
-func writeHeader(w *bytes.Buffer, header textproto.MIMEHeader) {
-	// fixed order, so the output is reproducible
-	for _, name := range []string{"From", "To", "Cc", "Subject", "Date", "Message-Id",
+// writePart adds one attachment. Anything that is not itself a mail goes out
+// base64-encoded: a raw byte in a mail body survives no hop unscathed.
+func writePart(mw *multipart.Writer, contentType, filename string, content []byte, encode bool) error {
+	h := textproto.MIMEHeader{
+		"Content-Type": {contentType},
+		"Content-Disposition": {mime.FormatMediaType("attachment",
+			map[string]string{"filename": filename})},
+	}
+	if encode {
+		h.Set("Content-Transfer-Encoding", "base64")
+	}
+	part, err := mw.CreatePart(h)
+	if err != nil {
+		return err
+	}
+	if !encode {
+		_, err = part.Write(content)
+		return err
+	}
+	_, err = part.Write(wrap76(base64.StdEncoding.EncodeToString(content)))
+	return err
+}
+
+// wrap76 breaks the base64 text into lines. Without it the whole attachment
+// becomes one line, and RFC 5322 allows 998 characters - some servers cut
+// there, others refuse the message.
+func wrap76(s string) []byte {
+	var out bytes.Buffer
+	out.Grow(len(s) + len(s)/76*2)
+	for len(s) > 76 {
+		out.WriteString(s[:76])
+		out.WriteString("\r\n")
+		s = s[76:]
+	}
+	out.WriteString(s)
+	return out.Bytes()
+}
+
+// attachmentName keeps the file name harmless: no path, no control characters,
+// and not endless.
+func attachmentName(name string) string {
+	name = strings.TrimSpace(name)
+	if i := strings.LastIndexAny(name, `/\`); i >= 0 {
+		name = name[i+1:]
+	}
+	name = strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return -1
+		}
+		return r
+	}, name)
+	if name == "" {
+		name = "anhang"
+	}
+	if r := []rune(name); len(r) > 100 {
+		name = string(r[:100])
+	}
+	return name
+}
+
+func writeHeader(w *bytes.Buffer, header textproto.MIMEHeader, keepBcc bool) {
+	// A fixed order, so the output is reproducible - and a fixed list, so a Bcc
+	// cannot slip into a sent message by accident. It is only written where it
+	// is explicitly wanted: in a stored draft.
+	names := []string{"From", "To", "Cc", "Subject", "Date", "Message-Id",
 		"In-Reply-To", "References", "MIME-Version", "Content-Type",
-		"Content-Transfer-Encoding"} {
+		"Content-Transfer-Encoding"}
+	if keepBcc {
+		names = append(names, "Bcc")
+	}
+	for _, name := range names {
 		if v := header.Get(name); v != "" {
 			fmt.Fprintf(w, "%s: %s\r\n", name, v)
 		}

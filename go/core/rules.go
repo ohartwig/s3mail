@@ -86,6 +86,11 @@ type RuleAction struct {
 	MoveTo    *string
 }
 
+// skipsRules names the folders the automation leaves alone.
+func skipsRules(folder string) bool {
+	return folder == Trash || folder == Spam || folder == Sent || folder == Drafts
+}
+
 // PlanRules walks the rules and returns what to do.
 //
 // The first matching rule wins. A message is filed automatically only once (the
@@ -107,7 +112,9 @@ func PlanRules(pool []Message, d *Data, force bool) []RuleAction {
 		if d.Get(m.Mid).Ruled && !force {
 			continue
 		}
-		if (m.Folder == Trash || m.Folder == Spam) && !force {
+		// Trash and spam are somebody's decision, sent mail and drafts are our
+		// own writing - the automation has no business in any of the four.
+		if skipsRules(m.Folder) && !force {
 			out = append(out, RuleAction{Mid: m.Mid, Key: m.Key, MarkRuled: true})
 			continue
 		}

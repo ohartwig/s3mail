@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"s3mail/core"
 	"s3mail/i18n"
 )
 
@@ -143,6 +144,39 @@ func TestPagesUseOnlyKnownKeys(t *testing.T) {
 	for key := range keys {
 		if cat.T(key) == key {
 			t.Errorf("%q has no text in the catalogue", key)
+		}
+	}
+}
+
+// TestComposeCarriesTheNewFields - the pages are strings; a lost field is
+// noticed by nobody otherwise. Checked are the anchors, not the sentences.
+func TestComposeCarriesTheNewFields(t *testing.T) {
+	out := page("inbox", PageMailbox, "de", map[string]any{"bucket": "b"})
+	for _, anchor := range []string{"c_bcc", "c_files", "c_attach", "c_atts", "c_draft",
+		"/api/draft", "draft_key", "attachments"} {
+		if !strings.Contains(out, anchor) {
+			t.Errorf("%q missing from the mailbox page - the way there is gone", anchor)
+		}
+	}
+}
+
+// TestSentAndDraftsAreInTheSidebar - both are system folders and have to be
+// visible even while they are empty; otherwise nobody finds their own mail again.
+func TestSentAndDraftsAreInTheSidebar(t *testing.T) {
+	for _, key := range []string{"folder.sent", "folder.drafts"} {
+		for _, lang := range []string{"de", "en", "es"} {
+			if i18n.Get(lang).T(key) == key {
+				t.Errorf("%s: %q has no label", lang, key)
+			}
+		}
+	}
+	names := map[string]bool{}
+	for _, f := range core.SystemFolders {
+		names[f.Name] = true
+	}
+	for _, want := range []string{core.Sent, core.Drafts} {
+		if !names[want] {
+			t.Errorf("%q is not a system folder - then it disappears when empty", want)
 		}
 	}
 }

@@ -22,8 +22,8 @@ type Fake struct {
 	Meta    map[string]map[string]string
 	SSE     map[string]store.CopyOpts
 	CallLog []string
-	PutErr  error // wenn gesetzt, scheitert jedes Put
-	ListErr error // wenn gesetzt, scheitert jedes List
+	PutErr  error // when set, every Put fails
+	ListErr error // when set, every List fails
 }
 
 func New() *Fake {
