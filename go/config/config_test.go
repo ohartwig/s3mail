@@ -1,4 +1,4 @@
-package konfig
+package config
 
 import (
 	"os"
@@ -17,11 +17,11 @@ func sandkasten(t *testing.T) string {
 	return dir
 }
 
-func TestSpeichernUndLaden(t *testing.T) {
+func TestSaveAndLoad(t *testing.T) {
 	sandkasten(t)
-	k := Standard()
+	k := Defaults()
 	k.Bucket, k.Prefix, k.Absender = "mein-bucket", "mail", "support@firma.de"
-	pfad, err := Speichern(k)
+	pfad, err := Save(k)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,14 +31,14 @@ func TestSpeichernUndLaden(t *testing.T) {
 			t.Errorf("Rechte: %v", info.Mode().Perm())
 		}
 	}
-	zurueck := Laden()
+	zurueck := Load()
 	if zurueck.Bucket != "mein-bucket" || zurueck.Absender != "support@firma.de" {
 		t.Errorf("%+v", zurueck)
 	}
 	if zurueck.Prefix != "mail/" {
 		t.Errorf("Prefix nicht normalisiert: %q", zurueck.Prefix)
 	}
-	if _, err := Speichern(Konfig{}); err == nil {
+	if _, err := Save(Config{}); err == nil {
 		t.Error("ohne Bucket gespeichert")
 	}
 }
@@ -48,15 +48,15 @@ func TestPrefixNormalisieren(t *testing.T) {
 		"": "", "mail": "mail/", "mail/": "mail/", "/mail": "mail/",
 		" mail ": "mail/", "/mail/unter": "mail/unter/",
 	} {
-		if got := PrefixNormalisieren(rein); got != raus {
+		if got := NormalizePrefix(rein); got != raus {
 			t.Errorf("%q -> %q, erwartet %q", rein, got, raus)
 		}
 	}
 }
 
-// TestZugangsdatenSindAdditiv - der Assistent darf ein bestehendes Profil, das
+// TestCredentialsAreAdditive - der Assistent darf ein bestehendes Profil, das
 // ganz anders arbeitet, nicht anfassen.
-func TestZugangsdatenSindAdditiv(t *testing.T) {
+func TestCredentialsAreAdditive(t *testing.T) {
 	dir := sandkasten(t)
 	awsDir := filepath.Join(dir, "aws")
 	if err := os.MkdirAll(awsDir, 0o700); err != nil {
@@ -68,7 +68,7 @@ func TestZugangsdatenSindAdditiv(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	name, err := ZugangsdatenSchreiben("s3mail", "AKIAEXAMPLE1234567", "geheim", "eu-central-1")
+	name, err := WriteCredentials("s3mail", "AKIAEXAMPLE1234567", "geheim", "eu-central-1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,12 +97,12 @@ func TestZugangsdatenSindAdditiv(t *testing.T) {
 	}
 }
 
-func TestZugangsdatenZweimalUeberschreibtNurDasProfil(t *testing.T) {
+func TestCredentialsTwiceOverwriteOnlyThatProfile(t *testing.T) {
 	dir := sandkasten(t)
-	if _, err := ZugangsdatenSchreiben("s3mail", "AKIAALTALTALTALT12", "alt", "eu-west-1"); err != nil {
+	if _, err := WriteCredentials("s3mail", "AKIAALTALTALTALT12", "alt", "eu-west-1"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ZugangsdatenSchreiben("s3mail", "AKIANEUNEUNEUNEU12", "neu", "eu-central-1"); err != nil {
+	if _, err := WriteCredentials("s3mail", "AKIANEUNEUNEUNEU12", "neu", "eu-central-1"); err != nil {
 		t.Fatal(err)
 	}
 	creds, _ := os.ReadFile(filepath.Join(dir, "aws", "credentials"))
@@ -114,13 +114,13 @@ func TestZugangsdatenZweimalUeberschreibtNurDasProfil(t *testing.T) {
 	}
 }
 
-func TestZugangsdatenValidierung(t *testing.T) {
+func TestCredentialsValidation(t *testing.T) {
 	sandkasten(t)
 	for name, f := range map[string]func() error{
-		"ohne Secret":   func() error { _, e := ZugangsdatenSchreiben("s3mail", "AKIA1234567890123", "", ""); return e },
-		"ohne Key":      func() error { _, e := ZugangsdatenSchreiben("s3mail", "", "geheim", ""); return e },
-		"kein AKIA":     func() error { _, e := ZugangsdatenSchreiben("s3mail", "XYZ1234567890123", "geheim", ""); return e },
-		"zu kurzer Key": func() error { _, e := ZugangsdatenSchreiben("s3mail", "AKIA123", "geheim", ""); return e },
+		"ohne Secret":   func() error { _, e := WriteCredentials("s3mail", "AKIA1234567890123", "", ""); return e },
+		"ohne Key":      func() error { _, e := WriteCredentials("s3mail", "", "geheim", ""); return e },
+		"kein AKIA":     func() error { _, e := WriteCredentials("s3mail", "XYZ1234567890123", "geheim", ""); return e },
+		"zu kurzer Key": func() error { _, e := WriteCredentials("s3mail", "AKIA123", "geheim", ""); return e },
 	} {
 		if err := f(); err == nil {
 			t.Errorf("%s: durchgelassen", name)
@@ -136,7 +136,7 @@ func TestProfileLesen(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(awsDir, "config"),
 		[]byte("[default]\n[profile arbeit]\n[sso-session firma]\n"), 0o600)
 
-	p := Profile()
+	p := Profiles()
 	for _, muss := range []string{"default", "s3mail", "arbeit"} {
 		if !enthalten(p, muss) {
 			t.Errorf("%q fehlt in %v", muss, p)
@@ -150,12 +150,12 @@ func TestProfileLesen(t *testing.T) {
 	}
 }
 
-// TestPfadeSindPlattformgerecht - unter Windows darf nichts in einem ~/.config
+// TestPathsSuitThePlatform - unter Windows darf nichts in einem ~/.config
 // landen, das dort niemand sucht.
-func TestPfadeSindPlattformgerecht(t *testing.T) {
+func TestPathsSuitThePlatform(t *testing.T) {
 	os.Unsetenv("S3MAIL_CONFIG_DIR")
 	os.Unsetenv("S3MAIL_CACHE_DIR")
-	k, c := Verzeichnis(), CacheVerzeichnis()
+	k, c := Dir(), CacheDir()
 	if !strings.HasSuffix(k, "s3mail") || !strings.HasSuffix(c, "s3mail") {
 		t.Errorf("Verzeichnisse: %q %q", k, c)
 	}

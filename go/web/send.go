@@ -5,33 +5,33 @@ import (
 	"net/http"
 	"time"
 
-	"s3mail/assistent"
 	"s3mail/mailer"
+	"s3mail/wizard"
 )
 
-// Versender ist der Ausschnitt von SES, den der Server braucht.
-type Versender interface {
-	Senden(ctx context.Context, n mailer.Nachricht) (string, error)
+// Sender ist der Ausschnitt von SES, den der Server braucht.
+type Sender interface {
+	Send(ctx context.Context, n mailer.Message) (string, error)
 }
 
-// MitVersand schaltet Antworten und Weiterleiten frei. Ohne das laeuft s3mail im
+// WithSender schaltet Antworten und Weiterleiten frei. Ohne das laeuft s3mail im
 // reinen Lesemodus (--no-send).
-func (s *Server) MitVersand(v Versender, standardAbsender string) {
+func (s *Server) WithSender(v Sender, standardAbsender string) {
 	s.versender, s.standardAbsender = v, standardAbsender
 }
 
-// MitAssistent haengt die /api/setup/*-Routen an.
-func (s *Server) MitAssistent(a *assistent.Assistent) { s.assistent = a }
+// WithWizard haengt die /api/setup/*-Routen an.
+func (s *Server) WithWizard(a *wizard.Wizard) { s.wizard = a }
 
 func (s *Server) sendenRoute() {
 	s.mux.HandleFunc("POST /api/send", func(w http.ResponseWriter, r *http.Request) {
 		if s.versender == nil {
-			s.fehler(w, http.StatusBadRequest, "SES-Versand ist deaktiviert (--no-send)")
+			s.writeError(w, http.StatusBadRequest, "SES-Versand ist deaktiviert (--no-send)")
 			return
 		}
-		var e mailer.Entwurf
-		if err := jsonLesen(r, &e); err != nil {
-			s.fehler(w, http.StatusBadRequest, s.text(r, "error.badJson"))
+		var e mailer.Draft
+		if err := readJSON(r, &e); err != nil {
+			s.writeError(w, http.StatusBadRequest, s.text(r, "error.badJson"))
 			return
 		}
 		var o mailer.Original
@@ -51,12 +51,12 @@ func (s *Server) sendenRoute() {
 				}
 			}
 		}
-		n, err := mailer.Bauen(e, s.standardAbsender, o, time.Now())
+		n, err := mailer.Build(e, s.standardAbsender, o, time.Now())
 		if err != nil {
-			s.fehler(w, http.StatusBadRequest, err.Error())
+			s.writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		id, err := s.versender.Senden(r.Context(), n)
+		id, err := s.versender.Send(r.Context(), n)
 		if err != nil {
 			s.uebersetzen(w, err)
 			return
@@ -65,28 +65,28 @@ func (s *Server) sendenRoute() {
 	})
 }
 
-func (s *Server) assistentRouten() {
+func (s *Server) wizardRoutes() {
 	s.mux.HandleFunc("POST /api/setup/{aktion}", func(w http.ResponseWriter, r *http.Request) {
-		if s.assistent == nil {
-			s.fehler(w, http.StatusBadRequest, s.text(r, "error.noWizard"))
+		if s.wizard == nil {
+			s.writeError(w, http.StatusBadRequest, s.text(r, "error.noWizard"))
 			return
 		}
-		fn, da := s.assistent.Route(r.URL.Path)
+		fn, da := s.wizard.Route(r.URL.Path)
 		if !da {
-			s.fehler(w, http.StatusNotFound, s.text(r, "error.unknownAction"))
+			s.writeError(w, http.StatusNotFound, s.text(r, "error.unknownAction"))
 			return
 		}
-		var d assistent.Daten
-		if err := jsonLesen(r, &d); err != nil {
-			s.fehler(w, http.StatusBadRequest, s.text(r, "error.badJson"))
+		var d wizard.Data
+		if err := readJSON(r, &d); err != nil {
+			s.writeError(w, http.StatusBadRequest, s.text(r, "error.badJson"))
 			return
 		}
 		d.Sprache = s.language(r)
 		erg, err := fn(r.Context(), d)
 		if err != nil {
-			var eingabe assistent.Eingabefehler
-			if asEingabefehler(err, &eingabe) {
-				s.fehler(w, http.StatusBadRequest, eingabe.Text)
+			var eingabe wizard.InputError
+			if asInputError(err, &eingabe) {
+				s.writeError(w, http.StatusBadRequest, eingabe.Text)
 				return
 			}
 			s.uebersetzen(w, err)

@@ -65,7 +65,7 @@ func NewMailbox(ctx context.Context, s3 S3, kms KMS, bucket, root, cacheDir stri
 	if cacheDir != "" {
 		_ = os.MkdirAll(cacheDir, 0o700)
 		m.CacheFile = filepath.Join(cacheDir, slug+".json")
-		m.cacheLesen()
+		m.readCache()
 		m.inhalt = neuerBodyCache(filepath.Join(cacheDir, slug+".bodies"))
 	}
 	lokal := ""
@@ -88,11 +88,11 @@ func (m *Mailbox) Index() []core.Message {
 	return out
 }
 
-func (m *Mailbox) Suche(query string, o core.SearchOpts) []core.Message {
+func (m *Mailbox) Search(query string, o core.SearchOpts) []core.Message {
 	return core.Search(m.Index(), m.State.Data(), query, o)
 }
 
-func (m *Mailbox) Ordner() []core.FolderInfo {
+func (m *Mailbox) Folders() []core.FolderInfo {
 	return core.Folders(m.Index(), m.State.Data())
 }
 
@@ -124,7 +124,7 @@ func (m *Mailbox) Fetch(ctx context.Context, key string, headBytes int) ([]byte,
 	if err != nil {
 		return nil, err
 	}
-	if !IstUmschlag(obj.Meta) {
+	if !IsEnvelope(obj.Meta) {
 		if headBytes == 0 {
 			m.inhalt.schreiben(etag, obj.Body)
 		}
@@ -141,7 +141,7 @@ func (m *Mailbox) Fetch(ctx context.Context, key string, headBytes int) ([]byte,
 			return nil, err
 		}
 	}
-	klar, err := Entschluesseln(obj.Body, obj.Meta, m.kms)
+	klar, err := Decrypt(obj.Body, obj.Meta, m.kms)
 	if err == nil && headBytes == 0 {
 		// Entschluesselt zwischenspeichern: das spart beim naechsten Oeffnen den
 		// KMS-Aufruf mit, nicht nur den S3-GET. Der Zwischenspeicher liegt dafuer
@@ -152,11 +152,11 @@ func (m *Mailbox) Fetch(ctx context.Context, key string, headBytes int) ([]byte,
 	return klar, err
 }
 
-// CacheLeeren wirft die zwischengespeicherten Inhalte weg.
-func (m *Mailbox) CacheLeeren() { m.inhalt.Leeren() }
+// ClearCache wirft die zwischengespeicherten Inhalte weg.
+func (m *Mailbox) ClearCache() { m.inhalt.Leeren() }
 
-// Verschluesselt sagt, ob im Postfach client-seitig verschluesselte Objekte liegen.
-func (m *Mailbox) Verschluesselt() bool {
+// Encrypted sagt, ob im Postfach client-seitig verschluesselte Objekte liegen.
+func (m *Mailbox) Encrypted() bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.verschluesselt
@@ -164,7 +164,7 @@ func (m *Mailbox) Verschluesselt() bool {
 
 // -- Indexieren ------------------------------------------------------------- //
 
-type RefreshErgebnis struct {
+type RefreshResult struct {
 	Geprueft int `json:"geprueft"`
 	Neu      int `json:"neu"`
 	Entfernt int `json:"entfernt"`
@@ -173,12 +173,12 @@ type RefreshErgebnis struct {
 // Refresh listet den Bucket, holt zu jeder neuen oder geaenderten Mail den Anfang
 // und baut daraus den Index. Abgeglichen wird ueber ETags, es wird also nur
 // geholt, was sich wirklich geaendert hat.
-func (m *Mailbox) Refresh(ctx context.Context) (RefreshErgebnis, error) {
+func (m *Mailbox) Refresh(ctx context.Context) (RefreshResult, error) {
 	m.State.Load(ctx)
 
 	objs, err := m.s3.List(ctx, m.bucket, m.Root)
 	if err != nil {
-		return RefreshErgebnis{}, err
+		return RefreshResult{}, err
 	}
 	gelistet := make(map[string]ObjectInfo, len(objs))
 	for _, o := range objs {
@@ -214,7 +214,7 @@ func (m *Mailbox) Refresh(ctx context.Context) (RefreshErgebnis, error) {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			frisch[i] = m.zusammenfassen(ctx, o)
+			frisch[i] = m.summarize(ctx, o)
 		}(i, o)
 	}
 	wg.Wait()
@@ -224,14 +224,14 @@ func (m *Mailbox) Refresh(ctx context.Context) (RefreshErgebnis, error) {
 		m.index[msg.Key] = msg
 	}
 	m.mu.Unlock()
-	m.cacheSchreiben()
+	m.writeCache()
 
-	return RefreshErgebnis{Geprueft: len(gelistet), Neu: len(todo), Entfernt: entfernt}, nil
+	return RefreshResult{Geprueft: len(gelistet), Neu: len(todo), Entfernt: entfernt}, nil
 }
 
-// zusammenfassen baut den Indexeintrag. Eine kaputte Mail kippt nicht den Lauf -
+// summarize baut den Indexeintrag. Eine kaputte Mail kippt nicht den Lauf -
 // sie landet als Platzhalter im Index, damit sie sichtbar und verschiebbar bleibt.
-func (m *Mailbox) zusammenfassen(ctx context.Context, o ObjectInfo) core.Message {
+func (m *Mailbox) summarize(ctx context.Context, o ObjectInfo) core.Message {
 	basis := core.Message{
 		Key: o.Key, Mid: m.Mid(o.Key), Folder: m.FolderOf(o.Key),
 		ETag: o.ETag, Size: o.Size,
@@ -258,7 +258,7 @@ func (m *Mailbox) zusammenfassen(ctx context.Context, o ObjectInfo) core.Message
 
 // -- Verschieben / Loeschen ------------------------------------------------- //
 
-type MoveErgebnis struct {
+type MoveResult struct {
 	Key     string `json:"key"`
 	NewKey  string `json:"new_key"`
 	Folder  string `json:"folder"`
@@ -268,12 +268,12 @@ type MoveErgebnis struct {
 // Move kopiert und loescht - S3 kennt kein Umbenennen. Verschluesselung und
 // Speicherklasse des Originals werden dabei mitgenommen, sonst landete die Kopie
 // unter dem Standardschluessel des Buckets.
-func (m *Mailbox) Move(ctx context.Context, keys []string, folder string) ([]MoveErgebnis, error) {
+func (m *Mailbox) Move(ctx context.Context, keys []string, folder string) ([]MoveResult, error) {
 	ziel, err := core.ValidFolder(folder)
 	if err != nil {
 		return nil, err
 	}
-	var out []MoveErgebnis
+	var out []MoveResult
 	err = m.State.Batch(ctx, func() error {
 		for _, key := range keys {
 			if err := m.Own(key); err != nil {
@@ -286,13 +286,13 @@ func (m *Mailbox) Move(ctx context.Context, keys []string, folder string) ([]Mov
 				continue
 			}
 			if m.FolderOf(key) == ziel {
-				out = append(out, MoveErgebnis{Key: key, NewKey: key, Skipped: true})
+				out = append(out, MoveResult{Key: key, NewKey: key, Skipped: true})
 				continue
 			}
 			mid := m.Mid(key)
-			neuerKey, neueMid := m.freierKey(mid, ziel)
+			neuerKey, neueMid := m.freeKey(mid, ziel)
 
-			if err := m.s3.Copy(ctx, m.bucket, key, neuerKey, m.kopierOpts(ctx, key)); err != nil {
+			if err := m.s3.Copy(ctx, m.bucket, key, neuerKey, m.copyOpts(ctx, key)); err != nil {
 				return err
 			}
 			if err := m.s3.Delete(ctx, m.bucket, key); err != nil {
@@ -309,16 +309,16 @@ func (m *Mailbox) Move(ctx context.Context, keys []string, folder string) ([]Mov
 					return err
 				}
 			}
-			out = append(out, MoveErgebnis{Key: key, NewKey: neuerKey, Folder: ziel})
+			out = append(out, MoveResult{Key: key, NewKey: neuerKey, Folder: ziel})
 		}
 		return nil
 	})
-	m.cacheSchreiben()
+	m.writeCache()
 	return out, err
 }
 
-// freierKey entschaerft eine Namenskollision im Zielordner.
-func (m *Mailbox) freierKey(mid, ziel string) (string, string) {
+// freeKey entschaerft eine Namenskollision im Zielordner.
+func (m *Mailbox) freeKey(mid, ziel string) (string, string) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	kandidat, _ := m.KeyFor(mid, ziel)
@@ -334,8 +334,8 @@ func (m *Mailbox) freierKey(mid, ziel string) (string, string) {
 	}
 }
 
-// kopierOpts liest die Verschluesselungseinstellung des Originals.
-func (m *Mailbox) kopierOpts(ctx context.Context, key string) CopyOpts {
+// copyOpts liest die Verschluesselungseinstellung des Originals.
+func (m *Mailbox) copyOpts(ctx context.Context, key string) CopyOpts {
 	head, err := m.s3.Head(ctx, m.bucket, key)
 	if err != nil {
 		return CopyOpts{}
@@ -379,7 +379,7 @@ func (m *Mailbox) Delete(ctx context.Context, keys []string, force bool) (int, e
 		}
 		return nil
 	})
-	m.cacheSchreiben()
+	m.writeCache()
 	return n, err
 }
 
@@ -438,7 +438,7 @@ func (m *Mailbox) ApplyRules(ctx context.Context, pool []core.Message, force boo
 
 // -- Zwischenspeicher ------------------------------------------------------- //
 
-func (m *Mailbox) cacheLesen() {
+func (m *Mailbox) readCache() {
 	blob, err := os.ReadFile(m.CacheFile)
 	if err != nil {
 		return
@@ -452,7 +452,7 @@ func (m *Mailbox) cacheLesen() {
 	}
 }
 
-func (m *Mailbox) cacheSchreiben() {
+func (m *Mailbox) writeCache() {
 	if m.CacheFile == "" {
 		return
 	}

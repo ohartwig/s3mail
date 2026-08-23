@@ -27,7 +27,7 @@ func (s *Server) MitSperrliste(l Sperrliste) { s.sperrliste = l }
 func (s *Server) sperrlistenRouten() {
 	s.mux.HandleFunc("GET /api/blocked", func(w http.ResponseWriter, r *http.Request) {
 		if s.sperrliste == nil {
-			s.fehler(w, http.StatusBadRequest, s.text(r, "error.noBlocklist"))
+			s.writeError(w, http.StatusBadRequest, s.text(r, "error.noBlocklist"))
 			return
 		}
 		liste, err := s.sperrliste.Lesen(r.Context())
@@ -38,22 +38,22 @@ func (s *Server) sperrlistenRouten() {
 		s.json(w, http.StatusOK, map[string]any{"blocked": liste})
 	})
 
-	s.post("/api/block", func(w http.ResponseWriter, r *http.Request, a anfrage) {
+	s.post("/api/block", func(w http.ResponseWriter, r *http.Request, a request) {
 		s.sperrlisteAendern(w, r, a, true)
 	})
-	s.post("/api/unblock", func(w http.ResponseWriter, r *http.Request, a anfrage) {
+	s.post("/api/unblock", func(w http.ResponseWriter, r *http.Request, a request) {
 		s.sperrlisteAendern(w, r, a, false)
 	})
 }
 
-func (s *Server) sperrlisteAendern(w http.ResponseWriter, r *http.Request, a anfrage, sperren bool) {
+func (s *Server) sperrlisteAendern(w http.ResponseWriter, r *http.Request, a request, sperren bool) {
 	if s.sperrliste == nil {
-		s.fehler(w, http.StatusBadRequest, s.text(r, "error.noBlocklist"))
+		s.writeError(w, http.StatusBadRequest, s.text(r, "error.noBlocklist"))
 		return
 	}
 	adresse := adresseAus(a.Address)
 	if adresse == "" {
-		s.fehler(w, http.StatusBadRequest, s.text(r, "error.noAddress"))
+		s.writeError(w, http.StatusBadRequest, s.text(r, "error.noAddress"))
 		return
 	}
 	var err error

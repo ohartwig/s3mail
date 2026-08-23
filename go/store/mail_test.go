@@ -31,7 +31,7 @@ func postfachBauen(t *testing.T) (*s3fake.Fake, *store.Mailbox) {
 	return f, m
 }
 
-func TestIndexUndOrdner(t *testing.T) {
+func TestIndexAndFolders(t *testing.T) {
 	ctx := context.Background()
 	_, m := postfachBauen(t)
 	erg, err := m.Refresh(ctx)
@@ -50,7 +50,7 @@ func TestIndexUndOrdner(t *testing.T) {
 		t.Errorf("Betreff nicht geparst: %q", got)
 	}
 	nach := map[string]core.FolderInfo{}
-	for _, o := range m.Ordner() {
+	for _, o := range m.Folders() {
 		nach[o.Name] = o
 	}
 	if nach[core.Inbox].Count != 2 || nach[core.Archive].Count != 1 {
@@ -58,8 +58,8 @@ func TestIndexUndOrdner(t *testing.T) {
 	}
 }
 
-// TestZustandUndOpsSindKeineMail - sonst tauchen sie als Nachricht auf.
-func TestZustandUndOpsSindKeineMail(t *testing.T) {
+// TestStateAndOpsAreNotMail - sonst tauchen sie als Nachricht auf.
+func TestStateAndOpsAreNotMail(t *testing.T) {
 	ctx := context.Background()
 	_, m := postfachBauen(t)
 	if _, err := m.Refresh(ctx); err != nil {
@@ -76,14 +76,14 @@ func TestZustandUndOpsSindKeineMail(t *testing.T) {
 			t.Errorf("interner Schluessel im Index: %s", msg.Key)
 		}
 	}
-	for _, o := range m.Ordner() {
+	for _, o := range m.Folders() {
 		if strings.HasPrefix(o.Name, ".") {
 			t.Errorf("interner Ordner in der Seitenleiste: %s", o.Name)
 		}
 	}
 }
 
-func TestVerschiebenNimmtZustandMit(t *testing.T) {
+func TestMoveCarriesTheState(t *testing.T) {
 	ctx := context.Background()
 	f, m := postfachBauen(t)
 	if _, err := m.Refresh(ctx); err != nil {
@@ -110,7 +110,7 @@ func TestVerschiebenNimmtZustandMit(t *testing.T) {
 	}
 }
 
-func TestVerschiebenErbtVerschluesselung(t *testing.T) {
+func TestMoveInheritsEncryption(t *testing.T) {
 	ctx := context.Background()
 	f, m := postfachBauen(t)
 	f.SSE["mail/m1"] = store.CopyOpts{ServerSideEncryption: "aws:kms",
@@ -130,7 +130,7 @@ func TestVerschiebenErbtVerschluesselung(t *testing.T) {
 	}
 }
 
-func TestVerschiebenPruefungen(t *testing.T) {
+func TestMoveChecks(t *testing.T) {
 	ctx := context.Background()
 	_, m := postfachBauen(t)
 	if _, err := m.Refresh(ctx); err != nil {
@@ -152,7 +152,7 @@ func TestVerschiebenPruefungen(t *testing.T) {
 	}
 }
 
-func TestNamenskollision(t *testing.T) {
+func TestNameCollision(t *testing.T) {
 	ctx := context.Background()
 	f, m := postfachBauen(t)
 	f.Objs["mail/archiv/m1"] = mailBauen("X <x@y.de>", "post@firma.de", "Kollision",
@@ -172,8 +172,8 @@ func TestNamenskollision(t *testing.T) {
 	}
 }
 
-// TestLoeschenNurAusPapierkorb - die Pruefung sitzt im Store, nicht in der UI.
-func TestLoeschenNurAusPapierkorb(t *testing.T) {
+// TestDeleteOnlyFromTrash - die Pruefung sitzt im Store, nicht in der UI.
+func TestDeleteOnlyFromTrash(t *testing.T) {
 	ctx := context.Background()
 	_, m := postfachBauen(t)
 	if _, err := m.Refresh(ctx); err != nil {
@@ -194,7 +194,7 @@ func TestLoeschenNurAusPapierkorb(t *testing.T) {
 	}
 }
 
-func TestLoeschenGesperrt(t *testing.T) {
+func TestDeleteBlocked(t *testing.T) {
 	ctx := context.Background()
 	f := s3fake.Neu()
 	f.Objs["mail/trash/m1"] = mailBauen("a@b.de", "c@d.de", "x", "y",
@@ -208,9 +208,9 @@ func TestLoeschenGesperrt(t *testing.T) {
 	}
 }
 
-// TestVerschluesseltKeinTeilstueck - ein halbes Chiffrat laesst sich nicht
+// TestEncryptedMeansNoRangeGet - ein halbes Chiffrat laesst sich nicht
 // entschluesseln, also muss der Range-GET wegfallen, sobald so ein Objekt auftaucht.
-func TestVerschluesseltKeinTeilstueck(t *testing.T) {
+func TestEncryptedMeansNoRangeGet(t *testing.T) {
 	ctx := context.Background()
 	plain, faelle := umschlaegeLaden(t)
 	f := s3fake.Neu()
@@ -226,7 +226,7 @@ func TestVerschluesseltKeinTeilstueck(t *testing.T) {
 	if string(roh) != string(plain) {
 		t.Error("Klartext weicht ab")
 	}
-	if !m.Verschluesselt() {
+	if !m.Encrypted() {
 		t.Error("Postfach nicht als verschluesselt gemerkt")
 	}
 	// zweiter Zugriff darf gar keinen Range mehr schicken
@@ -241,7 +241,7 @@ func TestVerschluesseltKeinTeilstueck(t *testing.T) {
 	}
 }
 
-func TestVerschluesseltOhneRechteKipptNurDieseMail(t *testing.T) {
+func TestEncryptedWithoutPermissionFailsOnlyThatMail(t *testing.T) {
 	ctx := context.Background()
 	_, faelle := umschlaegeLaden(t)
 	f := s3fake.Neu()
@@ -268,7 +268,7 @@ func TestVerschluesseltOhneRechteKipptNurDieseMail(t *testing.T) {
 	}
 }
 
-func TestRegelnBeimIndexieren(t *testing.T) {
+func TestRulesWhileIndexing(t *testing.T) {
 	ctx := context.Background()
 	_, m := postfachBauen(t)
 	archiv := core.Archive
@@ -301,7 +301,7 @@ func TestRegelnBeimIndexieren(t *testing.T) {
 	}
 }
 
-func TestZwischenspeicherSpartRequests(t *testing.T) {
+func TestCacheSavesRequests(t *testing.T) {
 	ctx := context.Background()
 	f, m := postfachBauen(t)
 	if _, err := m.Refresh(ctx); err != nil {
@@ -322,10 +322,10 @@ func TestZwischenspeicherSpartRequests(t *testing.T) {
 	}
 }
 
-// TestInhaltAusDemZwischenspeicher - eine Mail zum zweiten Mal zu oeffnen darf
+// TestBodyFromTheCache - eine Mail zum zweiten Mal zu oeffnen darf
 // keinen S3-Zugriff mehr kosten. Der Index lag schon immer lokal, der Inhalt
 // nicht: bisher wurde jede geoeffnete Mail samt Anhaengen erneut geholt.
-func TestInhaltAusDemZwischenspeicher(t *testing.T) {
+func TestBodyFromTheCache(t *testing.T) {
 	ctx := context.Background()
 	f, m := postfachBauen(t)
 	if _, err := m.Refresh(ctx); err != nil {
@@ -351,9 +351,9 @@ func TestInhaltAusDemZwischenspeicher(t *testing.T) {
 	}
 }
 
-// TestZwischenspeicherHaengtAmETag - aendert sich das Objekt, muss der Eintrag
+// TestCacheHangsOnTheETag - aendert sich das Objekt, muss der Eintrag
 // verfallen. Sonst zeigt s3mail nach einem Wechsel des Inhalts die alte Fassung.
-func TestZwischenspeicherHaengtAmETag(t *testing.T) {
+func TestCacheHangsOnTheETag(t *testing.T) {
 	ctx := context.Background()
 	f, m := postfachBauen(t)
 	if _, err := m.Refresh(ctx); err != nil {
@@ -376,9 +376,9 @@ func TestZwischenspeicherHaengtAmETag(t *testing.T) {
 	}
 }
 
-// TestTeilstueckeWerdenNichtZwischengespeichert - ein gespeichertes Teilstueck
+// TestPartialFetchesAreNotCached - ein gespeichertes Teilstueck
 // waere beim naechsten Oeffnen eine abgeschnittene Mail, ohne dass es auffaellt.
-func TestTeilstueckeWerdenNichtZwischengespeichert(t *testing.T) {
+func TestPartialFetchesAreNotCached(t *testing.T) {
 	ctx := context.Background()
 	f, m := postfachBauen(t)
 	if _, err := m.Refresh(ctx); err != nil { // holt nur HeaderChunk

@@ -29,7 +29,7 @@ func zustandBauen(t *testing.T, f *s3fake.Fake) *store.State {
 		n++
 		return time.Date(2026, 8, 21, 10, 0, n, 0, time.UTC)
 	}
-	s.SetInstanz(fmt.Sprintf("%012x", instanzZaehler.Add(1)))
+	s.SetInstance(fmt.Sprintf("%012x", instanzZaehler.Add(1)))
 	return s
 }
 
@@ -48,9 +48,9 @@ func snapshot(t *testing.T, f *s3fake.Fake) *core.Data {
 	return d.Normalize()
 }
 
-// TestEineAenderungEinKleinesOp - der Kern des Umbaus: nicht das ganze Dokument,
+// TestOneChangeOneSmallOp - der Kern des Umbaus: nicht das ganze Dokument,
 // sondern die Aenderung.
-func TestEineAenderungEinKleinesOp(t *testing.T) {
+func TestOneChangeOneSmallOp(t *testing.T) {
 	ctx := context.Background()
 	f := s3fake.Neu()
 	s := zustandBauen(t, f)
@@ -73,8 +73,8 @@ func TestEineAenderungEinKleinesOp(t *testing.T) {
 	}
 }
 
-// TestZweiRechnerKeinKonflikt - beide schreiben, keiner ueberschreibt.
-func TestZweiRechnerKeinKonflikt(t *testing.T) {
+// TestTwoMachinesNoConflict - beide schreiben, keiner ueberschreibt.
+func TestTwoMachinesNoConflict(t *testing.T) {
 	ctx := context.Background()
 	f := s3fake.Neu()
 	a, b := zustandBauen(t, f), zustandBauen(t, f)
@@ -121,9 +121,9 @@ func TestZusammenfassen(t *testing.T) {
 	}
 }
 
-// TestWasserstandUeberspringtEingearbeitetes - genau dafuer gibt es den
+// TestWatermarkSkipsWhatIsAlreadyIn - genau dafuer gibt es den
 // Wasserstand: ein liegengebliebenes Op darf nicht ein zweites Mal wirken.
-func TestWasserstandUeberspringtEingearbeitetes(t *testing.T) {
+func TestWatermarkSkipsWhatIsAlreadyIn(t *testing.T) {
 	ctx := context.Background()
 	f := s3fake.Neu()
 	s := zustandBauen(t, f)
@@ -149,7 +149,7 @@ func TestWasserstandUeberspringtEingearbeitetes(t *testing.T) {
 	}
 }
 
-func TestBatchSchreibtEinmal(t *testing.T) {
+func TestBatchWritesOnce(t *testing.T) {
 	ctx := context.Background()
 	f := s3fake.Neu()
 	s := zustandBauen(t, f)
@@ -206,7 +206,7 @@ func TestSchreibfehlerBehaeltAenderung(t *testing.T) {
 	}
 }
 
-func TestLokalerRueckfall(t *testing.T) {
+func TestLocalFallback(t *testing.T) {
 	ctx := context.Background()
 	f := s3fake.Neu()
 	lokal := filepath.Join(t.TempDir(), "state.json")

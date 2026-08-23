@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"s3mail/konfig"
+	"s3mail/config"
 )
 
 // starteProtokoll oeffnet die Datei, in der der Start festgehalten wird.
@@ -17,7 +17,7 @@ import (
 // der Nutzer vor einem Programm, das scheinbar nichts tut. Die Datei ist die
 // einzige Spur, die er uns schicken kann.
 func starteProtokoll() io.WriteCloser {
-	dir := konfig.Verzeichnis()
+	dir := config.Dir()
 	if os.MkdirAll(dir, 0o700) != nil {
 		return nopCloser{io.Discard}
 	}

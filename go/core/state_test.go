@@ -37,8 +37,8 @@ func lauf(ops []Op, wiederholungen int) *Data {
 	return d
 }
 
-// TestOpsGegenPython: dieselbe Op-Folge, dasselbe Ergebnis wie in Python.
-func TestOpsGegenPython(t *testing.T) {
+// TestOpsAgainstPython: dieselbe Op-Folge, dasselbe Ergebnis wie in Python.
+func TestOpsAgainstPython(t *testing.T) {
 	ops, want := opsLaden(t)
 	got := lauf(ops, 1)
 
@@ -68,11 +68,11 @@ func TestOpsGegenPython(t *testing.T) {
 	}
 }
 
-// TestOpsIdempotent ist die Invariante, auf der der Wasserstand ruht: ein
+// TestOpsAreIdempotent ist die Invariante, auf der der Wasserstand ruht: ein
 // Op-Objekt, das beim Aufraeumen liegenbleibt und ein zweites Mal angewandt wird,
 // darf nichts veraendern. Faellt dieser Test, ist das Op-Log-Design kaputt - nicht
 // nur dieser Test.
-func TestOpsIdempotent(t *testing.T) {
+func TestOpsAreIdempotent(t *testing.T) {
 	ops, _ := opsLaden(t)
 	einmal, zweimal := lauf(ops, 1), lauf(ops, 2)
 	if !reflect.DeepEqual(einmal, zweimal) {
@@ -82,8 +82,8 @@ func TestOpsIdempotent(t *testing.T) {
 	}
 }
 
-// TestOpsEinzelnIdempotent zeigt genauer, welche Operation es waere.
-func TestOpsEinzelnIdempotent(t *testing.T) {
+// TestOpsAreIdempotentIndividually zeigt genauer, welche Operation es waere.
+func TestOpsAreIdempotentIndividually(t *testing.T) {
 	ops, _ := opsLaden(t)
 	for i, op := range ops {
 		basis := lauf(ops[:i], 1)
@@ -110,10 +110,10 @@ func klon(t *testing.T, d *Data) *Data {
 	return out.Normalize()
 }
 
-// TestZweiRechner bildet den Fall nach, fuer den es das Op-Log ueberhaupt gibt:
+// TestTwoMachines bildet den Fall nach, fuer den es das Op-Log ueberhaupt gibt:
 // zwei Rechner mit demselben Ausgangsstand aendern verschiedene Mails, danach
 // dieselbe. Nichts darf verlorengehen.
-func TestZweiRechner(t *testing.T) {
+func TestTwoMachines(t *testing.T) {
 	ausgang := NewData()
 	Apply(ausgang, Op{T: "tags", Mids: []string{"m1"}, Add: []string{"start"}})
 

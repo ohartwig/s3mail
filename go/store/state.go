@@ -77,7 +77,7 @@ func NewState(ctx context.Context, s3 S3, bucket, root, localFile string) *State
 		localFile: localFile,
 		data:      core.NewData(),
 		remoteOK:  true,
-		instanz:   InstanzKennung(),
+		instanz:   InstanceID(),
 		Now:       func() time.Time { return time.Now().UTC() },
 		Workers:   holWorkers,
 	}
@@ -85,10 +85,10 @@ func NewState(ctx context.Context, s3 S3, bucket, root, localFile string) *State
 	return st
 }
 
-// InstanzKennung ist pro State einmalig. Sechs Zufallsbytes aus crypto/rand -
+// InstanceID ist pro State einmalig. Sechs Zufallsbytes aus crypto/rand -
 // damit stossen zwei Rechner auch dann nicht zusammen, wenn ihre Uhren auf die
 // Mikrosekunde genau gleich stehen.
-func InstanzKennung() string {
+func InstanceID() string {
 	b := make([]byte, 6)
 	if _, err := rand.Read(b); err != nil {
 		return "000000000000"
@@ -96,8 +96,8 @@ func InstanzKennung() string {
 	return hex.EncodeToString(b)
 }
 
-// SetInstanz ist fuer Tests, die zwei Rechner nachstellen.
-func (s *State) SetInstanz(k string) { s.instanz = k }
+// SetInstance ist fuer Tests, die zwei Rechner nachstellen.
+func (s *State) SetInstance(k string) { s.instanz = k }
 
 // Data gibt eine Momentaufnahme heraus. Aufrufer duerfen sie lesen, nicht aendern.
 func (s *State) Data() *core.Data {

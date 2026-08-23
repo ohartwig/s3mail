@@ -18,8 +18,8 @@ import (
 	"time"
 )
 
-// Entwurf ist, was die Oberflaeche schickt.
-type Entwurf struct {
+// Draft ist, was die Oberflaeche schickt.
+type Draft struct {
 	Mode    string `json:"mode"` // "reply", "forward" oder "new"
 	Key     string `json:"key"`
 	From    string `json:"from"`
@@ -37,8 +37,8 @@ type Original struct {
 	Roh        []byte // fuer das Weiterleiten als .eml
 }
 
-// Nachricht ist die fertige Mail samt Empfaengerliste.
-type Nachricht struct {
+// Message ist die fertige Mail samt Empfaengerliste.
+type Message struct {
 	Roh        []byte
 	Absender   string
 	Empfaenger []string
@@ -49,25 +49,25 @@ var (
 	ErrKeinEmpfaenger = errors.New("kein Empfaenger angegeben")
 )
 
-// Bauen setzt die Mail zusammen.
-func Bauen(e Entwurf, standardAbsender string, o Original, jetzt time.Time) (Nachricht, error) {
+// Build setzt die Mail zusammen.
+func Build(e Draft, standardAbsender string, o Original, jetzt time.Time) (Message, error) {
 	absender := strings.TrimSpace(e.From)
 	if absender == "" {
 		absender = strings.TrimSpace(standardAbsender)
 	}
 	if absender == "" {
-		return Nachricht{}, ErrKeinAbsender
+		return Message{}, ErrKeinAbsender
 	}
-	an, err := adressen(e.To)
+	an, err := addresses(e.To)
 	if err != nil {
-		return Nachricht{}, err
+		return Message{}, err
 	}
-	kopie, err := adressen(e.Cc)
+	kopie, err := addresses(e.Cc)
 	if err != nil {
-		return Nachricht{}, err
+		return Message{}, err
 	}
 	if len(an) == 0 && len(kopie) == 0 {
-		return Nachricht{}, ErrKeinEmpfaenger
+		return Message{}, ErrKeinEmpfaenger
 	}
 
 	kopf := textproto.MIMEHeader{}
@@ -76,9 +76,9 @@ func Bauen(e Entwurf, standardAbsender string, o Original, jetzt time.Time) (Nac
 	if len(kopie) > 0 {
 		kopf.Set("Cc", strings.Join(kopie, ", "))
 	}
-	kopf.Set("Subject", kodiere(e.Subject))
+	kopf.Set("Subject", encodeWord(e.Subject))
 	kopf.Set("Date", jetzt.Format(time.RFC1123Z))
-	kopf.Set("Message-Id", neueMessageID(absender))
+	kopf.Set("Message-Id", newMessageID(absender))
 	kopf.Set("MIME-Version", "1.0")
 
 	// Beim Antworten die Faeden zusammenhalten: ohne In-Reply-To und References
@@ -91,8 +91,8 @@ func Bauen(e Entwurf, standardAbsender string, o Original, jetzt time.Time) (Nac
 
 	var koerper bytes.Buffer
 	if e.Mode == "forward" && len(o.Roh) > 0 {
-		if err := mitAnhang(&koerper, kopf, e.Body, o); err != nil {
-			return Nachricht{}, err
+		if err := withAttachment(&koerper, kopf, e.Body, o); err != nil {
+			return Message{}, err
 		}
 	} else {
 		kopf.Set("Content-Type", `text/plain; charset="utf-8"`)
@@ -101,16 +101,16 @@ func Bauen(e Entwurf, standardAbsender string, o Original, jetzt time.Time) (Nac
 	}
 
 	var roh bytes.Buffer
-	schreibeKopf(&roh, kopf)
+	writeHeader(&roh, kopf)
 	roh.WriteString("\r\n")
 	roh.Write(koerper.Bytes())
 
-	return Nachricht{Roh: roh.Bytes(), Absender: absender,
+	return Message{Roh: roh.Bytes(), Absender: absender,
 		Empfaenger: append(append([]string{}, an...), kopie...)}, nil
 }
 
-// mitAnhang haengt die weitergeleitete Mail als .eml an.
-func mitAnhang(koerper *bytes.Buffer, kopf textproto.MIMEHeader, text string, o Original) error {
+// withAttachment haengt die weitergeleitete Mail als .eml an.
+func withAttachment(koerper *bytes.Buffer, kopf textproto.MIMEHeader, text string, o Original) error {
 	mw := multipart.NewWriter(koerper)
 	kopf.Set("Content-Type", `multipart/mixed; boundary="`+mw.Boundary()+`"`)
 
@@ -145,7 +145,7 @@ func mitAnhang(koerper *bytes.Buffer, kopf textproto.MIMEHeader, text string, o 
 	return mw.Close()
 }
 
-func schreibeKopf(w *bytes.Buffer, kopf textproto.MIMEHeader) {
+func writeHeader(w *bytes.Buffer, kopf textproto.MIMEHeader) {
 	// feste Reihenfolge, damit die Ausgabe reproduzierbar ist
 	for _, name := range []string{"From", "To", "Cc", "Subject", "Date", "Message-Id",
 		"In-Reply-To", "References", "MIME-Version", "Content-Type",
@@ -156,8 +156,8 @@ func schreibeKopf(w *bytes.Buffer, kopf textproto.MIMEHeader) {
 	}
 }
 
-// adressen zerlegt eine Empfaengerliste und liefert die reinen Adressen.
-func adressen(s string) ([]string, error) {
+// addresses zerlegt eine Empfaengerliste und liefert die reinen Adressen.
+func addresses(s string) ([]string, error) {
 	if strings.TrimSpace(s) == "" {
 		return nil, nil
 	}
@@ -172,8 +172,8 @@ func adressen(s string) ([]string, error) {
 	return out, nil
 }
 
-// kodiere macht aus einem Betreff mit Umlauten einen RFC-2047-Header.
-func kodiere(s string) string {
+// encodeWord macht aus einem Betreff mit Umlauten einen RFC-2047-Header.
+func encodeWord(s string) string {
 	for _, r := range s {
 		if r > 127 {
 			return mime.QEncoding.Encode("utf-8", s)
@@ -182,7 +182,7 @@ func kodiere(s string) string {
 	return s
 }
 
-func neueMessageID(absender string) string {
+func newMessageID(absender string) string {
 	b := make([]byte, 12)
 	_, _ = rand.Read(b)
 	domain := "s3mail.local"

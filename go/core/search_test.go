@@ -28,9 +28,9 @@ func laden(t *testing.T) ([]Message, *Data) {
 	return index, data.Normalize()
 }
 
-// TestSucheGegenPython faehrt dieselben Abfragen wie die Python-Fassung und
+// TestSearchAgainstPython faehrt dieselben Abfragen wie die Python-Fassung und
 // vergleicht Treffer *und* Reihenfolge.
-func TestSucheGegenPython(t *testing.T) {
+func TestSearchAgainstPython(t *testing.T) {
 	index, data := laden(t)
 	blob, err := os.ReadFile(filepath.Join("testdata", "searches.json"))
 	if err != nil {
@@ -88,9 +88,9 @@ func TestSuchOptionen(t *testing.T) {
 	}
 }
 
-// TestSortierungNeuesteZuerst - die Liste haengt daran, dass Date als Text
+// TestSortingNewestFirst - die Liste haengt daran, dass Date als Text
 // sortierbar ist (RFC 3339 in UTC).
-func TestSortierungNeuesteZuerst(t *testing.T) {
+func TestSortingNewestFirst(t *testing.T) {
 	index, data := laden(t)
 	hits := Search(index, data, "", SearchOpts{})
 	for i := 1; i < len(hits); i++ {

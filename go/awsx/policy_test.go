@@ -22,7 +22,7 @@ const postfachPolicy = `{
      "Action":["ses:ListIdentities","ses:GetIdentityVerificationAttributes"],"Resource":"*"}
   ]}`
 
-func TestPostfachPolicyGibtAllesHer(t *testing.T) {
+func TestMailboxPolicyYieldsEverything(t *testing.T) {
 	f := ausPolicies([]string{url.QueryEscape(postfachPolicy)})
 	if f.Bucket != "koh-findready-mail" {
 		t.Errorf("Bucket = %q", f.Bucket)
@@ -33,19 +33,19 @@ func TestPostfachPolicyGibtAllesHer(t *testing.T) {
 	if f.Absender != "ole@findready.ai" {
 		t.Errorf("Absender = %q", f.Absender)
 	}
-	if !f.Vollstaendig() {
+	if !f.Complete() {
 		t.Error("Fund gilt als unvollstaendig, obwohl Bucket und Prefix da sind")
 	}
 }
 
-func TestUnkodiertesDokumentGehtAuch(t *testing.T) {
+func TestUnencodedDocumentWorksToo(t *testing.T) {
 	// GetPolicyVersion liefert je nach Weg kodiert oder nicht.
 	if f := ausPolicies([]string{postfachPolicy}); f.Prefix != "mail/ole/" {
 		t.Errorf("Prefix = %q", f.Prefix)
 	}
 }
 
-func TestDerGenauerePrefixGewinnt(t *testing.T) {
+func TestTheMoreSpecificPrefixWins(t *testing.T) {
 	// Ein Verwalter-Zugang darf den ganzen Bucket und trotzdem ein Postfach.
 	doc := `{"Statement":[
 	 {"Effect":"Allow","Action":"s3:GetObject","Resource":"arn:aws:s3:::b/*"},
@@ -56,7 +56,7 @@ func TestDerGenauerePrefixGewinnt(t *testing.T) {
 	}
 }
 
-func TestDenyWirdNichtAlsHinweisGelesen(t *testing.T) {
+func TestDenyIsNotReadAsGuidance(t *testing.T) {
 	// Sonst schluege die Bucket-Policy, die fremde Postfaecher verbietet, als
 	// Vorschlag durch - der Zugang landete im Postfach eines anderen.
 	doc := `{"Statement":[{"Effect":"Deny","Action":"s3:GetObject",
@@ -66,7 +66,7 @@ func TestDenyWirdNichtAlsHinweisGelesen(t *testing.T) {
 	}
 }
 
-func TestPlatzhalterTaugenNichtAlsVorschlag(t *testing.T) {
+func TestPlaceholdersAreNoSuggestion(t *testing.T) {
 	doc := `{"Statement":[
 	 {"Effect":"Allow","Action":"s3:GetObject","Resource":"arn:aws:s3:::*/mail/*"},
 	 {"Effect":"Allow","Action":"ses:SendEmail","Resource":"*",
@@ -80,7 +80,7 @@ func TestPlatzhalterTaugenNichtAlsVorschlag(t *testing.T) {
 	}
 }
 
-func TestPrefixOhneSchraegstrichWirdAufDenOrdnerGekuerzt(t *testing.T) {
+func TestPrefixWithoutSlashIsCutToTheFolder(t *testing.T) {
 	// "mail/ole" ohne Schraegstrich ist fuer s3:prefix etwas anderes als
 	// "mail/ole/" - und genau daran scheiterte das Auflisten im ersten Versuch.
 	doc := `{"Statement":[{"Effect":"Allow","Action":"s3:GetObject",
@@ -90,7 +90,7 @@ func TestPrefixOhneSchraegstrichWirdAufDenOrdnerGekuerzt(t *testing.T) {
 	}
 }
 
-func TestEinzelnesStatementOhneListe(t *testing.T) {
+func TestSingleStatementWithoutList(t *testing.T) {
 	doc := `{"Statement":{"Effect":"Allow","Action":"s3:GetObject",
 	 "Resource":"arn:aws:s3:::b/mail/ole/*"}}`
 	if f := ausPolicies([]string{doc}); f.Bucket != "b" || f.Prefix != "mail/ole/" {
@@ -98,7 +98,7 @@ func TestEinzelnesStatementOhneListe(t *testing.T) {
 	}
 }
 
-func TestMuellFuehrtZuLeeremFund(t *testing.T) {
+func TestGarbageYieldsAnEmptyFinding(t *testing.T) {
 	for _, d := range []string{"", "kein json", "{}", `{"Statement":42}`} {
 		if f := ausPolicies([]string{d}); f.Bucket != "" || f.Absender != "" {
 			t.Errorf("%q ergab %+v", d, f)
@@ -106,7 +106,7 @@ func TestMuellFuehrtZuLeeremFund(t *testing.T) {
 	}
 }
 
-func TestBenutzerAusArn(t *testing.T) {
+func TestUserFromArn(t *testing.T) {
 	faelle := map[string]string{
 		"arn:aws:iam::1:user/koh-mail-ole":          "koh-mail-ole",
 		"arn:aws:iam::1:user/team/mail/ole":         "ole",
@@ -115,7 +115,7 @@ func TestBenutzerAusArn(t *testing.T) {
 		"": "",
 	}
 	for arn, will := range faelle {
-		if got := benutzerAusArn(arn); got != will {
+		if got := userFromArn(arn); got != will {
 			t.Errorf("%q -> %q, erwartet %q", arn, got, will)
 		}
 	}

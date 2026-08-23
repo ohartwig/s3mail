@@ -19,7 +19,7 @@ import (
 // S3 setzt store.S3 auf das AWS-SDK um.
 type S3 struct{ c *s3.Client }
 
-func NeuS3(cfg aws.Config, endpunkt string) *S3 {
+func NewS3(cfg aws.Config, endpunkt string) *S3 {
 	return &S3{c: s3.NewFromConfig(cfg, func(o *s3.Options) {
 		if endpunkt != "" { // fuer Tests und S3-Klone
 			o.BaseEndpoint = aws.String(endpunkt)
@@ -37,7 +37,7 @@ func (a *S3) List(ctx context.Context, bucket, prefix string) ([]store.ObjectInf
 	for p.HasMorePages() {
 		seite, err := p.NextPage(ctx)
 		if err != nil {
-			return nil, uebersetzen(err)
+			return nil, translateError(err)
 		}
 		for _, o := range seite.Contents {
 			out = append(out, store.ObjectInfo{
@@ -58,7 +58,7 @@ func (a *S3) Get(ctx context.Context, bucket, key, byteRange string) (store.Obje
 	}
 	resp, err := a.c.GetObject(ctx, in)
 	if err != nil {
-		return store.Object{}, uebersetzen(err)
+		return store.Object{}, translateError(err)
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
@@ -73,7 +73,7 @@ func (a *S3) Head(ctx context.Context, bucket, key string) (store.Head, error) {
 	resp, err := a.c.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(bucket), Key: aws.String(key)})
 	if err != nil {
-		return store.Head{}, uebersetzen(err)
+		return store.Head{}, translateError(err)
 	}
 	return store.Head{
 		Meta:                 resp.Metadata,
@@ -93,13 +93,13 @@ func (a *S3) Put(ctx context.Context, bucket, key string, body []byte, contentTy
 		in.ContentType = aws.String(contentType)
 	}
 	_, err := a.c.PutObject(ctx, in)
-	return uebersetzen(err)
+	return translateError(err)
 }
 
 func (a *S3) Delete(ctx context.Context, bucket, key string) error {
 	_, err := a.c.DeleteObject(ctx, &s3.DeleteObjectInput{
 		Bucket: aws.String(bucket), Key: aws.String(key)})
-	return uebersetzen(err)
+	return translateError(err)
 }
 
 // Copy nimmt Verschluesselung und Speicherklasse des Originals mit - sonst landete
@@ -123,12 +123,12 @@ func (a *S3) Copy(ctx context.Context, bucket, srcKey, dstKey string, o store.Co
 		in.StorageClass = types.StorageClass(o.StorageClass)
 	}
 	_, err := a.c.CopyObject(ctx, in)
-	return uebersetzen(err)
+	return translateError(err)
 }
 
-// uebersetzen macht aus einem fehlenden Objekt store.ErrNichtGefunden, damit die
+// translateError macht aus einem fehlenden Objekt store.ErrNichtGefunden, damit die
 // Schichten darueber nicht auf AWS-Typen angewiesen sind.
-func uebersetzen(err error) error {
+func translateError(err error) error {
 	if err == nil {
 		return nil
 	}

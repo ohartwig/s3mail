@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"s3mail/assistent"
 	"s3mail/s3fake"
 	"s3mail/store"
+	"s3mail/wizard"
 )
 
 const testToken = "test-token-123"
@@ -99,7 +99,7 @@ func rufen(t *testing.T, ts *httptest.Server, methode, pfad string, body string,
 	return ruf{resp.StatusCode, blob}
 }
 
-func TestPostfachRouten(t *testing.T) {
+func TestMailboxRoutes(t *testing.T) {
 	ts, mb := serverBauen(t)
 
 	d := rufen(t, ts, "GET", "/api/messages?folder=", "", nil).json(t)
@@ -141,7 +141,7 @@ func TestPostfachRouten(t *testing.T) {
 	_ = mb
 }
 
-func TestFehlercodes(t *testing.T) {
+func TestErrorCodes(t *testing.T) {
 	ts, _ := serverBauen(t)
 	faelle := []struct {
 		name, methode, pfad, body string
@@ -161,7 +161,7 @@ func TestFehlercodes(t *testing.T) {
 	}
 }
 
-func TestMailLesenUndAnhang(t *testing.T) {
+func TestReadMailAndAttachment(t *testing.T) {
 	ctx := context.Background()
 	f := s3fake.Neu()
 	f.Setzen("mail/m1", []byte("From: a@b.de\r\nTo: c@d.de\r\nSubject: Mit Anhang\r\n"+
@@ -202,8 +202,8 @@ func TestMailLesenUndAnhang(t *testing.T) {
 	}
 }
 
-// TestZugangskontrolle - dieselben drei Pruefungen wie in der Python-Fassung.
-func TestZugangskontrolle(t *testing.T) {
+// TestAccessControl - dieselben drei Pruefungen wie in der Python-Fassung.
+func TestAccessControl(t *testing.T) {
 	ts, _ := serverBauen(t)
 	ohne := map[string]string{"X-S3mail-Token": ""}
 
@@ -237,8 +237,8 @@ func TestZugangskontrolle(t *testing.T) {
 	}
 }
 
-// TestSeiteSetztCookie - daran haengen die Download-Links.
-func TestSeiteSetztCookie(t *testing.T) {
+// TestPageSetsCookie - daran haengen die Download-Links.
+func TestPageSetsCookie(t *testing.T) {
 	ts, _ := serverBauen(t)
 	req, _ := http.NewRequest("GET", ts.URL+"/?t="+testToken, nil)
 	resp, err := http.DefaultTransport.RoundTrip(req)
@@ -259,7 +259,7 @@ func TestSeiteSetztCookie(t *testing.T) {
 	}
 }
 
-func TestOberflaecheIstVollstaendig(t *testing.T) {
+func TestInterfaceIsComplete(t *testing.T) {
 	// Die Tokenseite ist seit der Uebersetzung ein Geruest: ihre Saetze stehen
 	// in den Katalogen, nicht in der Datei. Fuer sie zaehlt, dass die Vorlage
 	// da ist, nicht wie lang sie ist.
@@ -284,11 +284,11 @@ func TestOberflaecheIstVollstaendig(t *testing.T) {
 	}
 }
 
-// TestOhnePostfach - vor der Einrichtung gibt es kein Postfach. Die Routen
+// TestWithoutMailbox - vor der Einrichtung gibt es kein Postfach. Die Routen
 // duerfen dann nicht in einen Nil-Zeiger laufen.
-func TestOhnePostfach(t *testing.T) {
+func TestWithoutMailbox(t *testing.T) {
 	srv := NewServer(nil, testToken, "127.0.0.1", 0, nil)
-	srv.MitAssistent(&assistent.Assistent{})
+	srv.WithWizard(&wizard.Wizard{})
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
 	srv.Port = portVon(ts.URL)
@@ -330,9 +330,9 @@ func TestOhnePostfach(t *testing.T) {
 	}
 }
 
-// TestAutoAbgleichWirdAusgeliefert - der Takt kommt aus der Konfiguration; ohne
+// TestAutoRefreshIsShipped - der Takt kommt aus der Konfiguration; ohne
 // ihn stünde die Seite still und niemand saehe, dass es den Abgleich gibt.
-func TestAutoAbgleichWirdAusgeliefert(t *testing.T) {
+func TestAutoRefreshIsShipped(t *testing.T) {
 	ctx := context.Background()
 	f := s3fake.Neu()
 	f.Setzen("mail/m1", mailRoh("a@b.de", "x", "y", "Mon, 03 Aug 2026 09:00:00 +0000"))
@@ -361,10 +361,10 @@ func TestAutoAbgleichWirdAusgeliefert(t *testing.T) {
 	}
 }
 
-// TestSchreibenOhneVorlage - Antworten und Weiterleiten gab es von Anfang an,
+// TestComposeWithoutATemplate - Antworten und Weiterleiten gab es von Anfang an,
 // eine Mail ohne Vorlage nicht: der Server konnte es (mode "new"), nur fuehrte
 // kein Weg dorthin. Das faellt niemandem auf, der ein volles Postfach testet.
-func TestSchreibenOhneVorlage(t *testing.T) {
+func TestComposeWithoutATemplate(t *testing.T) {
 	for _, teil := range []string{`id="new"`, `compose("new")`, `mode === "new" ? ""`} {
 		if !strings.Contains(SeitePostfach, teil) {
 			t.Errorf("Postfachseite ohne %s - neue Nachricht nicht erreichbar", teil)

@@ -56,10 +56,10 @@ func (f *fakeSperrliste) Lesen(context.Context) ([]Sperreintrag, error) {
 	return out, nil
 }
 
-// TestAdresseAusKopfzeile - der Knopf sitzt an der Mailansicht, und dort steht
+// TestAddressFromHeader - der Knopf sitzt an der Mailansicht, und dort steht
 // die Adresse als `Name <a@x.de>`. Ginge das ungefiltert an SES, landete der
 // Anzeigename auf der Sperrliste oder SES lehnte ab.
-func TestAdresseAusKopfzeile(t *testing.T) {
+func TestAddressFromHeader(t *testing.T) {
 	faelle := map[string]string{
 		`Vorname Nachname <a@x.de>`:    "a@x.de",
 		`"Nachname, Vorname" <b@y.de>`: "b@y.de",
@@ -76,7 +76,7 @@ func TestAdresseAusKopfzeile(t *testing.T) {
 	}
 }
 
-func TestSperrenUndFreigeben(t *testing.T) {
+func TestBlockAndUnblock(t *testing.T) {
 	f := &fakeSperrliste{drin: map[string]bool{}}
 	ts, _ := serverMitSperrliste(t, f)
 
@@ -121,10 +121,10 @@ func TestSperrenUndFreigeben(t *testing.T) {
 	}
 }
 
-// TestOhneVersandKeineSperrliste - wer nicht senden darf (--no-send), soll auch
+// TestNoSendingNoSuppressionList - wer nicht senden darf (--no-send), soll auch
 // niemanden vom Senden ausschliessen koennen. Ohne die Pruefung liefe die Route
 // in einen Nil-Zeiger.
-func TestOhneVersandKeineSperrliste(t *testing.T) {
+func TestNoSendingNoSuppressionList(t *testing.T) {
 	ts, _ := serverMitSperrliste(t, nil)
 	req, _ := http.NewRequest("GET", ts.URL+"/api/blocked", nil)
 	req.Header.Set("X-S3mail-Token", testToken)
@@ -137,8 +137,8 @@ func TestOhneVersandKeineSperrliste(t *testing.T) {
 	}
 }
 
-// TestSperrlisteInDerOberflaeche - der Knopf ist der einzige Weg dorthin.
-func TestSperrlisteInDerOberflaeche(t *testing.T) {
+// TestSuppressionListInTheInterface - der Knopf ist der einzige Weg dorthin.
+func TestSuppressionListInTheInterface(t *testing.T) {
 	for _, teil := range []string{`id="vBlock"`, `id="blockedBtn"`, "/api/unblock"} {
 		if !strings.Contains(SeitePostfach, teil) {
 			t.Errorf("Postfachseite ohne %s", teil)

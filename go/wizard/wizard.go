@@ -1,6 +1,6 @@
 // Package assistent bedient die /api/setup/*-Aufrufe: AWS-Zugang einrichten,
 // Bucket waehlen, Verbindung pruefen, Papierkorb-Automatik setzen, speichern.
-package assistent
+package wizard
 
 import (
 	"context"
@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"s3mail/awsx"
+	"s3mail/check"
+	"s3mail/config"
 	"s3mail/i18n"
-	"s3mail/konfig"
-	"s3mail/pruefung"
 )
 
 // Regionen, in denen SES eingehende Mail entgegennimmt. Andere anzubieten waere
@@ -32,8 +32,8 @@ var Regionen = [][2]string{
 	{"af-south-1", "Africa (Cape Town)"}, {"me-south-1", "Middle East (Bahrain)"},
 }
 
-// Daten ist, was die Assistentenseite schickt.
-type Daten struct {
+// Data ist, was die Assistentenseite schickt.
+type Data struct {
 	Profil      string `json:"profile"`
 	NeuesProfil string `json:"new_profile"`
 	KeyID       string `json:"key_id"`
@@ -51,74 +51,74 @@ type Daten struct {
 	Sprache string `json:"-"`
 }
 
-// Scharfschalten wird nach dem Speichern gerufen, damit der laufende Prozess ohne
+// Activator wird nach dem Speichern gerufen, damit der laufende Prozess ohne
 // Neustart ins Postfach wechselt.
-type Scharfschalten func(k konfig.Konfig) error
+type Activator func(k config.Config) error
 
-type Assistent struct {
-	Aktivieren Scharfschalten
+type Wizard struct {
+	Aktivieren Activator
 }
 
-// Eingabefehler ist ein Fehler, den der Nutzer selbst beheben kann - die
+// InputError ist ein Fehler, den der Nutzer selbst beheben kann - die
 // HTTP-Schicht macht daraus ein 400 statt eines 500.
-type Eingabefehler struct{ Text string }
+type InputError struct{ Text string }
 
-func (e Eingabefehler) Error() string { return e.Text }
+func (e InputError) Error() string { return e.Text }
 
-func fehler(format string, a ...any) error {
-	return Eingabefehler{fmt.Sprintf(format, a...)}
+func inputError(format string, a ...any) error {
+	return InputError{fmt.Sprintf(format, a...)}
 }
 
 // Info liefert alles, was die Seite beim Laden braucht.
-func (a *Assistent) Info(_ context.Context, _ Daten) (map[string]any, error) {
+func (a *Wizard) Info(_ context.Context, _ Data) (map[string]any, error) {
 	regionen := make([]map[string]string, 0, len(Regionen))
 	for _, r := range Regionen {
 		regionen = append(regionen, map[string]string{"id": r[0], "label": r[1] + " · " + r[0]})
 	}
 	return map[string]any{
-		"config":      konfig.Laden(),
-		"profiles":    konfig.Profile(),
+		"config":      config.Load(),
+		"profiles":    config.Profiles(),
 		"regions":     regionen,
-		"config_file": konfig.Datei(),
+		"config_file": config.File(),
 	}, nil
 }
 
-// Zugangsdaten schreibt Access Key und Secret als benanntes AWS-Profil.
-func (a *Assistent) Zugangsdaten(_ context.Context, d Daten) (map[string]any, error) {
-	name, err := konfig.ZugangsdatenSchreiben(d.NeuesProfil, d.KeyID, d.Secret, d.Region)
+// Credentials schreibt Access Key und Secret als benanntes AWS-Profil.
+func (a *Wizard) Credentials(_ context.Context, d Data) (map[string]any, error) {
+	name, err := config.WriteCredentials(d.NeuesProfil, d.KeyID, d.Secret, d.Region)
 	if err != nil {
-		return nil, Eingabefehler{err.Error()}
+		return nil, InputError{err.Error()}
 	}
-	return map[string]any{"profile": name, "profiles": konfig.Profile()}, nil
+	return map[string]any{"profile": name, "profiles": config.Profiles()}, nil
 }
 
 // Buckets fuellt die beiden Auswahllisten.
-func (a *Assistent) Buckets(ctx context.Context, d Daten) (map[string]any, error) {
-	cfg, err := awsx.Sitzung(ctx, d.Profil, d.Region)
+func (a *Wizard) Buckets(ctx context.Context, d Data) (map[string]any, error) {
+	cfg, err := awsx.Session(ctx, d.Profil, d.Region)
 	if err == nil {
-		err = awsx.ZugangPruefen(ctx, cfg)
+		err = awsx.CheckAccess(ctx, cfg)
 	}
 	if err != nil {
-		return nil, Eingabefehler{awsx.Klartext(err, d.Profil, i18n.Get(d.Sprache))}
+		return nil, InputError{awsx.PlainText(err, d.Profil, i18n.Get(d.Sprache))}
 	}
-	s3 := awsx.NeuS3(cfg, "")
+	s3 := awsx.NewS3(cfg, "")
 	buckets, err := s3.Buckets(ctx)
 	if err != nil {
-		return nil, Eingabefehler{awsx.Klartext(err, d.Profil, i18n.Get(d.Sprache))}
+		return nil, InputError{awsx.PlainText(err, d.Profil, i18n.Get(d.Sprache))}
 	}
 	// Nie nil an die Oberflaeche geben: ein nil-Slice wird zu JSON `null`, und
 	// `null.map(...)` beendet das Skript der Seite - der Nutzer sieht dann nicht
 	// "kein Recht zum Auflisten", sondern gar nichts mehr.
-	ses := awsx.NeuSES(cfg, "")
+	ses := awsx.NewSES(cfg, "")
 	out := map[string]any{
-		"buckets":    nichtNil(buckets),
-		"identities": nichtNil(ses.Identitaeten(ctx)),
-		"domains":    nichtNil(ses.VerifizierteDomains(ctx)),
+		"buckets":    notNil(buckets),
+		"identities": notNil(ses.Identitaeten(ctx)),
+		"domains":    notNil(ses.VerifizierteDomains(ctx)),
 	}
 	// Was der Zugang ueber sich selbst verraet, muss niemand abtippen. Scheitert
 	// das (aeltere Postfaecher duerfen ihre Policy nicht lesen), bleibt der
 	// Assistent bei der Handeingabe - deshalb hier kein Fehler nach aussen.
-	if f, err := awsx.Erkunden(ctx, cfg); err == nil && (f.Bucket != "" || f.Absender != "") {
+	if f, err := awsx.Discover(ctx, cfg); err == nil && (f.Bucket != "" || f.Absender != "") {
 		out["found"] = f
 	}
 	if len(buckets) == 0 {
@@ -132,70 +132,70 @@ func (a *Assistent) Buckets(ctx context.Context, d Daten) (map[string]any, error
 }
 
 // Test ist Schritt 3: die Checkliste.
-func (a *Assistent) Test(ctx context.Context, d Daten) (map[string]any, error) {
+func (a *Wizard) Test(ctx context.Context, d Data) (map[string]any, error) {
 	if strings.TrimSpace(d.Bucket) == "" {
-		return nil, fehler("%s", i18n.Get(d.Sprache).T("setup.error.noBucket"))
+		return nil, inputError("%s", i18n.Get(d.Sprache).T("setup.error.noBucket"))
 	}
-	cfg, err := awsx.Sitzung(ctx, d.Profil, d.Region)
+	cfg, err := awsx.Session(ctx, d.Profil, d.Region)
 	if err == nil {
-		err = awsx.ZugangPruefen(ctx, cfg)
+		err = awsx.CheckAccess(ctx, cfg)
 	}
 	if err != nil {
-		return nil, Eingabefehler{awsx.Klartext(err, d.Profil, i18n.Get(d.Sprache))}
+		return nil, InputError{awsx.PlainText(err, d.Profil, i18n.Get(d.Sprache))}
 	}
-	s3 := awsx.NeuS3(cfg, "")
-	prefix := konfig.PrefixNormalisieren(d.Prefix)
-	punkte := pruefung.Ausfuehren(ctx, s3, awsx.NeuKMS(cfg, ""), awsx.NeuSES(cfg, ""),
+	s3 := awsx.NewS3(cfg, "")
+	prefix := config.NormalizePrefix(d.Prefix)
+	punkte := check.Run(ctx, s3, awsx.NewKMS(cfg, ""), awsx.NewSES(cfg, ""),
 		d.Bucket, prefix, strings.TrimSpace(d.Absender), i18n.Get(d.Sprache))
 	return map[string]any{
 		"checks":         punkte,
-		"ok":             pruefung.Alles(punkte),
+		"ok":             check.AllOK(punkte),
 		"lifecycle_days": s3.LifecycleTage(ctx, d.Bucket),
 	}, nil
 }
 
 // Lifecycle setzt oder entfernt die Papierkorb-Automatik.
-func (a *Assistent) Lifecycle(ctx context.Context, d Daten) (map[string]any, error) {
-	cfg, err := awsx.Sitzung(ctx, d.Profil, d.Region)
+func (a *Wizard) Lifecycle(ctx context.Context, d Data) (map[string]any, error) {
+	cfg, err := awsx.Session(ctx, d.Profil, d.Region)
 	if err != nil {
-		return nil, Eingabefehler{awsx.Klartext(err, d.Profil, i18n.Get(d.Sprache))}
+		return nil, InputError{awsx.PlainText(err, d.Profil, i18n.Get(d.Sprache))}
 	}
-	nachricht, err := awsx.NeuS3(cfg, "").LifecycleSetzen(ctx, d.Bucket,
-		konfig.PrefixNormalisieren(d.Prefix), d.Tage)
+	nachricht, err := awsx.NewS3(cfg, "").LifecycleSetzen(ctx, d.Bucket,
+		config.NormalizePrefix(d.Prefix), d.Tage)
 	if err != nil {
-		return nil, Eingabefehler{awsx.Klartext(err, d.Profil, i18n.Get(d.Sprache))}
+		return nil, InputError{awsx.PlainText(err, d.Profil, i18n.Get(d.Sprache))}
 	}
 	return map[string]any{"message": nachricht}, nil
 }
 
-// Speichern schreibt die Konfiguration und schaltet das Postfach scharf.
-func (a *Assistent) Speichern(_ context.Context, d Daten) (map[string]any, error) {
-	k := konfig.Laden()
+// Save schreibt die Konfiguration und schaltet das Postfach scharf.
+func (a *Wizard) Save(_ context.Context, d Data) (map[string]any, error) {
+	k := config.Load()
 	k.Profil, k.Region = d.Profil, d.Region
 	k.Bucket = strings.TrimSpace(d.Bucket)
-	k.Prefix = konfig.PrefixNormalisieren(d.Prefix)
+	k.Prefix = config.NormalizePrefix(d.Prefix)
 	k.Absender = strings.TrimSpace(d.Absender)
 	k.AllowDelete = d.AllowDelete == nil || *d.AllowDelete
 
-	pfad, err := konfig.Speichern(k)
+	pfad, err := config.Save(k)
 	if err != nil {
-		return nil, Eingabefehler{err.Error()}
+		return nil, InputError{err.Error()}
 	}
 	if a.Aktivieren != nil {
 		if err := a.Aktivieren(k); err != nil {
-			return nil, Eingabefehler{awsx.Klartext(err, k.Profil, i18n.Get(d.Sprache))}
+			return nil, InputError{awsx.PlainText(err, k.Profil, i18n.Get(d.Sprache))}
 		}
 	}
 	return map[string]any{"config": k, "path": pfad}, nil
 }
 
 // Route waehlt den Handler zum Pfad.
-func (a *Assistent) Route(pfad string) (func(context.Context, Daten) (map[string]any, error), bool) {
+func (a *Wizard) Route(pfad string) (func(context.Context, Data) (map[string]any, error), bool) {
 	switch strings.TrimPrefix(pfad, "/api/setup/") {
 	case "info":
 		return a.Info, true
 	case "credentials":
-		return a.Zugangsdaten, true
+		return a.Credentials, true
 	case "buckets":
 		return a.Buckets, true
 	case "test":
@@ -203,12 +203,12 @@ func (a *Assistent) Route(pfad string) (func(context.Context, Daten) (map[string
 	case "lifecycle":
 		return a.Lifecycle, true
 	case "save":
-		return a.Speichern, true
+		return a.Save, true
 	}
 	return nil, false
 }
 
-func nichtNil(l []string) []string {
+func notNil(l []string) []string {
 	if l == nil {
 		return []string{}
 	}

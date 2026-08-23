@@ -7,8 +7,8 @@ import (
 	"testing"
 )
 
-// TestOrdnernamenGegenPython: dieselben Namen, dasselbe Urteil.
-func TestOrdnernamenGegenPython(t *testing.T) {
+// TestFolderNamesAgainstPython: dieselben Namen, dasselbe Urteil.
+func TestFolderNamesAgainstPython(t *testing.T) {
 	blob, err := os.ReadFile(filepath.Join("testdata", "folders.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -32,7 +32,7 @@ func TestOrdnernamenGegenPython(t *testing.T) {
 	}
 }
 
-func TestKeysUndOrdner(t *testing.T) {
+func TestKeysAndFolders(t *testing.T) {
 	s := NewStore("mail/")
 	faelle := []struct{ key, mid, folder string }{
 		{"mail/m1", "m1", Inbox},
@@ -82,7 +82,7 @@ func TestSicherheitsgrenze(t *testing.T) {
 	}
 }
 
-func TestOrdnerZaehler(t *testing.T) {
+func TestFolderCounts(t *testing.T) {
 	index, data := laden(t)
 	f := Folders(index, data)
 	if len(f) < 4 {

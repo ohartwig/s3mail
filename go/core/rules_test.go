@@ -47,7 +47,7 @@ func mail(mid, folder, from, subject string) Message {
 	return Message{Mid: mid, Key: "mail/" + mid, Folder: folder, From: from, Subject: subject}
 }
 
-func TestRegelnErsteGewinnt(t *testing.T) {
+func TestRulesFirstMatchWins(t *testing.T) {
 	d := NewData()
 	archiv, spam := Archive, Spam
 	d.Rules = []Rule{
@@ -63,7 +63,7 @@ func TestRegelnErsteGewinnt(t *testing.T) {
 	}
 }
 
-func TestRegelnNurEinmal(t *testing.T) {
+func TestRulesRunOnlyOnce(t *testing.T) {
 	d := NewData()
 	archiv := Archive
 	d.Rules = []Rule{{Contains: "shop", Field: "any", Folder: &archiv, Enabled: true}}
@@ -85,7 +85,7 @@ func TestRegelnNurEinmal(t *testing.T) {
 	}
 }
 
-func TestRegelnLassenPapierkorbUndSpamInRuhe(t *testing.T) {
+func TestRulesLeaveTrashAndSpamAlone(t *testing.T) {
 	d := NewData()
 	archiv := Archive
 	d.Rules = []Rule{{Contains: "shop", Field: "any", Folder: &archiv, Tags: []string{"A"}, Enabled: true}}
@@ -103,7 +103,7 @@ func TestRegelnLassenPapierkorbUndSpamInRuhe(t *testing.T) {
 	}
 }
 
-func TestRegelnAusgeschaltet(t *testing.T) {
+func TestRulesSwitchedOff(t *testing.T) {
 	d := NewData()
 	archiv := Archive
 	d.Rules = []Rule{{Contains: "shop", Field: "any", Folder: &archiv, Enabled: false}}

@@ -85,7 +85,7 @@ func TestChoiceBeatsBrowser(t *testing.T) {
 
 func TestLanguageRouteSetsACookie(t *testing.T) {
 	srv := NewServer(nil, testToken, "127.0.0.1", 0, nil)
-	srv.MitAssistent(nil)
+	srv.WithWizard(nil)
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
 	srv.Port = portVon(ts.URL)

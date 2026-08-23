@@ -111,15 +111,15 @@ func StripHTML(raw string) string {
 }
 
 // Rolle eines Parts im Dokument.
-type rolle int
+type role int
 
 const (
-	rolleText   rolle = iota // Fliesstext oder HTML
-	rolleAnhang              // taucht in der Anhangsliste auf
-	rolleInline              // Bild, auf das das HTML per cid: zeigt - beides nicht
+	rolleText   role = iota // Fliesstext oder HTML
+	rolleAnhang             // taucht in der Anhangsliste auf
+	rolleInline             // Bild, auf das das HTML per cid: zeigt - beides nicht
 )
 
-func rolleVon(h message.Header) rolle {
+func roleOf(h message.Header) role {
 	disp, dparams, _ := h.ContentDisposition()
 	ctype, cparams, _ := h.ContentType()
 	_, hatDateiname := dparams["filename"]
@@ -209,7 +209,7 @@ func walk(ent *message.Entity, idx *int, text, html *strings.Builder, s *Summary
 	ctype, cparams, _ := ent.Header.ContentType()
 	i := *idx
 	*idx++
-	switch rolleVon(ent.Header) {
+	switch roleOf(ent.Header) {
 	case rolleInline:
 		return
 	case rolleAnhang:
@@ -236,9 +236,9 @@ func walk(ent *message.Entity, idx *int, text, html *strings.Builder, s *Summary
 	}
 }
 
-// Voll ist die ganze Mail fuer die Detailansicht - mit Fliesstext, HTML und den
+// Full ist die ganze Mail fuer die Detailansicht - mit Fliesstext, HTML und den
 // Anhaengen samt Inhalt.
-type Voll struct {
+type Full struct {
 	Subject    string   `json:"subject"`
 	From       string   `json:"from"`
 	ReplyTo    string   `json:"reply_to"`
@@ -264,9 +264,9 @@ type Anhang struct {
 	Inhalt      []byte `json:"-"`
 }
 
-// Lesen parst eine ganze Mail.
-func Lesen(raw []byte, fallback time.Time) Voll {
-	v := Voll{Anhaenge: []Anhang{}}
+// Read parst eine ganze Mail.
+func Read(raw []byte, fallback time.Time) Full {
+	v := Full{Anhaenge: []Anhang{}}
 	ent, err := message.Read(strings.NewReader(string(raw)))
 	if ent == nil {
 		v.Subject = "(nicht lesbar)"
@@ -301,7 +301,7 @@ func Lesen(raw []byte, fallback time.Time) Voll {
 	return v
 }
 
-func vollWalk(ent *message.Entity, idx *int, text, html *[]string, v *Voll) {
+func vollWalk(ent *message.Entity, idx *int, text, html *[]string, v *Full) {
 	if mr := ent.MultipartReader(); mr != nil {
 		for {
 			part, err := mr.NextPart()
@@ -314,7 +314,7 @@ func vollWalk(ent *message.Entity, idx *int, text, html *[]string, v *Voll) {
 	ctype, cparams, _ := ent.Header.ContentType()
 	i := *idx
 	*idx++
-	switch rolleVon(ent.Header) {
+	switch roleOf(ent.Header) {
 	case rolleInline:
 		return
 	case rolleAnhang:

@@ -30,9 +30,9 @@ type KMS interface {
 // ErrKeinKMS meldet, dass die Mail verschluesselt ist, aber kein Zugriff besteht.
 var ErrKeinKMS = errors.New("diese Mail ist mit KMS verschluesselt, aber es ist kein KMS-Zugriff eingerichtet")
 
-// KleineMeta senkt alle Schluessel auf Kleinschreibung - S3 gibt Metadaten je nach
+// LowerMeta senkt alle Schluessel auf Kleinschreibung - S3 gibt Metadaten je nach
 // Weg unterschiedlich zurueck.
-func KleineMeta(meta map[string]string) map[string]string {
+func LowerMeta(meta map[string]string) map[string]string {
 	out := make(map[string]string, len(meta))
 	for k, v := range meta {
 		out[strings.ToLower(k)] = v
@@ -40,19 +40,19 @@ func KleineMeta(meta map[string]string) map[string]string {
 	return out
 }
 
-// IstUmschlag erkennt ein client-seitig verschluesseltes Objekt an den Metadaten.
-func IstUmschlag(meta map[string]string) bool {
-	m := KleineMeta(meta)
+// IsEnvelope erkennt ein client-seitig verschluesseltes Objekt an den Metadaten.
+func IsEnvelope(meta map[string]string) bool {
+	m := LowerMeta(meta)
 	return m[cseKeyV2] != "" || m[cseKeyV1] != ""
 }
 
-// Entschluesseln macht den Umschlag auf: KMS entpackt den Datenschluessel, damit
+// Decrypt macht den Umschlag auf: KMS entpackt den Datenschluessel, damit
 // wird der Inhalt entschluesselt - AES-GCM beim aktuellen Format, AES-CBC beim
 // aelteren.
 //
 // Der Encryption Context aus x-amz-matdesc muss an KMS mit, sonst lehnt KMS ab.
-func Entschluesseln(body []byte, meta map[string]string, kms KMS) ([]byte, error) {
-	m := KleineMeta(meta)
+func Decrypt(body []byte, meta map[string]string, kms KMS) ([]byte, error) {
+	m := LowerMeta(meta)
 	verpackt := m[cseKeyV2]
 	if verpackt == "" {
 		verpackt = m[cseKeyV1]
@@ -106,7 +106,7 @@ func Entschluesseln(body []byte, meta map[string]string, kms KMS) ([]byte, error
 		}
 		klar = make([]byte, len(body))
 		cipher.NewCBCDecrypter(block, iv).CryptBlocks(klar, body)
-		klar, err = entpolstern(klar)
+		klar, err = unpad(klar)
 		if err != nil {
 			return nil, err
 		}
@@ -120,8 +120,8 @@ func Entschluesseln(body []byte, meta map[string]string, kms KMS) ([]byte, error
 	return klar, nil
 }
 
-// entpolstern entfernt die PKCS#7-Polsterung, ohne bei Murks durchzudrehen.
-func entpolstern(data []byte) ([]byte, error) {
+// unpad entfernt die PKCS#7-Polsterung, ohne bei Murks durchzudrehen.
+func unpad(data []byte) ([]byte, error) {
 	if len(data) == 0 {
 		return data, nil
 	}

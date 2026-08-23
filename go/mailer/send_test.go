@@ -19,11 +19,11 @@ func lies(t *testing.T, roh []byte) *mail.Message {
 	return m
 }
 
-// TestAntwortHaeltDenFaden - ohne In-Reply-To und References macht die Antwort im
+// TestReplyKeepsTheThread - ohne In-Reply-To und References macht die Antwort im
 // Postfach des Empfaengers einen neuen Strang auf. Das faellt beim Testen nie auf
 // und beim Empfaenger sofort.
-func TestAntwortHaeltDenFaden(t *testing.T) {
-	n, err := Bauen(Entwurf{Mode: "reply", To: "kunde@x.de", Subject: "Re: Rechnung",
+func TestReplyKeepsTheThread(t *testing.T) {
+	n, err := Build(Draft{Mode: "reply", To: "kunde@x.de", Subject: "Re: Rechnung",
 		Body: "Passt so."}, "support@firma.de",
 		Original{MessageID: "<abc@x.de>", References: "<alt1@x.de> <alt2@x.de>"}, jetzt())
 	if err != nil {
@@ -38,15 +38,15 @@ func TestAntwortHaeltDenFaden(t *testing.T) {
 		t.Errorf("References: %q", refs)
 	}
 	// bei einer neuen Mail darf beides fehlen
-	n, _ = Bauen(Entwurf{Mode: "new", To: "kunde@x.de", Body: "Hallo"},
+	n, _ = Build(Draft{Mode: "new", To: "kunde@x.de", Body: "Hallo"},
 		"support@firma.de", Original{MessageID: "<abc@x.de>"}, jetzt())
 	if lies(t, n.Roh).Header.Get("In-Reply-To") != "" {
 		t.Error("neue Mail bekommt In-Reply-To")
 	}
 }
 
-func TestEmpfaengerUndAbsender(t *testing.T) {
-	n, err := Bauen(Entwurf{To: `"Nachname, Vorname" <a@x.de>, b@y.de`, Cc: "c@z.de",
+func TestRecipientsAndSender(t *testing.T) {
+	n, err := Build(Draft{To: `"Nachname, Vorname" <a@x.de>, b@y.de`, Cc: "c@z.de",
 		Body: "x"}, "support@firma.de", Original{}, jetzt())
 	if err != nil {
 		t.Fatal(err)
@@ -64,23 +64,23 @@ func TestEmpfaengerUndAbsender(t *testing.T) {
 	}
 }
 
-func TestPflichtfelder(t *testing.T) {
-	if _, err := Bauen(Entwurf{To: "a@b.de", Body: "x"}, "", Original{}, jetzt()); err != ErrKeinAbsender {
+func TestRequiredFields(t *testing.T) {
+	if _, err := Build(Draft{To: "a@b.de", Body: "x"}, "", Original{}, jetzt()); err != ErrKeinAbsender {
 		t.Errorf("ohne Absender: %v", err)
 	}
-	if _, err := Bauen(Entwurf{Body: "x"}, "a@b.de", Original{}, jetzt()); err != ErrKeinEmpfaenger {
+	if _, err := Build(Draft{Body: "x"}, "a@b.de", Original{}, jetzt()); err != ErrKeinEmpfaenger {
 		t.Errorf("ohne Empfaenger: %v", err)
 	}
-	if _, err := Bauen(Entwurf{To: "das ist keine adresse", Body: "x"}, "a@b.de",
+	if _, err := Build(Draft{To: "das ist keine adresse", Body: "x"}, "a@b.de",
 		Original{}, jetzt()); err == nil {
 		t.Error("kaputte Empfaengerliste durchgelassen")
 	}
 }
 
-// TestBetreffMitUmlauten - roh im Header waere das ein 8-Bit-Zeichen und je nach
+// TestSubjectWithUmlauts - roh im Header waere das ein 8-Bit-Zeichen und je nach
 // Server entweder abgelehnt oder verstuemmelt.
-func TestBetreffMitUmlauten(t *testing.T) {
-	n, err := Bauen(Entwurf{To: "a@b.de", Subject: "Rückfrage über 89,€", Body: "x"},
+func TestSubjectWithUmlauts(t *testing.T) {
+	n, err := Build(Draft{To: "a@b.de", Subject: "Rückfrage über 89,€", Body: "x"},
 		"support@firma.de", Original{}, jetzt())
 	if err != nil {
 		t.Fatal(err)
@@ -108,10 +108,10 @@ func entschluesselnHeader(s string) string {
 	return out
 }
 
-// TestWeiterleitenHaengtDieMailAn
-func TestWeiterleitenHaengtDieMailAn(t *testing.T) {
+// TestForwardAttachesTheMail
+func TestForwardAttachesTheMail(t *testing.T) {
 	original := []byte("From: alt@x.de\r\nSubject: Original\r\n\r\nAlter Inhalt.\r\n")
-	n, err := Bauen(Entwurf{Mode: "forward", Key: "mail/m1", To: "kollege@firma.de",
+	n, err := Build(Draft{Mode: "forward", Key: "mail/m1", To: "kollege@firma.de",
 		Subject: "Fwd: Original", Body: "Siehe unten."},
 		"support@firma.de", Original{Subject: "Original", Roh: original}, jetzt())
 	if err != nil {
@@ -136,10 +136,10 @@ func TestWeiterleitenHaengtDieMailAn(t *testing.T) {
 	}
 }
 
-func TestMessageIDIstEinmalig(t *testing.T) {
+func TestMessageIDIsUnique(t *testing.T) {
 	gesehen := map[string]bool{}
 	for i := 0; i < 100; i++ {
-		n, err := Bauen(Entwurf{To: "a@b.de", Body: "x"}, "support@firma.de",
+		n, err := Build(Draft{To: "a@b.de", Body: "x"}, "support@firma.de",
 			Original{}, jetzt())
 		if err != nil {
 			t.Fatal(err)

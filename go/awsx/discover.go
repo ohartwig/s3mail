@@ -12,8 +12,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 )
 
-// Fund ist, was s3mail ueber sich selbst herausgefunden hat.
-type Fund struct {
+// Finding ist, was s3mail ueber sich selbst herausgefunden hat.
+type Finding struct {
 	Benutzer string `json:"user"`
 	Bucket   string `json:"bucket"`
 	Prefix   string `json:"prefix"`
@@ -21,10 +21,10 @@ type Fund struct {
 	Region   string `json:"region"`
 }
 
-// Vollstaendig sagt, ob der Assistent damit ohne Rueckfrage weiterkommt.
-func (f Fund) Vollstaendig() bool { return f.Bucket != "" && f.Prefix != "" }
+// Complete sagt, ob der Assistent damit ohne Rueckfrage weiterkommt.
+func (f Finding) Complete() bool { return f.Bucket != "" && f.Prefix != "" }
 
-// Erkunden liest die Einstellungen aus dem Zugang selbst, statt sie zu erfragen.
+// Discover liest die Einstellungen aus dem Zugang selbst, statt sie zu erfragen.
 //
 // Ein Postfach-Zugang traegt alles Noetige in seiner eigenen IAM-Policy: das
 // Recht auf s3:GetObject nennt Bucket und Prefix, die Bedingung ses:FromAddress
@@ -34,17 +34,17 @@ func (f Fund) Vollstaendig() bool { return f.Bucket != "" && f.Prefix != "" }
 //
 // Fehlt das Recht, die eigene Policy zu lesen, kommt ein leerer Fund zurueck und
 // der Assistent fragt wie bisher. Ein Fehler ist das nicht.
-func Erkunden(ctx context.Context, cfg aws.Config) (Fund, error) {
+func Discover(ctx context.Context, cfg aws.Config) (Finding, error) {
 	id, err := sts.NewFromConfig(cfg).GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
 	if err != nil {
-		return Fund{}, err
+		return Finding{}, err
 	}
-	name := benutzerAusArn(aws.ToString(id.Arn))
+	name := userFromArn(aws.ToString(id.Arn))
 	if name == "" {
 		// Rolle, Root oder ein anderer Identitaetstyp - hat keine Benutzer-Policy.
-		return Fund{}, nil
+		return Finding{}, nil
 	}
-	f := ausPolicies(policyTexte(ctx, iam.NewFromConfig(cfg), name))
+	f := ausPolicies(policyDocuments(ctx, iam.NewFromConfig(cfg), name))
 	f.Benutzer = name
 	if f.Bucket != "" {
 		f.Region = BucketRegion(ctx, cfg, f.Bucket)
@@ -52,9 +52,9 @@ func Erkunden(ctx context.Context, cfg aws.Config) (Fund, error) {
 	return f, nil
 }
 
-// benutzerAusArn zieht den Benutzernamen aus arn:aws:iam::123:user/pfad/name.
+// userFromArn zieht den Benutzernamen aus arn:aws:iam::123:user/pfad/name.
 // Bei allem anderen (assumed-role, root, Dienst) kommt "" zurueck.
-func benutzerAusArn(arn string) string {
+func userFromArn(arn string) string {
 	i := strings.Index(arn, ":user/")
 	if i < 0 {
 		return ""
@@ -66,10 +66,10 @@ func benutzerAusArn(arn string) string {
 	return rest
 }
 
-// policyTexte holt die Policy-Dokumente des Benutzers - erst die eingebetteten,
+// policyDocuments holt die Policy-Dokumente des Benutzers - erst die eingebetteten,
 // dann die angehaengten. Jeder Schritt darf scheitern, ohne den Rest mitzureissen:
 // die meisten Zugaenge duerfen nur einen Teil davon lesen, manche gar nichts.
-func policyTexte(ctx context.Context, c *iam.Client, benutzer string) []string {
+func policyDocuments(ctx context.Context, c *iam.Client, benutzer string) []string {
 	var out []string
 	if l, err := c.ListUserPolicies(ctx, &iam.ListUserPoliciesInput{UserName: &benutzer}); err == nil {
 		for _, n := range l.PolicyNames {

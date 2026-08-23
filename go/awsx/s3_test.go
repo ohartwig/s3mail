@@ -230,10 +230,10 @@ func adapter(t *testing.T, srv *s3Server) (*awsx.S3, *httptest.Server) {
 		Region:      "eu-central-1",
 		Credentials: credentials.NewStaticCredentialsProvider("AKIATEST", "geheim", ""),
 	}
-	return awsx.NeuS3(cfg, ts.URL), ts
+	return awsx.NewS3(cfg, ts.URL), ts
 }
 
-func TestListBlaettert(t *testing.T) {
+func TestListPaginates(t *testing.T) {
 	srv := neuerS3Server()
 	srv.SeiteMax = 2 // erzwingt drei Seiten
 	for i := 0; i < 5; i++ {
@@ -268,9 +268,9 @@ func TestListBlaettert(t *testing.T) {
 	}
 }
 
-// TestRangeWirdGeschickt - der Index holt nur die ersten 64 KB. Faellt der
+// TestRangeIsSent - der Index holt nur die ersten 64 KB. Faellt der
 // Range-Header weg, laedt s3mail bei jedem Abgleich das ganze Postfach.
-func TestRangeWirdGeschickt(t *testing.T) {
+func TestRangeIsSent(t *testing.T) {
 	srv := neuerS3Server()
 	srv.objs["mail/m1"] = []byte("0123456789abcdefghij")
 	a, _ := adapter(t, srv)
@@ -291,9 +291,9 @@ func TestRangeWirdGeschickt(t *testing.T) {
 	}
 }
 
-// TestMetadatenKommenAn - dort steckt der Krypto-Umschlag. Gehen sie verloren,
+// TestMetadataArrives - dort steckt der Krypto-Umschlag. Gehen sie verloren,
 // ist eine verschluesselte Mail nicht mehr zu oeffnen.
-func TestMetadatenKommenAn(t *testing.T) {
+func TestMetadataArrives(t *testing.T) {
 	srv := neuerS3Server()
 	srv.objs["mail/enc"] = []byte("chiffrat")
 	srv.meta["mail/enc"] = map[string]string{
@@ -305,24 +305,24 @@ func TestMetadatenKommenAn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !store.IstUmschlag(obj.Meta) {
+	if !store.IsEnvelope(obj.Meta) {
 		t.Fatalf("Umschlag nicht erkannt, Metadaten: %v", obj.Meta)
 	}
-	if store.KleineMeta(obj.Meta)["x-amz-matdesc"] != `{"a":"b"}` {
+	if store.LowerMeta(obj.Meta)["x-amz-matdesc"] != `{"a":"b"}` {
 		t.Errorf("Encryption Context verloren: %v", obj.Meta)
 	}
 	h, err := a.Head(context.Background(), "test-bucket", "mail/enc")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !store.IstUmschlag(h.Meta) {
+	if !store.IsEnvelope(h.Meta) {
 		t.Errorf("Head liefert keine Metadaten: %v", h.Meta)
 	}
 }
 
-// TestKopierenNimmtVerschluesselungMit - sonst landet die Kopie unter dem
+// TestCopyCarriesEncryption - sonst landet die Kopie unter dem
 // Standardschluessel des Buckets statt unter dem des Originals.
-func TestKopierenNimmtVerschluesselungMit(t *testing.T) {
+func TestCopyCarriesEncryption(t *testing.T) {
 	srv := neuerS3Server()
 	srv.objs["mail/m1"] = []byte("inhalt")
 	a, _ := adapter(t, srv)
@@ -347,9 +347,9 @@ func TestKopierenNimmtVerschluesselungMit(t *testing.T) {
 	}
 }
 
-// TestKopierenMitSonderzeichen - Schluessel mit Leerzeichen und Umlauten muessen
+// TestCopyWithSpecialCharacters - Schluessel mit Leerzeichen und Umlauten muessen
 // in x-amz-copy-source kodiert werden, sonst schlaegt die Signatur fehl.
-func TestKopierenMitSonderzeichen(t *testing.T) {
+func TestCopyWithSpecialCharacters(t *testing.T) {
 	srv := neuerS3Server()
 	srv.objs["mail/Rechnung Übersicht.eml"] = []byte("inhalt")
 	a, _ := adapter(t, srv)
@@ -364,7 +364,7 @@ func TestKopierenMitSonderzeichen(t *testing.T) {
 	}
 }
 
-func TestFehlendesObjekt(t *testing.T) {
+func TestMissingObject(t *testing.T) {
 	srv := neuerS3Server()
 	a, _ := adapter(t, srv)
 	_, err := a.Get(context.Background(), "test-bucket", "mail/gibtsnicht", "")
@@ -377,7 +377,7 @@ func TestFehlendesObjekt(t *testing.T) {
 	}
 }
 
-func TestPutUndDelete(t *testing.T) {
+func TestPutAndDelete(t *testing.T) {
 	srv := neuerS3Server()
 	a, _ := adapter(t, srv)
 	ctx := context.Background()
@@ -396,9 +396,9 @@ func TestPutUndDelete(t *testing.T) {
 	}
 }
 
-// TestGanzesPostfachUeberDenAdapter faehrt die Schicht darueber gegen den
+// TestWholeMailboxThroughTheAdapter faehrt die Schicht darueber gegen den
 // S3-Server: indexieren, verschieben, Zustand schreiben und wieder lesen.
-func TestGanzesPostfachUeberDenAdapter(t *testing.T) {
+func TestWholeMailboxThroughTheAdapter(t *testing.T) {
 	ctx := context.Background()
 	srv := neuerS3Server()
 	srv.objs["mail/m1"] = []byte("From: Anna <anna@kunde.de>\r\nTo: post@firma.de\r\n" +
@@ -440,7 +440,7 @@ func schluessel(s *s3Server) []string {
 	return out
 }
 
-// TestBucketsOhneRechtLiefertLeereListe prueft den Pfad, der jeden
+// TestBucketsWithoutPermissionYieldEmptyList prueft den Pfad, der jeden
 // Postfach-Benutzer traf: deren IAM-Policy gibt absichtlich kein
 // s3:ListAllMyBuckets, der Aufruf laeuft also in ein AccessDenied.
 //
@@ -448,7 +448,7 @@ func schluessel(s *s3Server) []string {
 // nil-Slice wird zu JSON `null`, und die Oberflaeche ruft darauf .map() auf.
 // Der Nutzer sah dann nicht "kein Recht zum Auflisten", sondern
 // "Cannot read properties of null (reading 'map')" - und nichts ging mehr.
-func TestBucketsOhneRechtLiefertLeereListe(t *testing.T) {
+func TestBucketsWithoutPermissionYieldEmptyList(t *testing.T) {
 	srv := neuerS3Server()
 	verweigern := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" && r.URL.Path == "/" {
@@ -463,7 +463,7 @@ func TestBucketsOhneRechtLiefertLeereListe(t *testing.T) {
 	defer ts.Close()
 	cfg := aws.Config{Region: "eu-north-1",
 		Credentials: credentials.NewStaticCredentialsProvider("AKIATEST", "geheim", "")}
-	a := awsx.NeuS3(cfg, ts.URL)
+	a := awsx.NewS3(cfg, ts.URL)
 
 	buckets, err := a.Buckets(context.Background())
 	if err != nil {

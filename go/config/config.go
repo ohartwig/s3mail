@@ -2,7 +2,7 @@
 // AWS-Zugangsdaten. Die Pfade folgen den Gepflogenheiten der jeweiligen
 // Plattform - unter Windows landet nichts in einem ~/.config, das dort niemand
 // sucht.
-package konfig
+package config
 
 import (
 	"encoding/json"
@@ -13,8 +13,8 @@ import (
 	"strings"
 )
 
-// Konfig ist, was in config.json steht.
-type Konfig struct {
+// Config ist, was in config.json steht.
+type Config struct {
 	Profil      string `json:"profile"`
 	Region      string `json:"region"`
 	Bucket      string `json:"bucket"`
@@ -30,14 +30,14 @@ type Konfig struct {
 	Sprache string `json:"language"`
 }
 
-func Standard() Konfig {
-	return Konfig{Region: "eu-central-1", Prefix: "mail/", AllowDelete: true,
+func Defaults() Config {
+	return Config{Region: "eu-central-1", Prefix: "mail/", AllowDelete: true,
 		Port: 8765, Host: "127.0.0.1"}
 }
 
-// Verzeichnis ist der Ort der Konfiguration: ~/.config/s3mail unter Linux,
+// Dir ist der Ort der Konfiguration: ~/.config/s3mail unter Linux,
 // ~/Library/Application Support/s3mail unter macOS, %AppData%\s3mail unter Windows.
-func Verzeichnis() string {
+func Dir() string {
 	if v := os.Getenv("S3MAIL_CONFIG_DIR"); v != "" {
 		return v
 	}
@@ -48,8 +48,8 @@ func Verzeichnis() string {
 	return filepath.Join(basis, "s3mail")
 }
 
-// CacheVerzeichnis ist der Ort des Index - Daten, deren Verlust nur Zeit kostet.
-func CacheVerzeichnis() string {
+// CacheDir ist der Ort des Index - Daten, deren Verlust nur Zeit kostet.
+func CacheDir() string {
 	if v := os.Getenv("S3MAIL_CACHE_DIR"); v != "" {
 		return v
 	}
@@ -60,16 +60,16 @@ func CacheVerzeichnis() string {
 	return filepath.Join(basis, "s3mail")
 }
 
-func Datei() string { return filepath.Join(Verzeichnis(), "config.json") }
+func File() string { return filepath.Join(Dir(), "config.json") }
 
-func Vorhanden() bool {
-	_, err := os.Stat(Datei())
+func Exists() bool {
+	_, err := os.Stat(File())
 	return err == nil
 }
 
-func Laden() Konfig {
-	k := Standard()
-	blob, err := os.ReadFile(Datei())
+func Load() Config {
+	k := Defaults()
+	blob, err := os.ReadFile(File())
 	if err != nil {
 		return k
 	}
@@ -86,29 +86,29 @@ func Laden() Konfig {
 	return k
 }
 
-// Speichern legt die Datei mit 0600 an - dort steht zwar kein Geheimnis, aber
+// Save legt die Datei mit 0600 an - dort steht zwar kein Geheimnis, aber
 // der Bucketname geht auch niemanden etwas an.
-func Speichern(k Konfig) (string, error) {
+func Save(k Config) (string, error) {
 	if strings.TrimSpace(k.Bucket) == "" {
 		return "", errors.New("ohne Bucket geht es nicht")
 	}
-	k.Prefix = PrefixNormalisieren(k.Prefix)
-	if err := os.MkdirAll(Verzeichnis(), 0o700); err != nil {
+	k.Prefix = NormalizePrefix(k.Prefix)
+	if err := os.MkdirAll(Dir(), 0o700); err != nil {
 		return "", err
 	}
 	blob, err := json.MarshalIndent(k, "", "  ")
 	if err != nil {
 		return "", err
 	}
-	pfad := Datei()
+	pfad := File()
 	if err := os.WriteFile(pfad, blob, 0o600); err != nil {
 		return "", err
 	}
 	return pfad, nil
 }
 
-// PrefixNormalisieren macht aus "/mail" und "mail" jeweils "mail/".
-func PrefixNormalisieren(p string) string {
+// NormalizePrefix macht aus "/mail" und "mail" jeweils "mail/".
+func NormalizePrefix(p string) string {
 	p = strings.TrimSpace(p)
 	p = strings.TrimLeft(p, "/")
 	if p != "" && !strings.HasSuffix(p, "/") {
@@ -119,8 +119,8 @@ func PrefixNormalisieren(p string) string {
 
 // -- AWS-Zugangsdaten ------------------------------------------------------- //
 
-// AWSVerzeichnis ist ~/.aws - derselbe Ort, den auch die AWS-Werkzeuge lesen.
-func AWSVerzeichnis() string {
+// AWSDir ist ~/.aws - derselbe Ort, den auch die AWS-Werkzeuge lesen.
+func AWSDir() string {
 	if v := os.Getenv("S3MAIL_AWS_DIR"); v != "" {
 		return v
 	}
@@ -131,8 +131,8 @@ func AWSVerzeichnis() string {
 	return filepath.Join(heim, ".aws")
 }
 
-// Profile liest die Profilnamen aus ~/.aws/credentials und ~/.aws/config.
-func Profile() []string {
+// Profiles liest die Profilnamen aus ~/.aws/credentials und ~/.aws/config.
+func Profiles() []string {
 	gesehen := map[string]bool{}
 	var out []string
 	fuegeHinzu := func(name string) {
@@ -144,7 +144,7 @@ func Profile() []string {
 	for _, f := range []struct{ datei, praefix string }{
 		{"credentials", ""}, {"config", "profile "},
 	} {
-		blob, err := os.ReadFile(filepath.Join(AWSVerzeichnis(), f.datei))
+		blob, err := os.ReadFile(filepath.Join(AWSDir(), f.datei))
 		if err != nil {
 			continue
 		}
@@ -164,9 +164,9 @@ func Profile() []string {
 	return out
 }
 
-// ZugangsdatenSchreiben legt die Schluessel als benanntes Profil in
+// WriteCredentials legt die Schluessel als benanntes Profil in
 // ~/.aws/credentials ab - additiv, vorhandene Profile bleiben unberuehrt.
-func ZugangsdatenSchreiben(profil, keyID, secret, region string) (string, error) {
+func WriteCredentials(profil, keyID, secret, region string) (string, error) {
 	profil = strings.TrimSpace(profil)
 	if profil == "" {
 		profil = "s3mail"
@@ -178,10 +178,10 @@ func ZugangsdatenSchreiben(profil, keyID, secret, region string) (string, error)
 	if len(keyID) < 16 || (!strings.HasPrefix(keyID, "AKIA") && !strings.HasPrefix(keyID, "ASIA")) {
 		return "", errors.New("Das sieht nicht nach einer Access Key ID aus (beginnt mit AKIA…)")
 	}
-	if err := os.MkdirAll(AWSVerzeichnis(), 0o700); err != nil {
+	if err := os.MkdirAll(AWSDir(), 0o700); err != nil {
 		return "", err
 	}
-	if err := iniSetzen(filepath.Join(AWSVerzeichnis(), "credentials"), profil,
+	if err := iniSetzen(filepath.Join(AWSDir(), "credentials"), profil,
 		map[string]string{"aws_access_key_id": keyID, "aws_secret_access_key": secret}); err != nil {
 		return "", err
 	}
@@ -192,7 +192,7 @@ func ZugangsdatenSchreiben(profil, keyID, secret, region string) (string, error)
 	if region == "" {
 		region = "eu-central-1"
 	}
-	if err := iniSetzen(filepath.Join(AWSVerzeichnis(), "config"), abschnitt,
+	if err := iniSetzen(filepath.Join(AWSDir(), "config"), abschnitt,
 		map[string]string{"region": region}); err != nil {
 		return "", err
 	}

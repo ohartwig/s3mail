@@ -20,9 +20,9 @@ func apiFehler(kode string) error {
 	}
 }
 
-// TestKlartext - das AWS-SDK meldet fehlende Zugangsdaten in einem halben Dutzend
+// TestPlainText - das AWS-SDK meldet fehlende Zugangsdaten in einem halben Dutzend
 // Formen, alle englisch. Daraus muss ein Satz mit dem naechsten Schritt werden.
-func TestKlartext(t *testing.T) {
+func TestPlainText(t *testing.T) {
 	faelle := []struct {
 		name      string
 		err       error
@@ -55,7 +55,7 @@ func TestKlartext(t *testing.T) {
 			[]string{"Keine Verbindung zu AWS"}, nil},
 	}
 	for _, f := range faelle {
-		got := awsx.Klartext(f.err, f.profil, i18n.Get("de"))
+		got := awsx.PlainText(f.err, f.profil, i18n.Get("de"))
 		for _, teil := range f.muss {
 			if !strings.Contains(got, teil) {
 				t.Errorf("%s: %q enthaelt nicht %q", f.name, got, teil)
@@ -69,13 +69,13 @@ func TestKlartext(t *testing.T) {
 	}
 }
 
-// TestKlartextVerschlucktNichts - was wir nicht kennen, muss durchkommen, sonst
+// TestPlainTextSwallowsNothing - was wir nicht kennen, muss durchkommen, sonst
 // steht der Nutzer vor einer freundlichen, aber nutzlosen Meldung.
-func TestKlartextVerschlucktNichts(t *testing.T) {
-	if got := awsx.Klartext(errors.New("Boom aus dem Nichts"), "", i18n.Get("de")); !strings.Contains(got, "Boom") {
+func TestPlainTextSwallowsNothing(t *testing.T) {
+	if got := awsx.PlainText(errors.New("Boom aus dem Nichts"), "", i18n.Get("de")); !strings.Contains(got, "Boom") {
 		t.Errorf("unbekannter Fehler verschluckt: %q", got)
 	}
-	if awsx.Klartext(nil, "", i18n.Get("de")) != "" {
+	if awsx.PlainText(nil, "", i18n.Get("de")) != "" {
 		t.Error("nil ergibt eine Meldung")
 	}
 }

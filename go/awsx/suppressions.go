@@ -10,7 +10,7 @@ import (
 	v2types "github.com/aws/aws-sdk-go-v2/service/sesv2/types"
 )
 
-// Sperrliste ist die Unterdrueckungsliste des SES-Kontos: Adressen, an die SES
+// Suppressions ist die Unterdrueckungsliste des SES-Kontos: Adressen, an die SES
 // nichts mehr zustellt.
 //
 // Sie gilt fuer das ganze Konto und nicht fuer ein Postfach. Wer hier eine
@@ -18,27 +18,27 @@ import (
 // jede andere Software, die ueber dasselbe Konto verschickt. Deshalb gibt es
 // Freigeben() gleich mit: eine Sperre, die man nicht zurueecknehmen kann, ist
 // bei einem Tippfehler eine Falle.
-type Sperrliste struct{ c *sesv2.Client }
+type Suppressions struct{ c *sesv2.Client }
 
-func NeueSperrliste(cfg aws.Config, endpunkt string) *Sperrliste {
-	return &Sperrliste{c: sesv2.NewFromConfig(cfg, func(o *sesv2.Options) {
+func NewSuppressions(cfg aws.Config, endpunkt string) *Suppressions {
+	return &Suppressions{c: sesv2.NewFromConfig(cfg, func(o *sesv2.Options) {
 		if endpunkt != "" {
 			o.BaseEndpoint = aws.String(endpunkt)
 		}
 	})}
 }
 
-// Eintrag ist eine gesperrte Adresse mit Grund und Zeitpunkt.
-type Eintrag struct {
+// Entry ist eine gesperrte Adresse mit Grund und Zeitpunkt.
+type Entry struct {
 	Adresse string `json:"address"`
 	Grund   string `json:"reason"`
 	Seit    string `json:"since"`
 }
 
-// Sperren traegt eine Adresse ein. Grund ist COMPLAINT: der Eintrag entsteht,
+// Block traegt eine Adresse ein. Grund ist COMPLAINT: der Eintrag entsteht,
 // weil jemand darum gebeten hat, nicht mehr angeschrieben zu werden - genau
 // das, was SES unter einer Beschwerde versteht. BOUNCE traegt SES selbst ein.
-func (s *Sperrliste) Sperren(ctx context.Context, adresse string) error {
+func (s *Suppressions) Block(ctx context.Context, adresse string) error {
 	_, err := s.c.PutSuppressedDestination(ctx, &sesv2.PutSuppressedDestinationInput{
 		EmailAddress: aws.String(adresse),
 		Reason:       v2types.SuppressionListReasonComplaint,
@@ -46,17 +46,17 @@ func (s *Sperrliste) Sperren(ctx context.Context, adresse string) error {
 	return err
 }
 
-// Freigeben nimmt eine Adresse wieder heraus.
-func (s *Sperrliste) Freigeben(ctx context.Context, adresse string) error {
+// Unblock nimmt eine Adresse wieder heraus.
+func (s *Suppressions) Unblock(ctx context.Context, adresse string) error {
 	_, err := s.c.DeleteSuppressedDestination(ctx, &sesv2.DeleteSuppressedDestinationInput{
 		EmailAddress: aws.String(adresse),
 	})
 	return err
 }
 
-// Lesen liefert die gesperrten Adressen, neueste zuerst.
-func (s *Sperrliste) Lesen(ctx context.Context) ([]Eintrag, error) {
-	out := []Eintrag{}
+// List liefert die gesperrten Adressen, neueste zuerst.
+func (s *Suppressions) List(ctx context.Context) ([]Entry, error) {
+	out := []Entry{}
 	var weiter *string
 	for {
 		resp, err := s.c.ListSuppressedDestinations(ctx,
@@ -65,7 +65,7 @@ func (s *Sperrliste) Lesen(ctx context.Context) ([]Eintrag, error) {
 			return nil, err
 		}
 		for _, d := range resp.SuppressedDestinationSummaries {
-			e := Eintrag{Adresse: aws.ToString(d.EmailAddress), Grund: string(d.Reason)}
+			e := Entry{Adresse: aws.ToString(d.EmailAddress), Grund: string(d.Reason)}
 			if d.LastUpdateTime != nil {
 				e.Seit = d.LastUpdateTime.UTC().Format(time.RFC3339)
 			}

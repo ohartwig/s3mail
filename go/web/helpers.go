@@ -5,16 +5,16 @@ import (
 	"errors"
 	"net/http"
 
-	"s3mail/assistent"
+	"s3mail/wizard"
 )
 
-func jsonLesen(r *http.Request, ziel any) error {
+func readJSON(r *http.Request, ziel any) error {
 	if r.ContentLength == 0 {
 		return nil
 	}
 	return json.NewDecoder(r.Body).Decode(ziel)
 }
 
-func asEingabefehler(err error, ziel *assistent.Eingabefehler) bool {
+func asInputError(err error, ziel *wizard.InputError) bool {
 	return errors.As(err, ziel)
 }

@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 )
 
-// NeuesToken wuerfelt das Sitzungs-Token.
-func NeuesToken() string {
+// NewToken wuerfelt das Sitzungs-Token.
+func NewToken() string {
 	b := make([]byte, 24)
 	if _, err := rand.Read(b); err != nil {
 		panic("kein Zufall verfuegbar: " + err.Error())
@@ -17,8 +17,8 @@ func NeuesToken() string {
 	return base64.RawURLEncoding.EncodeToString(b)
 }
 
-// gleich vergleicht in konstanter Zeit.
-func gleich(a, b string) bool {
+// equal vergleicht in konstanter Zeit.
+func equal(a, b string) bool {
 	return len(a) > 0 && subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }
 

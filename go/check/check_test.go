@@ -1,4 +1,4 @@
-package pruefung_test
+package check_test
 
 import (
 	"context"
@@ -12,24 +12,24 @@ import (
 
 	"s3mail/i18n"
 
-	"s3mail/pruefung"
+	"s3mail/check"
 	"s3mail/s3fake"
 	"s3mail/store"
 )
 
-func nach(punkte []pruefung.Punkt) map[string]pruefung.Punkt {
-	out := map[string]pruefung.Punkt{}
+func nach(punkte []check.Item) map[string]check.Item {
+	out := map[string]check.Item{}
 	for _, p := range punkte {
 		out[p.Name] = p
 	}
 	return out
 }
 
-func TestAllesInOrdnung(t *testing.T) {
+func TestEverythingOK(t *testing.T) {
 	f := s3fake.Neu()
 	f.Setzen("mail/m1", []byte("From: a@b.de\r\nSubject: x\r\n\r\nText\r\n"))
-	p := pruefung.Ausfuehren(context.Background(), f, nil, nil, "test-bucket", "mail/", "", i18n.Get("de"))
-	if !pruefung.Alles(p) {
+	p := check.Run(context.Background(), f, nil, nil, "test-bucket", "mail/", "", i18n.Get("de"))
+	if !check.AllOK(p) {
 		t.Errorf("nicht alles gruen: %+v", p)
 	}
 	k := nach(p)
@@ -51,47 +51,47 @@ func TestAllesInOrdnung(t *testing.T) {
 	}
 }
 
-// TestFehlendesRechtNenntDieAktion - das ist der ganze Zweck der Liste.
-func TestFehlendesRechtNenntDieAktion(t *testing.T) {
+// TestMissingPermissionNamesTheAction - das ist der ganze Zweck der Liste.
+func TestMissingPermissionNamesTheAction(t *testing.T) {
 	f := s3fake.Neu()
 	f.Setzen("mail/m1", []byte("From: a@b.de\r\n\r\nText\r\n"))
 	f.PutErr = errors.New("AccessDenied")
 
-	p := pruefung.Ausfuehren(context.Background(), f, nil, nil, "test-bucket", "mail/", "", i18n.Get("de"))
+	p := check.Run(context.Background(), f, nil, nil, "test-bucket", "mail/", "", i18n.Get("de"))
 	k := nach(p)
 	if k["Schreiben"].OK {
 		t.Fatal("Schreibfehler nicht bemerkt")
 	}
-	if !strings.Contains(k["Schreiben"].Hinweis, "s3:PutObject") {
-		t.Errorf("Hinweis nennt die IAM-Aktion nicht: %q", k["Schreiben"].Hinweis)
+	if !strings.Contains(k["Schreiben"].Hint, "s3:PutObject") {
+		t.Errorf("Hinweis nennt die IAM-Aktion nicht: %q", k["Schreiben"].Hint)
 	}
-	if pruefung.Alles(p) {
+	if check.AllOK(p) {
 		t.Error("Gesamturteil trotz Fehler gruen")
 	}
 }
 
-func TestLeeresPostfachIstKeinFehler(t *testing.T) {
+func TestEmptyMailboxIsNoError(t *testing.T) {
 	f := s3fake.Neu()
-	p := pruefung.Ausfuehren(context.Background(), f, nil, nil, "test-bucket", "mail/", "", i18n.Get("de"))
+	p := check.Run(context.Background(), f, nil, nil, "test-bucket", "mail/", "", i18n.Get("de"))
 	k := nach(p)
 	if !k["Bucket lesen"].OK || !strings.Contains(k["Bucket lesen"].Detail, "noch nichts") {
 		t.Errorf("%+v", k["Bucket lesen"])
 	}
-	if !k["Mail lesen"].Uebergangen || !k["Verschlüsselung"].Uebergangen {
+	if !k["Mail lesen"].Skipped || !k["Verschlüsselung"].Skipped {
 		t.Error("leeres Postfach muss uebersprungen werden, nicht rot sein")
 	}
-	if !pruefung.Alles(p) {
+	if !check.AllOK(p) {
 		t.Errorf("leeres Postfach als Fehler gewertet: %+v", p)
 	}
 }
 
-// TestInterneObjekteSindKeineMail - sonst prueft der Test den Zustand statt einer Mail.
-func TestInterneObjekteSindKeineMail(t *testing.T) {
+// TestInternalObjectsAreNotMail - sonst prueft der Test den Zustand statt einer Mail.
+func TestInternalObjectsAreNotMail(t *testing.T) {
 	f := s3fake.Neu()
 	f.Setzen("mail/"+store.StateObject, []byte(`{"messages":{}}`))
 	f.Setzen("mail/"+store.StateOps+"x.json", []byte(`{"ops":[]}`))
-	p := nach(pruefung.Ausfuehren(context.Background(), f, nil, nil, "test-bucket", "mail/", "", i18n.Get("de")))
-	if !p["Mail lesen"].Uebergangen {
+	p := nach(check.Run(context.Background(), f, nil, nil, "test-bucket", "mail/", "", i18n.Get("de")))
+	if !p["Mail lesen"].Skipped {
 		t.Errorf("Zustandsdatei als Mail geprueft: %+v", p["Mail lesen"])
 	}
 }
@@ -130,40 +130,40 @@ func umschlag(t *testing.T) ([]byte, map[string]string, []byte) {
 	return body, f.Meta, key
 }
 
-// TestVerschluesselungWirdErkannt - der Assistent soll sagen, womit man es zu tun
+// TestEncryptionIsDetected - der Assistent soll sagen, womit man es zu tun
 // hat, statt den Nutzer raten zu lassen.
-func TestVerschluesselungWirdErkannt(t *testing.T) {
+func TestEncryptionIsDetected(t *testing.T) {
 	body, meta, key := umschlag(t)
 
 	f := s3fake.Neu()
 	f.Setzen("mail/enc", body)
 	f.MetaSetzen("mail/enc", meta)
-	p := nach(pruefung.Ausfuehren(context.Background(), f, &kmsFake{key: key}, nil,
+	p := nach(check.Run(context.Background(), f, &kmsFake{key: key}, nil,
 		"test-bucket", "mail/", "", i18n.Get("de")))
 	if !p["Verschlüsselung"].OK || !strings.Contains(p["Verschlüsselung"].Detail, "klappt") {
 		t.Errorf("%+v", p["Verschlüsselung"])
 	}
 
 	// ohne kms:Decrypt muss der Punkt rot sein und die Aktion nennen
-	p = nach(pruefung.Ausfuehren(context.Background(), f,
+	p = nach(check.Run(context.Background(), f,
 		&kmsFake{fehler: errors.New("AccessDenied")}, nil, "test-bucket", "mail/", "", i18n.Get("de")))
 	if p["Verschlüsselung"].OK {
 		t.Error("fehlendes kms:Decrypt nicht bemerkt")
 	}
-	if !strings.Contains(p["Verschlüsselung"].Hinweis, "kms:Decrypt") {
-		t.Errorf("Hinweis: %q", p["Verschlüsselung"].Hinweis)
+	if !strings.Contains(p["Verschlüsselung"].Hint, "kms:Decrypt") {
+		t.Errorf("Hinweis: %q", p["Verschlüsselung"].Hint)
 	}
 
 	// serverseitig verschluesselt: nur ein Hinweis, kein Fehler
 	g := s3fake.Neu()
 	g.Setzen("mail/m1", []byte("From: a@b.de\r\n\r\nText\r\n"))
 	g.SSESetzen("mail/m1", store.CopyOpts{ServerSideEncryption: "aws:kms"})
-	p = nach(pruefung.Ausfuehren(context.Background(), g, nil, nil, "test-bucket", "mail/", "", i18n.Get("de")))
+	p = nach(check.Run(context.Background(), g, nil, nil, "test-bucket", "mail/", "", i18n.Get("de")))
 	if !p["Verschlüsselung"].OK || !strings.Contains(p["Verschlüsselung"].Detail, "serverseitig") {
 		t.Errorf("%+v", p["Verschlüsselung"])
 	}
-	if !strings.Contains(p["Verschlüsselung"].Hinweis, "kms:GenerateDataKey") {
-		t.Errorf("Hinweis zu SSE-KMS fehlt: %q", p["Verschlüsselung"].Hinweis)
+	if !strings.Contains(p["Verschlüsselung"].Hint, "kms:GenerateDataKey") {
+		t.Errorf("Hinweis zu SSE-KMS fehlt: %q", p["Verschlüsselung"].Hint)
 	}
 }
 
@@ -176,41 +176,41 @@ func (s *sesFake) Verifiziert(_ context.Context, _, _ string) ([]string, error) 
 	return s.gut, s.fehler
 }
 
-func TestSESAbsender(t *testing.T) {
+func TestSESSender(t *testing.T) {
 	f := s3fake.Neu()
 	f.Setzen("mail/m1", []byte("From: a@b.de\r\n\r\nText\r\n"))
 	ctx := context.Background()
 
-	p := nach(pruefung.Ausfuehren(ctx, f, nil, &sesFake{gut: []string{"support@firma.de"}},
+	p := nach(check.Run(ctx, f, nil, &sesFake{gut: []string{"support@firma.de"}},
 		"test-bucket", "mail/", "support@firma.de", i18n.Get("de")))
 	if !p["SES-Absender"].OK {
 		t.Errorf("%+v", p["SES-Absender"])
 	}
-	p = nach(pruefung.Ausfuehren(ctx, f, nil, &sesFake{}, "test-bucket", "mail/", "x@y.de", i18n.Get("de")))
+	p = nach(check.Run(ctx, f, nil, &sesFake{}, "test-bucket", "mail/", "x@y.de", i18n.Get("de")))
 	if p["SES-Absender"].OK {
 		t.Error("unverifizierte Adresse als in Ordnung gemeldet")
 	}
-	if !strings.Contains(p["SES-Absender"].Hinweis, "verifizieren") {
-		t.Errorf("Hinweis: %q", p["SES-Absender"].Hinweis)
+	if !strings.Contains(p["SES-Absender"].Hint, "verifizieren") {
+		t.Errorf("Hinweis: %q", p["SES-Absender"].Hint)
 	}
 	// ohne Absender: uebersprungen, nicht rot
-	p = nach(pruefung.Ausfuehren(ctx, f, nil, &sesFake{}, "test-bucket", "mail/", "", i18n.Get("de")))
-	if !p["SES-Absender"].Uebergangen {
+	p = nach(check.Run(ctx, f, nil, &sesFake{}, "test-bucket", "mail/", "", i18n.Get("de")))
+	if !p["SES-Absender"].Skipped {
 		t.Errorf("%+v", p["SES-Absender"])
 	}
 }
 
-// TestHinweisNenntDasPrefixZuerst - der haeufigste Grund fuer ein 403 beim
+// TestHintNamesThePrefixFirst - der haeufigste Grund fuer ein 403 beim
 // Auflisten ist bei prefix-beschraenkten Zugaengen nicht das fehlende Recht,
 // sondern ein Prefix eine Ebene zu weit oben. Die alte Fassung nannte genau das
 // nicht und schickte den Nutzer zur IAM-Konsole statt ins Feld darueber.
-func TestHinweisNenntDasPrefixZuerst(t *testing.T) {
+func TestHintNamesThePrefixFirst(t *testing.T) {
 	f := s3fake.Neu()
 	f.ListErr = errors.New("AccessDenied")
-	p := nach(pruefung.Ausfuehren(context.Background(), f, nil, nil,
+	p := nach(check.Run(context.Background(), f, nil, nil,
 		"test-bucket", "mail/ole/", "", i18n.Get("de")))
 
-	h := p["Bucket lesen"].Hinweis
+	h := p["Bucket lesen"].Hint
 	if !strings.Contains(h, "mail/ole/") {
 		t.Errorf("das erwartete Prefix wird nicht genannt: %q", h)
 	}

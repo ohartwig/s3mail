@@ -9,9 +9,9 @@ import (
 	"time"
 )
 
-// TestGegenPython faehrt jede Mail aus dem Korpus durch den Go-Parser und
+// TestAgainstPython faehrt jede Mail aus dem Korpus durch den Go-Parser und
 // vergleicht Feld fuer Feld mit dem, was der bestehende Python-Parser liefert.
-func TestGegenPython(t *testing.T) {
+func TestAgainstPython(t *testing.T) {
 	blob, err := os.ReadFile(filepath.Join("testdata", "expected.json"))
 	if err != nil {
 		t.Fatal(err)

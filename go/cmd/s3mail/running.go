@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"s3mail/konfig"
+	"s3mail/config"
 )
 
 // laufendeInstanz prueft, ob unter der gemerkten Adresse schon ein s3mail
@@ -18,7 +18,7 @@ import (
 // Datei ueberlebt einen Absturz, der Port ist dann aber von etwas anderem belegt,
 // und dann waere ein "laeuft schon" schlicht gelogen.
 func laufendeInstanz() (string, bool) {
-	blob, err := os.ReadFile(filepath.Join(konfig.Verzeichnis(), "adresse.txt"))
+	blob, err := os.ReadFile(filepath.Join(config.Dir(), "adresse.txt"))
 	if err != nil {
 		return "", false
 	}

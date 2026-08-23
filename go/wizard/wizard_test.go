@@ -1,11 +1,11 @@
-package assistent
+package wizard
 
 import (
 	"encoding/json"
 	"testing"
 )
 
-// TestNieNullAnDieOberflaeche haelt den Fehler fest, der v0.2.x fuer jeden
+// TestNeverNullToTheInterface haelt den Fehler fest, der v0.2.x fuer jeden
 // Postfach-Benutzer unbrauchbar machte.
 //
 // Die Postfach-Policy gibt absichtlich kein s3:ListAllMyBuckets - sonst saehe
@@ -15,13 +15,13 @@ import (
 // nicht "kein Recht zum Auflisten", sondern gar nichts mehr:
 //
 //	✕ Cannot read properties of null (reading 'map')
-func TestNieNullAnDieOberflaeche(t *testing.T) {
+func TestNeverNullToTheInterface(t *testing.T) {
 	for name, wert := range map[string][]string{
 		"nil":  nil,
 		"leer": {},
 		"voll": {"a", "b"},
 	} {
-		blob, err := json.Marshal(map[string]any{"buckets": nichtNil(wert)})
+		blob, err := json.Marshal(map[string]any{"buckets": notNil(wert)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -31,9 +31,9 @@ func TestNieNullAnDieOberflaeche(t *testing.T) {
 	}
 }
 
-// TestNilWirdWirklichZuNull dokumentiert, warum es nichtNil ueberhaupt braucht -
+// TestNilReallyBecomesNull dokumentiert, warum es nichtNil ueberhaupt braucht -
 // damit niemand die Funktion als ueberfluessig wegraeumt.
-func TestNilWirdWirklichZuNull(t *testing.T) {
+func TestNilReallyBecomesNull(t *testing.T) {
 	var leer []string
 	blob, _ := json.Marshal(map[string]any{"buckets": leer})
 	if string(blob) != `{"buckets":null}` {

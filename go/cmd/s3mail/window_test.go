@@ -5,13 +5,13 @@ import (
 	"testing"
 )
 
-// TestMacKommandoErzwingtNeueInstanz haelt den Fehler fest, der v0.2.1 unbrauchbar
+// TestMacCommandForcesANewInstance haelt den Fehler fest, der v0.2.1 unbrauchbar
 // machte: ohne "-n" reicht macOS die Adresse an eine bereits laufende
 // Browserinstanz weiter ("Wird in einer aktuellen Browsersitzung geoeffnet") und
 // verwirft --app= und --user-data-dir. Fuer den, der doppelgeklickt hat, sieht es
 // aus, als passiere gar nichts.
-func TestMacKommandoErzwingtNeueInstanz(t *testing.T) {
-	prog, args := macKommando("Google Chrome", "http://127.0.0.1:8765/?t=abc")
+func TestMacCommandForcesANewInstance(t *testing.T) {
+	prog, args := macCommand("Google Chrome", "http://127.0.0.1:8765/?t=abc")
 	if prog != "open" {
 		t.Errorf("Programm: %q", prog)
 	}
@@ -29,10 +29,10 @@ func TestMacKommandoErzwingtNeueInstanz(t *testing.T) {
 	}
 }
 
-// TestFensterArgumente - das eigene Profil verhindert, dass s3mail die Sitzung
+// TestWindowArgs - das eigene Profil verhindert, dass s3mail die Sitzung
 // eines laufenden Browserfensters mitbenutzt.
-func TestFensterArgumente(t *testing.T) {
-	args := fensterArgumente("http://x/")
+func TestWindowArgs(t *testing.T) {
+	args := windowArgs("http://x/")
 	if len(args) != 3 {
 		t.Fatalf("%v", args)
 	}

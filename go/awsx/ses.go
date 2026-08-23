@@ -13,7 +13,7 @@ import (
 // SES verschickt Antworten und Weiterleitungen.
 type SES struct{ c *ses.Client }
 
-func NeuSES(cfg aws.Config, endpunkt string) *SES {
+func NewSES(cfg aws.Config, endpunkt string) *SES {
 	return &SES{c: ses.NewFromConfig(cfg, func(o *ses.Options) {
 		if endpunkt != "" {
 			o.BaseEndpoint = aws.String(endpunkt)
@@ -22,7 +22,7 @@ func NeuSES(cfg aws.Config, endpunkt string) *SES {
 }
 
 // Senden uebergibt die fertige Mail an SES und liefert deren Message-ID.
-func (s *SES) Senden(ctx context.Context, n mailer.Nachricht) (string, error) {
+func (s *SES) Send(ctx context.Context, n mailer.Message) (string, error) {
 	resp, err := s.c.SendRawEmail(ctx, &ses.SendRawEmailInput{
 		Source:       aws.String(n.Absender),
 		Destinations: n.Empfaenger,

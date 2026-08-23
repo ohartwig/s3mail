@@ -17,8 +17,8 @@ func korpus(t *testing.T, name string) []byte {
 	return raw
 }
 
-func TestLesenTextUndHTML(t *testing.T) {
-	v := Lesen(korpus(t, "04-alternative"), time.Unix(0, 0).UTC())
+func TestReadTextAndHTML(t *testing.T) {
+	v := Read(korpus(t, "04-alternative"), time.Unix(0, 0).UTC())
 	if !strings.Contains(v.Text, "Nur-Text-Fassung mit Ümlaut") {
 		t.Errorf("Fliesstext: %q", v.Text)
 	}
@@ -30,10 +30,10 @@ func TestLesenTextUndHTML(t *testing.T) {
 	}
 }
 
-// TestLesenAnhaengeMitInhalt - die Detailansicht muss den Anhang gleich
+// TestReadAttachmentsWithContent - die Detailansicht muss den Anhang gleich
 // mitliefern, sonst wird die Mail zum Herunterladen ein zweites Mal geparst.
-func TestLesenAnhaengeMitInhalt(t *testing.T) {
-	v := Lesen(korpus(t, "05-nested-mixed"), time.Unix(0, 0).UTC())
+func TestReadAttachmentsWithContent(t *testing.T) {
+	v := Read(korpus(t, "05-nested-mixed"), time.Unix(0, 0).UTC())
 	if len(v.Anhaenge) != 1 {
 		t.Fatalf("%d Anhaenge", len(v.Anhaenge))
 	}
@@ -49,22 +49,22 @@ func TestLesenAnhaengeMitInhalt(t *testing.T) {
 	}
 }
 
-func TestLesenDateinamen(t *testing.T) {
+func TestReadFilenames(t *testing.T) {
 	for _, f := range []struct{ datei, name string }{
 		{"06-rfc2231-filename", "Bescheid Übersicht.pdf"},
 		{"07-raw-filename", "Übersicht Größe.xlsx"},
 	} {
-		v := Lesen(korpus(t, f.datei), time.Unix(0, 0).UTC())
+		v := Read(korpus(t, f.datei), time.Unix(0, 0).UTC())
 		if len(v.Anhaenge) != 1 || v.Anhaenge[0].Filename != f.name {
 			t.Errorf("%s: %v, erwartet %q", f.datei, v.Anhaenge, f.name)
 		}
 	}
 }
 
-// TestLesenInlineBleibtDraussen - das Logo aus der Signatur ist kein Anhang und
+// TestReadInlineStaysOut - das Logo aus der Signatur ist kein Anhang und
 // darf auch nicht als Binaermuell im Text landen.
-func TestLesenInlineBleibtDraussen(t *testing.T) {
-	v := Lesen(korpus(t, "08-inline-cid"), time.Unix(0, 0).UTC())
+func TestReadInlineStaysOut(t *testing.T) {
+	v := Read(korpus(t, "08-inline-cid"), time.Unix(0, 0).UTC())
 	if len(v.Anhaenge) != 0 {
 		t.Errorf("inline-Bild als Anhang gezaehlt: %v", v.Anhaenge)
 	}
@@ -76,8 +76,8 @@ func TestLesenInlineBleibtDraussen(t *testing.T) {
 	}
 }
 
-func TestLesenKopfzeilen(t *testing.T) {
-	v := Lesen(korpus(t, "13-address-commas"), time.Unix(0, 0).UTC())
+func TestReadHeaders(t *testing.T) {
+	v := Read(korpus(t, "13-address-commas"), time.Unix(0, 0).UTC())
 	if !strings.Contains(v.From, "Firma GmbH, Abteilung Vertrieb") {
 		t.Errorf("Anzeigename mit Komma zerlegt: %q", v.From)
 	}
@@ -86,15 +86,15 @@ func TestLesenKopfzeilen(t *testing.T) {
 	}
 }
 
-func TestLesenSESVerdicts(t *testing.T) {
-	v := Lesen(korpus(t, "15-ses-verdicts"), time.Unix(0, 0).UTC())
+func TestReadSESVerdicts(t *testing.T) {
+	v := Read(korpus(t, "15-ses-verdicts"), time.Unix(0, 0).UTC())
 	if !v.Spam || v.Virus {
 		t.Errorf("Verdicts: spam=%v virus=%v", v.Spam, v.Virus)
 	}
 }
 
-func TestLesenKaputteMail(t *testing.T) {
-	v := Lesen(korpus(t, "11-broken"), time.Unix(0, 0).UTC())
+func TestReadBrokenMail(t *testing.T) {
+	v := Read(korpus(t, "11-broken"), time.Unix(0, 0).UTC())
 	if v.Subject != "(kein Betreff)" && v.Subject != "(nicht lesbar)" {
 		t.Errorf("Betreff: %q", v.Subject)
 	}

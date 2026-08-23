@@ -22,9 +22,9 @@ import (
 // derselben Stelle suchen, sonst legt jemand ein Profil an, das nie gefunden wird.
 var GeteiltesVerzeichnis string
 
-// Sitzung baut die AWS-Konfiguration aus Profil und Region. Beides darf leer sein;
+// Session baut die AWS-Konfiguration aus Profil und Region. Beides darf leer sein;
 // dann greift, was in der Umgebung steht.
-func Sitzung(ctx context.Context, profil, region string) (aws.Config, error) {
+func Session(ctx context.Context, profil, region string) (aws.Config, error) {
 	var opts []func(*config.LoadOptions) error
 	if profil != "" {
 		opts = append(opts, config.WithSharedConfigProfile(profil))
@@ -46,10 +46,10 @@ func Sitzung(ctx context.Context, profil, region string) (aws.Config, error) {
 	return cfg, nil
 }
 
-// ZugangPruefen holt die Zugangsdaten einmal ab. config.LoadDefaultConfig meldet
+// CheckAccess holt die Zugangsdaten einmal ab. config.LoadDefaultConfig meldet
 // naemlich noch keinen Fehler, wenn gar keine hinterlegt sind - das faellt sonst
 // erst beim ersten Aufruf auf, mitten in einer anderen Operation.
-func ZugangPruefen(ctx context.Context, cfg aws.Config) error {
+func CheckAccess(ctx context.Context, cfg aws.Config) error {
 	if cfg.Credentials == nil {
 		return errors.New("keine Zugangsdaten")
 	}
@@ -57,12 +57,12 @@ func ZugangPruefen(ctx context.Context, cfg aws.Config) error {
 	return err
 }
 
-// Klartext uebersetzt eine AWS-Ausnahme in einen Satz, der sagt, was zu tun ist.
+// PlainText uebersetzt eine AWS-Ausnahme in einen Satz, der sagt, was zu tun ist.
 //
 // Das AWS-SDK meldet fehlende oder unbrauchbare Zugangsdaten in einem halben
 // Dutzend Formen, alle englisch und alle ohne Hinweis darauf, dass der Assistent
 // zwei Felder weiter oben genau das loesen wuerde.
-func Klartext(err error, profil string, cat i18n.Catalog) string {
+func PlainText(err error, profil string, cat i18n.Catalog) string {
 	if err == nil {
 		return ""
 	}

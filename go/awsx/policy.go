@@ -11,8 +11,8 @@ import (
 // ob der Assistent das Richtige vorschlaegt.
 
 // ausPolicies liest Bucket, Prefix und Absender aus IAM-Policy-Dokumenten.
-func ausPolicies(dokumente []string) Fund {
-	var f Fund
+func ausPolicies(dokumente []string) Finding {
+	var f Finding
 	for _, d := range dokumente {
 		for _, s := range statements(d) {
 			if !strings.EqualFold(s.Effect, "Allow") {
@@ -28,7 +28,7 @@ func ausPolicies(dokumente []string) Fund {
 					f.Bucket, f.Prefix = bucket, prefix
 				}
 			case hatPraefix(aktionen, "ses:"):
-				if a := absenderAus(s.Condition); a != "" {
+				if a := senderFrom(s.Condition); a != "" {
 					f.Absender = a
 				}
 			}
@@ -109,13 +109,13 @@ func ausS3(aktionen, ressourcen []string, cond map[string]map[string]json.RawMes
 		if bucket == "" {
 			bucket = name
 		}
-		if geteilt && len(ordner(schluessel)) > len(prefix) {
-			prefix = ordner(schluessel)
+		if geteilt && len(folderOf(schluessel)) > len(prefix) {
+			prefix = folderOf(schluessel)
 		}
 	}
 	if prefix == "" {
-		for _, w := range bedingung(cond, "s3:prefix") {
-			if o := ordner(w); len(o) > len(prefix) {
+		for _, w := range condition(cond, "s3:prefix") {
+			if o := folderOf(w); len(o) > len(prefix) {
 				prefix = o
 			}
 		}
@@ -123,9 +123,9 @@ func ausS3(aktionen, ressourcen []string, cond map[string]map[string]json.RawMes
 	return bucket, prefix
 }
 
-// ordner macht aus einem Schluesselmuster wie "mail/ole/*" den Ordner "mail/ole/".
+// folderOf macht aus einem Schluesselmuster wie "mail/ole/*" den Ordner "mail/ole/".
 // Ein Muster mit Platzhalter mittendrin ("mail/*/posteingang") gibt nichts her.
-func ordner(muster string) string {
+func folderOf(muster string) string {
 	i := strings.IndexAny(muster, "*?")
 	if i < 0 {
 		i = len(muster)
@@ -144,9 +144,9 @@ func ordner(muster string) string {
 	return p
 }
 
-// absenderAus liest die Adresse, auf die SES diesen Zugang festnagelt.
-func absenderAus(cond map[string]map[string]json.RawMessage) string {
-	for _, w := range bedingung(cond, "ses:FromAddress") {
+// senderFrom liest die Adresse, auf die SES diesen Zugang festnagelt.
+func senderFrom(cond map[string]map[string]json.RawMessage) string {
+	for _, w := range condition(cond, "ses:FromAddress") {
 		// Ein Muster wie "*@example.org" nennt keine Adresse, die man eintragen kann.
 		if !strings.ContainsAny(w, "*?") && strings.Contains(w, "@") {
 			return w
@@ -155,9 +155,9 @@ func absenderAus(cond map[string]map[string]json.RawMessage) string {
 	return ""
 }
 
-// bedingung sammelt die Werte eines Bedingungsschluessels ueber alle Operatoren.
+// condition sammelt die Werte eines Bedingungsschluessels ueber alle Operatoren.
 // IAM behandelt diese Schluessel ohne Ruecksicht auf Gross- und Kleinschreibung.
-func bedingung(cond map[string]map[string]json.RawMessage, schluessel string) []string {
+func condition(cond map[string]map[string]json.RawMessage, schluessel string) []string {
 	var out []string
 	for _, paare := range cond {
 		for k, v := range paare {

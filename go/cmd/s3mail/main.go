@@ -19,12 +19,12 @@ import (
 	"syscall"
 	"time"
 
-	"s3mail/assistent"
 	"s3mail/awsx"
+	"s3mail/config"
 	"s3mail/i18n"
-	"s3mail/konfig"
 	"s3mail/store"
 	"s3mail/web"
+	"s3mail/wizard"
 )
 
 // version wird beim Bauen gesetzt: -ldflags "-X main.version=v0.2.0".
@@ -54,16 +54,16 @@ func main() {
 	}
 
 	// Das SDK muss die Zugangsdaten dort suchen, wo der Assistent sie hinschreibt.
-	awsx.GeteiltesVerzeichnis = konfig.AWSVerzeichnis()
+	awsx.GeteiltesVerzeichnis = config.AWSDir()
 
-	k := konfig.Laden()
+	k := config.Load()
 	setzeWenn(&k.Bucket, *bucket)
 	setzeWenn(&k.Region, *region)
 	setzeWenn(&k.Profil, *profil)
 	setzeWenn(&k.Absender, *absender)
 	setzeWenn(&k.Host, *host)
 	if *prefix != "" {
-		k.Prefix = konfig.PrefixNormalisieren(*prefix)
+		k.Prefix = config.NormalizePrefix(*prefix)
 	}
 	if *port != 0 {
 		k.Port = *port
@@ -76,21 +76,21 @@ func main() {
 	defer stop()
 
 	var startfehler string
-	srv := web.NewServer(nil, web.NeuesToken(), k.Host, k.Port, nil)
+	srv := web.NewServer(nil, web.NewToken(), k.Host, k.Port, nil)
 
 	// Der Assistent schaltet das Postfach im laufenden Prozess scharf - nach
 	// "Speichern und starten" soll niemand das Programm neu starten muessen.
-	ass := &assistent.Assistent{}
-	ass.Aktivieren = func(neu konfig.Konfig) error {
+	ass := &wizard.Wizard{}
+	ass.Aktivieren = func(neu config.Config) error {
 		return scharfschalten(ctx, srv, neu, *noSend, *refreshSek)
 	}
-	srv.MitAssistent(ass)
+	srv.WithWizard(ass)
 
 	if k.Bucket != "" && !*setup {
 		if err := scharfschalten(ctx, srv, k, *noSend, *refreshSek); err != nil {
 			// Beim Start gibt es keine Anfrage und damit keine Sprache aus
 			// dem Browser - die aus der Konfiguration muss genuegen.
-			startfehler = awsx.Klartext(err, k.Profil, i18n.Get(k.Sprache))
+			startfehler = awsx.PlainText(err, k.Profil, i18n.Get(k.Sprache))
 		}
 	}
 
@@ -110,7 +110,7 @@ func main() {
 		// nach vorne holen und sich zurueckziehen.
 		if url, ok := laufendeInstanz(); ok {
 			melde(protokoll, "s3mail laeuft bereits - hole das Fenster nach vorne.")
-			oeffneFenster(url)
+			openWindow(url)
 			return
 		}
 		fmt.Fprintf(os.Stderr, "Kann nicht auf %s lauschen: %v\n", adresse, err)
@@ -130,13 +130,13 @@ func main() {
 	}
 	// Unter Windows startet s3mail per Doppelklick; wer das Konsolenfenster
 	// schliesst, kaeme sonst nicht mehr an die Adresse heran.
-	if pfad, err := web.TokenDateiSchreiben(konfig.Verzeichnis(), url); err == nil && pfad != "" {
+	if pfad, err := web.TokenDateiSchreiben(config.Dir(), url); err == nil && pfad != "" {
 		melde(protokoll, "Adresse steht auch in: %s", pfad)
 	}
-	defer web.TokenDateiEntfernen(konfig.Verzeichnis())
+	defer web.TokenDateiEntfernen(config.Dir())
 
 	if !*noBrowser {
-		go oeffneFenster(url)
+		go openWindow(url)
 	}
 
 	httpSrv := &http.Server{Handler: srv, ReadHeaderTimeout: 10 * time.Second}
@@ -156,28 +156,28 @@ func main() {
 }
 
 // scharfschalten baut Postfach und Versand aus einer Konfiguration.
-func scharfschalten(ctx context.Context, srv *web.Server, k konfig.Konfig, noSend bool, refreshSekunden int) error {
-	cfg, err := awsx.Sitzung(ctx, k.Profil, k.Region)
+func scharfschalten(ctx context.Context, srv *web.Server, k config.Config, noSend bool, refreshSekunden int) error {
+	cfg, err := awsx.Session(ctx, k.Profil, k.Region)
 	if err != nil {
 		return err
 	}
-	if err := awsx.ZugangPruefen(ctx, cfg); err != nil {
+	if err := awsx.CheckAccess(ctx, cfg); err != nil {
 		return err
 	}
-	s3 := awsx.NeuS3(cfg, "")
-	mb := store.NewMailbox(ctx, s3, awsx.NeuKMS(cfg, ""), k.Bucket, k.Prefix,
-		konfig.CacheVerzeichnis(), k.AllowDelete)
+	s3 := awsx.NewS3(cfg, "")
+	mb := store.NewMailbox(ctx, s3, awsx.NewKMS(cfg, ""), k.Bucket, k.Prefix,
+		config.CacheDir(), k.AllowDelete)
 	srv.Mailbox = mb
 	srv.Config = map[string]any{
 		"bucket": k.Bucket, "root": mb.Root, "default_from": k.Absender,
-		"can_send": !noSend, "config_file": konfig.Datei(),
+		"can_send": !noSend, "config_file": config.File(),
 		"refresh_seconds": refreshSekunden,
 	}
 	if !noSend {
-		srv.MitVersand(awsx.NeuSES(cfg, ""), k.Absender)
+		srv.WithSender(awsx.NewSES(cfg, ""), k.Absender)
 		// Die Sperrliste haengt am Versand: wer nicht senden darf, muss auch
 		// niemanden vom Senden ausschliessen koennen.
-		srv.MitSperrliste(sperrliste{awsx.NeueSperrliste(cfg, "")})
+		srv.MitSperrliste(sperrliste{awsx.NewSuppressions(cfg, "")})
 	}
 	return nil
 }
