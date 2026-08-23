@@ -100,7 +100,7 @@ test:
       else
         PAKETINHALT="dist/${DATEI}"
       fi
-      go run tools/zippen.go "dist/s3mail-${LABEL}.zip" "$PAKETINHALT"
+      go run tools/zip.go "dist/s3mail-${LABEL}.zip" "$PAKETINHALT"
       rm -rf "$PAKETINHALT"
     # Als ZIP, damit Ausführungs-Bit und Bundle-Struktur den Download überstehen –
     # eine roh heruntergeladene Datei kommt ohne +x an und startet nicht.
