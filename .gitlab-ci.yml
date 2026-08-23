@@ -218,8 +218,10 @@ sign:macos:
         printf 'wegwerf' > /tmp/id.pw
         ECHT=nein
       fi
+    # Absoluter Pfad, nicht `cd go/dist`: GitLab fuehrt alle script-Zeilen in
+    # derselben Shell aus, ein zweites relatives cd landet also in go/dist/go/dist.
     - |
-      cd go/dist
+      cd "$CI_PROJECT_DIR/go/dist"
       for LABEL in macos-arm64 macos-amd64; do
         APP="s3mail-${LABEL}.app"
         if [ "$ECHT" = "ja" ]; then
@@ -249,7 +251,7 @@ sign:macos:
     # Ein Paket, dessen Ausführungsbit den Weg nicht übersteht, startet auf dem
     # Zielrechner nicht - und das merkt man erst dort. Also hier nachsehen.
     - |
-      cd go/dist
+      cd "$CI_PROJECT_DIR/go/dist"
       for LABEL in macos-arm64 macos-amd64; do
         rm -rf pruef && mkdir pruef && unzip -q "s3mail-${LABEL}.zip" -d pruef
         BIN=pruef/s3mail.app/Contents/MacOS/s3mail
