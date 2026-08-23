@@ -37,8 +37,8 @@ func ops(f *s3fake.Fake) []string { return f.Keys("mail/" + store.StateOps) }
 
 func snapshot(t *testing.T, f *s3fake.Fake) *core.Data {
 	t.Helper()
-	blob, da := f.Objs["mail/"+store.StateObject]
-	if !da {
+	blob, present := f.Objs["mail/"+store.StateObject]
+	if !present {
 		return nil
 	}
 	var d core.Data
@@ -65,7 +65,7 @@ func TestOneChangeOneSmallOp(t *testing.T) {
 	if n := len(f.Objs[written[0]]); n > 200 {
 		t.Errorf("%d bytes - that looks like the whole document", n)
 	}
-	if _, da := f.Objs["mail/"+store.StateObject]; da {
+	if _, present := f.Objs["mail/"+store.StateObject]; present {
 		t.Error("a snapshot was written for a single change")
 	}
 	if !s.Get("m1").Read {

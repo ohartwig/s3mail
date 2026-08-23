@@ -28,7 +28,7 @@ type KMS interface {
 }
 
 // ErrNoKMS reports that the message is encrypted but no access exists.
-var ErrNoKMS = errors.New("diese Mail ist mit KMS verschluesselt, aber es ist kein KMS-Zugriff eingerichtet")
+var ErrNoKMS = errors.New("encrypted with KMS, but no KMS access is set up")
 
 // LowerMeta senkt alle Schluessel auf Kleinschreibung - S3 gibt Metadaten je nach
 // Weg unterschiedlich zurueck.
@@ -64,7 +64,7 @@ func Decrypt(body []byte, meta map[string]string, kms KMS) ([]byte, error) {
 	}
 	raw, err := base64.StdEncoding.DecodeString(wrapped)
 	if err != nil {
-		return nil, fmt.Errorf("verpackter Schluessel ist kein base64: %w", err)
+		return nil, fmt.Errorf("the wrapped key is not base64: %w", err)
 	}
 
 	encContext := map[string]string{}
@@ -77,7 +77,7 @@ func Decrypt(body []byte, meta map[string]string, kms KMS) ([]byte, error) {
 	}
 	iv, err := base64.StdEncoding.DecodeString(m["x-amz-iv"])
 	if err != nil {
-		return nil, fmt.Errorf("iv ist kein base64: %w", err)
+		return nil, fmt.Errorf("the iv is not base64: %w", err)
 	}
 
 	alg := strings.ToUpper(m["x-amz-cek-alg"])
@@ -97,11 +97,11 @@ func Decrypt(body []byte, meta map[string]string, kms KMS) ([]byte, error) {
 		}
 		plain, err = gcm.Open(nil, iv, body, nil) // Tag haengt hinten am Chiffrat
 		if err != nil {
-			return nil, fmt.Errorf("AES-GCM laesst sich nicht oeffnen: %w", err)
+			return nil, fmt.Errorf("AES-GCM does not open: %w", err)
 		}
 	} else {
 		if len(body)%aes.BlockSize != 0 || len(body) == 0 {
-			return nil, errors.New("AES-CBC: Laenge ist kein Vielfaches der Blockgroesse")
+			return nil, errors.New("AES-CBC: the length is not a multiple of the block size")
 		}
 		plain = make([]byte, len(body))
 		cipher.NewCBCDecrypter(block, iv).CryptBlocks(plain, body)
@@ -113,7 +113,7 @@ func Decrypt(body []byte, meta map[string]string, kms KMS) ([]byte, error) {
 
 	if want := m["x-amz-unencrypted-content-length"]; want != "" {
 		if n, err := strconv.Atoi(want); err == nil && n != len(plain) {
-			return nil, fmt.Errorf("entschluesselte Laenge passt nicht (%d != %d)", len(plain), n)
+			return nil, fmt.Errorf("the decrypted length does not match (%d != %d)", len(plain), n)
 		}
 	}
 	return plain, nil

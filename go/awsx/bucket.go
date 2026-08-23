@@ -3,7 +3,6 @@ package awsx
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -55,7 +54,7 @@ func (a *S3) LifecycleDays(ctx context.Context, bucket string) int {
 
 // SetLifecycle creates the trash rule, changes it, or takes it out again.
 // tage=0 wieder heraus. Fremde Regeln im Bucket bleiben stehen.
-func (a *S3) SetLifecycle(ctx context.Context, bucket, prefix string, days int) (string, error) {
+func (a *S3) SetLifecycle(ctx context.Context, bucket, prefix string, days int) error {
 	var existing []types.LifecycleRule
 	if resp, err := a.c.GetBucketLifecycleConfiguration(ctx,
 		&s3.GetBucketLifecycleConfigurationInput{Bucket: aws.String(bucket)}); err == nil {
@@ -76,19 +75,19 @@ func (a *S3) SetLifecycle(ctx context.Context, bucket, prefix string, days int) 
 	if len(existing) == 0 {
 		if _, err := a.c.DeleteBucketLifecycle(ctx,
 			&s3.DeleteBucketLifecycleInput{Bucket: aws.String(bucket)}); err != nil {
-			return "", err
+			return err
 		}
-		return "Papierkorb-Automatik entfernt.", nil
+		return nil
 	}
 	_, err := a.c.PutBucketLifecycleConfiguration(ctx, &s3.PutBucketLifecycleConfigurationInput{
 		Bucket:                 aws.String(bucket),
 		LifecycleConfiguration: &types.BucketLifecycleConfiguration{Rules: existing},
 	})
 	if err != nil {
-		return "", err
+		return err
 	}
 	if days == 0 {
-		return "Papierkorb-Automatik entfernt.", nil
+		return nil
 	}
-	return fmt.Sprintf("Papierkorb wird nach %d Tagen automatisch geleert.", days), nil
+	return nil
 }

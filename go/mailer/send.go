@@ -45,8 +45,8 @@ type Message struct {
 }
 
 var (
-	ErrNoSender    = errors.New("kein Absender gesetzt")
-	ErrNoRecipient = errors.New("kein Empfaenger angegeben")
+	ErrNoSender    = errors.New("no sender set")
+	ErrNoRecipient = errors.New("no recipient given")
 )
 
 // Build assembles the message.
@@ -163,7 +163,7 @@ func addresses(s string) ([]string, error) {
 	}
 	list, err := mail.ParseAddressList(s)
 	if err != nil {
-		return nil, fmt.Errorf("Empfaenger nicht lesbar: %w", err)
+		return nil, fmt.Errorf("recipient not readable: %w", err)
 	}
 	out := make([]string, 0, len(list))
 	for _, a := range list {

@@ -46,8 +46,8 @@ func TestOpsAgainstPython(t *testing.T) {
 		t.Errorf("Tags:\n  python: %v\n  go:     %v", want.Tags, got.Tags)
 	}
 	for mid, w := range want.Messages {
-		g, da := got.Messages[mid]
-		if !da {
+		g, present := got.Messages[mid]
+		if !present {
 			t.Errorf("%s missing in Go", mid)
 			continue
 		}
@@ -59,7 +59,7 @@ func TestOpsAgainstPython(t *testing.T) {
 		}
 	}
 	for mid := range got.Messages {
-		if _, da := want.Messages[mid]; !da {
+		if _, present := want.Messages[mid]; !present {
 			t.Errorf("%s exists in Go on top", mid)
 		}
 	}

@@ -23,9 +23,9 @@ const HeaderChunk = 65536
 
 var (
 	// ErrTrashOnly: deleting for good works only from there.
-	ErrTrashOnly = errors.New("endgueltig loeschen geht nur aus dem Papierkorb")
+	ErrTrashOnly = errors.New("deleting for good works only from the trash")
 	// ErrDeleteBlocked: with --no-delete not at all.
-	ErrDeleteBlocked = errors.New("endgueltiges loeschen ist deaktiviert")
+	ErrDeleteBlocked = errors.New("deleting for good is switched off")
 )
 
 // Mailbox is the index over the bucket, state included.
@@ -112,7 +112,7 @@ func (m *Mailbox) Fetch(ctx context.Context, key string, headBytes int) ([]byte,
 	m.mu.RUnlock()
 
 	if !partial && headBytes == 0 {
-		if b, da := m.content.read(etag); da {
+		if b, present := m.content.read(etag); present {
 			return b, nil
 		}
 	}
@@ -191,14 +191,14 @@ func (m *Mailbox) Refresh(ctx context.Context) (RefreshResult, error) {
 	m.mu.Lock()
 	var removed int
 	for key := range m.index {
-		if _, da := listed[key]; !da {
+		if _, present := listed[key]; !present {
 			delete(m.index, key)
 			removed++
 		}
 	}
 	var todo []ObjectInfo
 	for key, o := range listed {
-		if old, da := m.index[key]; !da || old.ETag != o.ETag {
+		if old, present := m.index[key]; !present || old.ETag != o.ETag {
 			todo = append(todo, o)
 		}
 	}
@@ -239,7 +239,7 @@ func (m *Mailbox) summarize(ctx context.Context, o ObjectInfo) core.Message {
 	}
 	raw, err := m.Fetch(ctx, o.Key, HeaderChunk)
 	if err != nil {
-		base.Subject = "(nicht lesbar)"
+		base.Subject = mimeparse.SubjectUnreadable
 		base.Snippet = err.Error()
 		return base
 	}
@@ -248,7 +248,7 @@ func (m *Mailbox) summarize(ctx context.Context, o ObjectInfo) core.Message {
 	base.From, base.To, base.Cc = s.From, s.To, s.Cc
 	base.Subject = s.Subject
 	if base.Subject == "" {
-		base.Subject = "(kein Betreff)"
+		base.Subject = mimeparse.SubjectNone
 	}
 	base.Snippet = s.Preview
 	base.HasAttachment = len(s.Attachments) > 0
@@ -256,7 +256,7 @@ func (m *Mailbox) summarize(ctx context.Context, o ObjectInfo) core.Message {
 	return base
 }
 
-// -- Verschieben / Loeschen ------------------------------------------------- //
+// -- move / delete ---------------------------------------------------------- //
 
 type MoveResult struct {
 	Key     string `json:"key"`

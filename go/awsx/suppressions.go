@@ -56,10 +56,10 @@ func (s *Suppressions) Unblock(ctx context.Context, address string) error {
 // List returns the blocked addresses, newest first.
 func (s *Suppressions) List(ctx context.Context) ([]Entry, error) {
 	out := []Entry{}
-	var weiter *string
+	var more *string
 	for {
 		resp, err := s.c.ListSuppressedDestinations(ctx,
-			&sesv2.ListSuppressedDestinationsInput{NextToken: weiter, PageSize: aws.Int32(100)})
+			&sesv2.ListSuppressedDestinationsInput{NextToken: more, PageSize: aws.Int32(100)})
 		if err != nil {
 			return nil, err
 		}
@@ -72,8 +72,8 @@ func (s *Suppressions) List(ctx context.Context) ([]Entry, error) {
 		}
 		// The counter limits what a broken answer can do: without it the loop would
 		// run forever on a token that never changes.
-		weiter = resp.NextToken
-		if weiter == nil || len(out) > 5000 {
+		more = resp.NextToken
+		if more == nil || len(out) > 5000 {
 			break
 		}
 	}

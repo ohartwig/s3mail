@@ -32,6 +32,14 @@ type Summary struct {
 	Spam        string       `json:"spam"`
 }
 
+// The two placeholders a message can carry instead of a subject. They land in
+// the index as well, so they cannot be translated where they are written - the
+// HTTP layer swaps them for the reader's language on the way out.
+const (
+	SubjectUnreadable = "(not readable)"
+	SubjectNone       = "(no subject)"
+)
+
 type Attachment struct {
 	Index int    `json:"index"`
 	Name  string `json:"name"`
@@ -152,13 +160,13 @@ func roleOf(h message.Header) role {
 // Summarize reads a raw message and builds the index entry from it.
 func Summarize(raw []byte, fallback time.Time) Summary {
 	s := Summary{Attachments: []Attachment{}}
-	ent, err := message.Read(strings.NewReader(string(raw)))
-	if ent == nil {
+	msg, err := message.Read(strings.NewReader(string(raw)))
+	if msg == nil {
 		s.Preview = rawPreview(raw) // gar kein MIME - dann eben der Rohtext
 		return s
 	}
 	_ = err // ein Header-Fehler kippt die Mail nicht, der Rest ist oft brauchbar
-	h := ent.Header
+	h := msg.Header
 	s.From = AddrStr(h.Get("From"))
 	s.To = AddrStr(h.Get("To"))
 	s.Cc = AddrStr(h.Get("Cc"))
@@ -168,7 +176,7 @@ func Summarize(raw []byte, fallback time.Time) Summary {
 
 	var text, html strings.Builder
 	idx := 0
-	walk(ent, &idx, &text, &html, &s)
+	walk(msg, &idx, &text, &html, &s)
 
 	preview := text.String()
 	if strings.TrimSpace(preview) == "" {
@@ -196,8 +204,8 @@ func rawPreview(raw []byte) string {
 	return out
 }
 
-func walk(ent *message.Entity, idx *int, text, html *strings.Builder, s *Summary) {
-	if mr := ent.MultipartReader(); mr != nil {
+func walk(msg *message.Entity, idx *int, text, html *strings.Builder, s *Summary) {
+	if mr := msg.MultipartReader(); mr != nil {
 		for {
 			part, err := mr.NextPart()
 			if err != nil {
@@ -206,14 +214,14 @@ func walk(ent *message.Entity, idx *int, text, html *strings.Builder, s *Summary
 			walk(part, idx, text, html, s)
 		}
 	}
-	ctype, cparams, _ := ent.Header.ContentType()
+	ctype, cparams, _ := msg.Header.ContentType()
 	i := *idx
 	*idx++
-	switch roleOf(ent.Header) {
+	switch roleOf(msg.Header) {
 	case roleInline:
 		return
 	case roleAttachment:
-		_, dparams, _ := ent.Header.ContentDisposition()
+		_, dparams, _ := msg.Header.ContentDisposition()
 		name := dparams["filename"]
 		if name == "" {
 			name = cparams["name"]
@@ -225,7 +233,7 @@ func walk(ent *message.Entity, idx *int, text, html *strings.Builder, s *Summary
 			Attachment{Index: i, Name: Dec(name), CType: ctype})
 		return
 	}
-	body, err := io.ReadAll(ent.Body)
+	body, err := io.ReadAll(msg.Body)
 	if err != nil {
 		return
 	}
@@ -267,17 +275,17 @@ type FullAttachment struct {
 // Read parses a whole message.
 func Read(raw []byte, fallback time.Time) Full {
 	v := Full{Attachments: []FullAttachment{}}
-	ent, err := message.Read(strings.NewReader(string(raw)))
-	if ent == nil {
-		v.Subject = "(nicht lesbar)"
+	msg, err := message.Read(strings.NewReader(string(raw)))
+	if msg == nil {
+		v.Subject = SubjectUnreadable
 		v.Text = rawPreview(raw)
 		return v
 	}
 	_ = err
-	h := ent.Header
+	h := msg.Header
 	v.Subject = Dec(h.Get("Subject"))
 	if v.Subject == "" {
-		v.Subject = "(kein Betreff)"
+		v.Subject = SubjectNone
 	}
 	v.From = AddrStr(h.Get("From"))
 	v.ReplyTo = AddrStr(h.Get("Reply-To"))
@@ -291,7 +299,7 @@ func Read(raw []byte, fallback time.Time) Full {
 
 	var text, html []string
 	idx := 0
-	fullWalk(ent, &idx, &text, &html, &v)
+	fullWalk(msg, &idx, &text, &html, &v)
 
 	v.HTML = strings.Join(html, "\n<hr>\n")
 	v.Text = strings.Join(text, "\n\n")
@@ -301,8 +309,8 @@ func Read(raw []byte, fallback time.Time) Full {
 	return v
 }
 
-func fullWalk(ent *message.Entity, idx *int, text, html *[]string, v *Full) {
-	if mr := ent.MultipartReader(); mr != nil {
+func fullWalk(msg *message.Entity, idx *int, text, html *[]string, v *Full) {
+	if mr := msg.MultipartReader(); mr != nil {
 		for {
 			part, err := mr.NextPart()
 			if err != nil {
@@ -311,15 +319,15 @@ func fullWalk(ent *message.Entity, idx *int, text, html *[]string, v *Full) {
 			fullWalk(part, idx, text, html, v)
 		}
 	}
-	ctype, cparams, _ := ent.Header.ContentType()
+	ctype, cparams, _ := msg.Header.ContentType()
 	i := *idx
 	*idx++
-	switch roleOf(ent.Header) {
+	switch roleOf(msg.Header) {
 	case roleInline:
 		return
 	case roleAttachment:
-		content, _ := io.ReadAll(ent.Body)
-		_, dparams, _ := ent.Header.ContentDisposition()
+		content, _ := io.ReadAll(msg.Body)
+		_, dparams, _ := msg.Header.ContentDisposition()
 		name := dparams["filename"]
 		if name == "" {
 			name = cparams["name"]
@@ -331,7 +339,7 @@ func fullWalk(ent *message.Entity, idx *int, text, html *[]string, v *Full) {
 			ContentType: ctype, Size: len(content), Content: content})
 		return
 	}
-	body, err := io.ReadAll(ent.Body)
+	body, err := io.ReadAll(msg.Body)
 	if err != nil {
 		return
 	}

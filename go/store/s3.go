@@ -56,4 +56,4 @@ type S3 interface {
 }
 
 // ErrNotFound is what an implementation should return for NoSuchKey.
-var ErrNotFound = errors.New("objekt nicht gefunden")
+var ErrNotFound = errors.New("object not found")

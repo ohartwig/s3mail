@@ -83,11 +83,11 @@ func main() {
 
 	// The wizard arms the mailbox inside the running process - after "save and
 	// start" nobody should have to restart the program.
-	ass := &wizard.Wizard{}
-	ass.Activate = func(fresh config.Config) error {
+	wiz := &wizard.Wizard{}
+	wiz.Activate = func(fresh config.Config) error {
 		return activate(ctx, srv, fresh, *noSend, *refreshSecs)
 	}
-	srv.WithWizard(ass)
+	srv.WithWizard(wiz)
 
 	if k.Bucket != "" && !*setup {
 		if err := activate(ctx, srv, k, *noSend, *refreshSecs); err != nil {
@@ -133,7 +133,7 @@ func main() {
 	}
 	// On Windows s3mail starts by double click; whoever closes the console window
 	// would otherwise have no way back to the address.
-	if path, err := web.WriteTokenFile(config.Dir(), url); err == nil && path != "" {
+	if path, err := web.WriteTokenFile(config.Dir(), url, cat.T("token.file.note")); err == nil && path != "" {
 		report(logFile, "%s", cat.Tf("cli.addressFile", path))
 	}
 	defer web.RemoveTokenFile(config.Dir())

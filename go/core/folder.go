@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
@@ -36,6 +37,12 @@ var SystemFolders = []SystemFolder{
 
 var folderRe = regexp.MustCompile(`^[\p{L}][\p{L}\p{N}_ .-]{0,39}$`)
 
+// ErrBadInput marks everything the caller got wrong: an impossible folder name,
+// a key outside the prefix, one of our own files. The HTTP layer turns exactly
+// these into a 400 - it used to look for German words in the message, which was
+// a translation away from silently becoming a 502.
+var ErrBadInput = errors.New("invalid input")
+
 // ValidFolder checks a folder name. The inbox is the empty name.
 func ValidFolder(name string) (string, error) {
 	name = strings.Trim(strings.TrimSpace(name), "/")
@@ -43,7 +50,7 @@ func ValidFolder(name string) (string, error) {
 		return Inbox, nil
 	}
 	if strings.Contains(name, "/") || name == "." || name == ".." || !folderRe.MatchString(name) {
-		return "", fmt.Errorf("ungueltiger Ordnername: %q", name)
+		return "", fmt.Errorf("%w: folder name %q", ErrBadInput, name)
 	}
 	return name, nil
 }
@@ -106,10 +113,10 @@ func (s *Store) Internal(key string) bool {
 // Own is the security boundary: no key outside the prefix, nothing internal.
 func (s *Store) Own(key string) error {
 	if !strings.HasPrefix(key, s.Root) {
-		return fmt.Errorf("Key liegt ausserhalb des Prefix")
+		return fmt.Errorf("%w: the key lies outside the prefix", ErrBadInput)
 	}
 	if s.Internal(key) {
-		return fmt.Errorf("interne Datei")
+		return fmt.Errorf("%w: internal file", ErrBadInput)
 	}
 	return nil
 }

@@ -85,11 +85,20 @@ func Load() Config {
 	return k
 }
 
+// The three things a caller can get wrong. They are sentinels and not sentences:
+// what the reader gets to see comes from the catalogue, and only the HTTP layer
+// knows which language they read.
+var (
+	ErrNoBucket              = errors.New("no bucket given")
+	ErrCredentialsIncomplete = errors.New("access key id and secret access key are both needed")
+	ErrBadKeyID              = errors.New("that does not look like an access key id")
+)
+
 // Save writes the file with mode 0600 - it holds no secret, but the bucket
 // name is nobody else's business either.
 func Save(k Config) (string, error) {
 	if strings.TrimSpace(k.Bucket) == "" {
-		return "", errors.New("ohne Bucket geht es nicht")
+		return "", ErrNoBucket
 	}
 	k.Prefix = NormalizePrefix(k.Prefix)
 	if err := os.MkdirAll(Dir(), 0o700); err != nil {
@@ -172,10 +181,10 @@ func WriteCredentials(profile, keyID, secret, region string) (string, error) {
 	}
 	keyID, secret = strings.TrimSpace(keyID), strings.TrimSpace(secret)
 	if keyID == "" || secret == "" {
-		return "", errors.New("Access Key ID und Secret Access Key werden beide gebraucht")
+		return "", ErrCredentialsIncomplete
 	}
 	if len(keyID) < 16 || (!strings.HasPrefix(keyID, "AKIA") && !strings.HasPrefix(keyID, "ASIA")) {
-		return "", errors.New("Das sieht nicht nach einer Access Key ID aus (beginnt mit AKIA…)")
+		return "", ErrBadKeyID
 	}
 	if err := os.MkdirAll(AWSDir(), 0o700); err != nil {
 		return "", err

@@ -26,7 +26,7 @@ func (s *Server) WithWizard(a *wizard.Wizard) { s.wizard = a }
 func (s *Server) sendRoute() {
 	s.mux.HandleFunc("POST /api/send", func(w http.ResponseWriter, r *http.Request) {
 		if s.sender == nil {
-			s.writeError(w, http.StatusBadRequest, "SES-Versand ist deaktiviert (--no-send)")
+			s.writeError(w, http.StatusBadRequest, s.text(r, "error.sendingOff"))
 			return
 		}
 		var e mailer.Draft
@@ -40,7 +40,7 @@ func (s *Server) sendRoute() {
 			// forward the raw message for the attachment.
 			obj, err := s.readMail(r, e.Key, false)
 			if err != nil {
-				s.translate(w, err)
+				s.translate(w, r, err)
 				return
 			}
 			o = mailer.Original{MessageID: obj.MessageID, References: obj.References,
@@ -58,7 +58,7 @@ func (s *Server) sendRoute() {
 		}
 		id, err := s.sender.Send(r.Context(), n)
 		if err != nil {
-			s.translate(w, err)
+			s.translate(w, r, err)
 			return
 		}
 		s.json(w, http.StatusOK, map[string]any{"message_id": id})
@@ -71,8 +71,8 @@ func (s *Server) wizardRoutes() {
 			s.writeError(w, http.StatusBadRequest, s.text(r, "error.noWizard"))
 			return
 		}
-		fn, da := s.wizard.Route(r.URL.Path)
-		if !da {
+		fn, present := s.wizard.Route(r.URL.Path)
+		if !present {
 			s.writeError(w, http.StatusNotFound, s.text(r, "error.unknownAction"))
 			return
 		}
@@ -89,7 +89,7 @@ func (s *Server) wizardRoutes() {
 				s.writeError(w, http.StatusBadRequest, input.Text)
 				return
 			}
-			s.translate(w, err)
+			s.translate(w, r, err)
 			return
 		}
 		s.json(w, http.StatusOK, res)

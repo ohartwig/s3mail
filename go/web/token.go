@@ -12,7 +12,7 @@ import (
 func NewToken() string {
 	b := make([]byte, 24)
 	if _, err := rand.Read(b); err != nil {
-		panic("kein Zufall verfuegbar: " + err.Error())
+		panic("no randomness available: " + err.Error())
 	}
 	return base64.RawURLEncoding.EncodeToString(b)
 }
@@ -27,16 +27,18 @@ func equal(a, b string) bool {
 // On Windows s3mail starts by double click, and whoever closes the console window
 // has no way back to the address - the server then still runs but is
 // unreachable. So it is written here as well.
-func WriteTokenFile(dir, url string) (string, error) {
+// addressFile is the name the start address is written under.
+const addressFile = "adresse.txt"
+
+func WriteTokenFile(dir, url, note string) (string, error) {
 	if dir == "" {
 		return "", nil
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
-	path := filepath.Join(dir, "adresse.txt")
-	content := url + "\n\nDiese Adresse gilt, solange s3mail laeuft. Nach einem\n" +
-		"Neustart steht hier eine neue.\n"
+	path := filepath.Join(dir, addressFile)
+	content := url + "\n\n" + note + "\n"
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		return "", err
 	}
@@ -47,6 +49,6 @@ func WriteTokenFile(dir, url string) (string, error) {
 // confusion when it lies around in a file.
 func RemoveTokenFile(dir string) {
 	if dir != "" {
-		_ = os.Remove(filepath.Join(dir, "adresse.txt"))
+		_ = os.Remove(filepath.Join(dir, addressFile))
 	}
 }

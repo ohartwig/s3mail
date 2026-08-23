@@ -184,9 +184,9 @@ func TestReadMailAndAttachment(t *testing.T) {
 	if !strings.Contains(d["text"].(string), "Ümlaut") {
 		t.Errorf("Fliesstext: %v", d["text"])
 	}
-	anh, _ := d["attachments"].([]any)
-	if len(anh) != 1 {
-		t.Fatalf("Anhaenge: %v", anh)
+	att, _ := d["attachments"].([]any)
+	if len(att) != 1 {
+		t.Fatalf("Anhaenge: %v", att)
 	}
 	if d["read"] != true || !mb.State.Get("m1").Read {
 		t.Error("opening did not mark it read")

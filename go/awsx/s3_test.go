@@ -124,8 +124,8 @@ func (s *s3Server) handleList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *s3Server) handleGet(w http.ResponseWriter, r *http.Request, key string) {
-	body, da := s.objs[key]
-	if !da {
+	body, present := s.objs[key]
+	if !present {
 		s.fail(w, 404, "NoSuchKey")
 		return
 	}
@@ -145,7 +145,7 @@ func (s *s3Server) handleGet(w http.ResponseWriter, r *http.Request, key string)
 }
 
 func (s *s3Server) header(w http.ResponseWriter, key string) {
-	if _, da := s.objs[key]; !da {
+	if _, present := s.objs[key]; !present {
 		s.fail(w, 404, "NotFound")
 		return
 	}
@@ -181,8 +181,8 @@ func (s *s3Server) handleCopy(w http.ResponseWriter, r *http.Request, key string
 		source = u
 	}
 	_, srcKey, _ := strings.Cut(strings.TrimPrefix(source, "/"), "/")
-	body, da := s.objs[srcKey]
-	if !da {
+	body, present := s.objs[srcKey]
+	if !present {
 		s.fail(w, 404, "NoSuchKey")
 		return
 	}
@@ -359,7 +359,7 @@ func TestCopyWithSpecialCharacters(t *testing.T) {
 		store.CopyOpts{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, da := srv.objs["mail/archiv/Rechnung Übersicht.eml"]; !da {
+	if _, present := srv.objs["mail/archiv/Rechnung Übersicht.eml"]; !present {
 		t.Errorf("copy missing, present: %v", key(srv))
 	}
 }
@@ -391,7 +391,7 @@ func TestPutAndDelete(t *testing.T) {
 	if err := a.Delete(ctx, "test-bucket", "mail/.s3mail-state/x.json"); err != nil {
 		t.Fatal(err)
 	}
-	if _, da := srv.objs["mail/.s3mail-state/x.json"]; da {
+	if _, present := srv.objs["mail/.s3mail-state/x.json"]; present {
 		t.Error("not deleted")
 	}
 }
@@ -416,7 +416,7 @@ func TestWholeMailboxThroughTheAdapter(t *testing.T) {
 	if _, err := mb.Move(ctx, []string{"mail/m1"}, "archiv"); err != nil {
 		t.Fatal(err)
 	}
-	if _, da := srv.objs["mail/archiv/m1"]; !da {
+	if _, present := srv.objs["mail/archiv/m1"]; !present {
 		t.Errorf("not moved: %v", key(srv))
 	}
 	// the state lands in the bucket and is read by a second mailbox

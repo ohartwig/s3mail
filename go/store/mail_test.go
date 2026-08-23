@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"s3mail/core"
+	"s3mail/mimeparse"
 	"s3mail/s3fake"
 	"s3mail/store"
 )
@@ -101,7 +102,7 @@ func TestMoveCarriesTheState(t *testing.T) {
 	if len(res) != 1 || res[0].NewKey != "mail/archiv/m1" {
 		t.Fatalf("%+v", res)
 	}
-	if _, da := f.Objs["mail/m1"]; da {
+	if _, present := f.Objs["mail/m1"]; present {
 		t.Error("original not deleted")
 	}
 	e := m.State.Get("m1")
@@ -167,7 +168,7 @@ func TestNameCollision(t *testing.T) {
 	if res[0].NewKey != "mail/archiv/m1-1" {
 		t.Errorf("collision not defused: %q", res[0].NewKey)
 	}
-	if _, da := f.Objs["mail/archiv/m1"]; !da {
+	if _, present := f.Objs["mail/archiv/m1"]; !present {
 		t.Error("existing message overwritten")
 	}
 }
@@ -189,7 +190,7 @@ func TestDeleteOnlyFromTrash(t *testing.T) {
 	if err != nil || n != 1 {
 		t.Errorf("delete from the trash: %d %v", n, err)
 	}
-	if _, da := m.State.Data().Messages["m1"]; da {
+	if _, present := m.State.Data().Messages["m1"]; present {
 		t.Error("the state entry of the deleted message stayed behind")
 	}
 }
@@ -263,7 +264,7 @@ func TestEncryptedWithoutPermissionFailsOnlyThatMail(t *testing.T) {
 	if to["klar"].Subject != "Lesbar" {
 		t.Errorf("readable message dragged down: %+v", to["klar"])
 	}
-	if to["enc1"].Subject != "(nicht lesbar)" {
+	if to["enc1"].Subject != mimeparse.SubjectUnreadable {
 		t.Errorf("unreadable message not marked: %+v", to["enc1"])
 	}
 }

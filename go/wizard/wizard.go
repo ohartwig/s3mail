@@ -43,7 +43,7 @@ type Data struct {
 	Prefix      string `json:"prefix"`
 	Absender    string `json:"from"`
 	AllowDelete *bool  `json:"allow_delete"`
-	Tage        int    `json:"days"`
+	Days        int    `json:"days"`
 
 	// Language is set by the HTTP layer from the request, not by the browser
 	// from the form: it is already in the cookie there, and two sources for
@@ -160,10 +160,14 @@ func (a *Wizard) Lifecycle(ctx context.Context, d Data) (map[string]any, error) 
 	if err != nil {
 		return nil, InputError{awsx.PlainText(err, d.Profile, i18n.Get(d.Language))}
 	}
-	msg, err := awsx.NewS3(cfg, "").SetLifecycle(ctx, d.Bucket,
-		config.NormalizePrefix(d.Prefix), d.Tage)
-	if err != nil {
-		return nil, InputError{awsx.PlainText(err, d.Profile, i18n.Get(d.Language))}
+	cat := i18n.Get(d.Language)
+	if err := awsx.NewS3(cfg, "").SetLifecycle(ctx, d.Bucket,
+		config.NormalizePrefix(d.Prefix), d.Days); err != nil {
+		return nil, InputError{awsx.PlainText(err, d.Profile, cat)}
+	}
+	msg := cat.T("lifecycle.off")
+	if d.Days > 0 {
+		msg = cat.Tf("lifecycle.on", d.Days)
 	}
 	return map[string]any{"message": msg}, nil
 }

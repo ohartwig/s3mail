@@ -95,7 +95,7 @@ func TestReadSESVerdicts(t *testing.T) {
 
 func TestReadBrokenMail(t *testing.T) {
 	v := Read(corpus(t, "11-broken"), time.Unix(0, 0).UTC())
-	if v.Subject != "(kein Betreff)" && v.Subject != "(nicht lesbar)" {
+	if v.Subject != SubjectNone && v.Subject != SubjectUnreadable {
 		t.Errorf("subject: %q", v.Subject)
 	}
 	if !strings.Contains(v.Text, "kein gueltiges mime") {

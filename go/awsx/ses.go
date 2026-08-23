@@ -50,7 +50,7 @@ func (s *SES) Identities(ctx context.Context) []string {
 	}
 	out := []string{}
 	for _, id := range resp.Identities {
-		if a, da := attrs.VerificationAttributes[id]; da &&
+		if a, present := attrs.VerificationAttributes[id]; present &&
 			a.VerificationStatus == types.VerificationStatusSuccess {
 			out = append(out, id)
 		}
@@ -78,7 +78,7 @@ func (s *SES) VerifiedDomains(ctx context.Context) []string {
 	}
 	out := []string{}
 	for _, id := range resp.Identities {
-		if a, da := attrs.VerificationAttributes[id]; da &&
+		if a, present := attrs.VerificationAttributes[id]; present &&
 			a.VerificationStatus == types.VerificationStatusSuccess {
 			out = append(out, id)
 		}
@@ -95,7 +95,7 @@ func (s *SES) Verified(ctx context.Context, address, domain string) ([]string, e
 	}
 	var good []string
 	for _, id := range []string{address, domain} {
-		if a, da := resp.VerificationAttributes[id]; da &&
+		if a, present := resp.VerificationAttributes[id]; present &&
 			a.VerificationStatus == types.VerificationStatusSuccess {
 			good = append(good, id)
 		}

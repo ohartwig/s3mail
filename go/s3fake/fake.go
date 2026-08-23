@@ -66,8 +66,8 @@ func (f *Fake) Get(_ context.Context, _, key, byteRange string) (store.Object, e
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.record("get " + key + " " + byteRange)
-	body, da := f.Objs[key]
-	if !da {
+	body, present := f.Objs[key]
+	if !present {
 		return store.Object{}, store.ErrNotFound
 	}
 	if byteRange != "" {
@@ -88,8 +88,8 @@ func (f *Fake) Head(_ context.Context, _, key string) (store.Head, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.record("head " + key)
-	body, da := f.Objs[key]
-	if !da {
+	body, present := f.Objs[key]
+	if !present {
 		return store.Head{}, store.ErrNotFound
 	}
 	o := f.SSE[key]
@@ -124,8 +124,8 @@ func (f *Fake) Copy(_ context.Context, _, src, dst string, o store.CopyOpts) err
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.record("copy " + src + " -> " + dst)
-	body, da := f.Objs[src]
-	if !da {
+	body, present := f.Objs[src]
+	if !present {
 		return store.ErrNotFound
 	}
 	f.Objs[dst] = append([]byte(nil), body...)
@@ -204,8 +204,8 @@ func (f *Fake) SSEOf(key string) store.CopyOpts {
 func (f *Fake) Has(key string) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	_, da := f.Objs[key]
-	return da
+	_, present := f.Objs[key]
+	return present
 }
 
 // ClearCalls resets the recording.

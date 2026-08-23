@@ -51,7 +51,7 @@ func Session(ctx context.Context, profile, region string) (aws.Config, error) {
 // first call, in the middle of some other operation.
 func CheckAccess(ctx context.Context, cfg aws.Config) error {
 	if cfg.Credentials == nil {
-		return errors.New("keine Zugangsdaten")
+		return errors.New("no credentials")
 	}
 	_, err := cfg.Credentials.Retrieve(ctx)
 	return err
@@ -120,7 +120,7 @@ func PlainText(err error, profile string, cat i18n.Catalog) string {
 	if strings.Contains(text, "failed to refresh cached credentials") ||
 		strings.Contains(text, "no EC2 IMDS role found") ||
 		strings.Contains(text, "failed to retrieve credentials") ||
-		strings.Contains(text, "keine Zugangsdaten") ||
+		strings.Contains(text, "no credentials") ||
 		strings.Contains(text, "EmptyStaticCreds") {
 		return cat.Tf("aws.noCredentials", wo, keys)
 	}

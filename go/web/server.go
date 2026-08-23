@@ -12,8 +12,10 @@ import (
 	"strings"
 	"time"
 
+	"s3mail/config"
 	"s3mail/core"
 	"s3mail/i18n"
+	"s3mail/mailer"
 	"s3mail/mimeparse"
 	"s3mail/store"
 	"s3mail/wizard"
@@ -117,11 +119,11 @@ func (s *Server) token(r *http.Request) string {
 
 func (s *Server) checkAccess(w http.ResponseWriter, r *http.Request) bool {
 	if !s.hostOK(r) {
-		http.Error(w, "s3mail: unerwarteter Host-Header", http.StatusForbidden)
+		http.Error(w, s.text(r, "error.badHost"), http.StatusForbidden)
 		return false
 	}
 	if !s.originOK(r) {
-		s.writeError(w, http.StatusForbidden, "Anfrage von einer fremden Herkunft abgelehnt")
+		s.writeError(w, http.StatusForbidden, s.text(r, "error.foreignOrigin"))
 		return false
 	}
 	if !equal(s.token(r), s.Token) {
@@ -142,7 +144,7 @@ func (s *Server) checkAccess(w http.ResponseWriter, r *http.Request) bool {
 func (s *Server) json(w http.ResponseWriter, code int, v any) {
 	blob, err := json.Marshal(v)
 	if err != nil {
-		http.Error(w, "Antwort nicht darstellbar", http.StatusInternalServerError)
+		http.Error(w, "answer cannot be rendered", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -156,20 +158,34 @@ func (s *Server) writeError(w http.ResponseWriter, code int, text string) {
 
 // translate maps errors from the logic onto status codes - so the layers below
 // throw exceptions instead of building status codes.
-// darunter passende Fehler werfen koennen statt Statuscodes zu bauen.
-func (s *Server) translate(w http.ResponseWriter, err error) {
+func (s *Server) translate(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case err == nil:
 		return
-	case errors.Is(err, store.ErrTrashOnly), errors.Is(err, store.ErrDeleteBlocked),
-		errors.Is(err, store.ErrNoKMS):
-		s.writeError(w, http.StatusForbidden, err.Error())
+	case errors.Is(err, store.ErrTrashOnly):
+		s.writeError(w, http.StatusForbidden, s.text(r, "error.trashOnly"))
+	case errors.Is(err, store.ErrDeleteBlocked):
+		s.writeError(w, http.StatusForbidden, s.text(r, "error.deleteBlocked"))
+	case errors.Is(err, store.ErrNoKMS):
+		s.writeError(w, http.StatusForbidden, s.text(r, "error.noKms"))
 	case errors.Is(err, store.ErrNotFound):
-		s.writeError(w, http.StatusNotFound, err.Error())
-	case strings.Contains(err.Error(), "ungueltig"), strings.Contains(err.Error(), "ausserhalb"),
-		strings.Contains(err.Error(), "interne Datei"):
-		s.writeError(w, http.StatusBadRequest, err.Error())
+		s.writeError(w, http.StatusNotFound, s.text(r, "error.notFound"))
+	case errors.Is(err, core.ErrBadInput):
+		s.writeError(w, http.StatusBadRequest, s.text(r, "error.badInput"))
+	case errors.Is(err, mailer.ErrNoSender):
+		s.writeError(w, http.StatusBadRequest, s.text(r, "error.noSender"))
+	case errors.Is(err, mailer.ErrNoRecipient):
+		s.writeError(w, http.StatusBadRequest, s.text(r, "error.noRecipient"))
+	case errors.Is(err, config.ErrNoBucket):
+		s.writeError(w, http.StatusBadRequest, s.text(r, "error.noBucket"))
+	case errors.Is(err, config.ErrCredentialsIncomplete):
+		s.writeError(w, http.StatusBadRequest, s.text(r, "error.credentialsIncomplete"))
+	case errors.Is(err, config.ErrBadKeyID):
+		s.writeError(w, http.StatusBadRequest, s.text(r, "error.badKeyId"))
 	default:
+		// Everything else is a diagnosis, not a sentence for the reader: the SDK
+		// message goes through unchanged, because it is the only thing that says
+		// what actually happened.
 		s.writeError(w, http.StatusBadGateway, err.Error())
 	}
 }
@@ -285,7 +301,7 @@ func (s *Server) routes() {
 			o.Folder = &folder
 		}
 		s.json(w, http.StatusOK, with(s.overview(r), map[string]any{
-			"messages": s.Mailbox.Search(q.Get("q"), o),
+			"messages": s.localizedSubjects(r, s.Mailbox.Search(q.Get("q"), o)),
 		}))
 	})
 
@@ -293,8 +309,14 @@ func (s *Server) routes() {
 		key := r.URL.Query().Get("key")
 		obj, err := s.readMail(r, key, true)
 		if err != nil {
-			s.translate(w, err)
+			s.translate(w, r, err)
 			return
+		}
+		switch obj.Subject {
+		case mimeparse.SubjectUnreadable:
+			obj.Subject = s.text(r, "mail.unreadable")
+		case mimeparse.SubjectNone:
+			obj.Subject = s.text(r, "mail.noSubject")
 		}
 		e := s.Mailbox.State.Get(s.Mailbox.Mid(key))
 		tags := e.Tags
@@ -312,7 +334,7 @@ func (s *Server) routes() {
 		idx, _ := strconv.Atoi(q.Get("index"))
 		obj, err := s.readMail(r, q.Get("key"), false)
 		if err != nil {
-			s.translate(w, err)
+			s.translate(w, r, err)
 			return
 		}
 		for _, a := range obj.Attachments {
@@ -329,18 +351,18 @@ func (s *Server) routes() {
 			_, _ = w.Write(a.Content)
 			return
 		}
-		s.writeError(w, http.StatusNotFound, "Anhang nicht gefunden")
+		s.writeError(w, http.StatusNotFound, s.text(r, "error.attachmentNotFound"))
 	})
 
 	s.mux.HandleFunc("GET /api/raw", func(w http.ResponseWriter, r *http.Request) {
 		key := r.URL.Query().Get("key")
 		if err := s.Mailbox.Own(key); err != nil {
-			s.translate(w, err)
+			s.translate(w, r, err)
 			return
 		}
 		raw, err := s.Mailbox.Fetch(r.Context(), key, 0)
 		if err != nil {
-			s.translate(w, err)
+			s.translate(w, r, err)
 			return
 		}
 		w.Header().Set("Content-Type", "message/rfc822")
@@ -352,11 +374,11 @@ func (s *Server) routes() {
 	s.post("/api/refresh", func(w http.ResponseWriter, r *http.Request, a request) {
 		res, err := s.Mailbox.Refresh(r.Context())
 		if err != nil {
-			s.translate(w, err)
+			s.translate(w, r, err)
 			return
 		}
 		if _, err := s.Mailbox.ApplyRules(r.Context(), nil, false); err != nil {
-			s.translate(w, err)
+			s.translate(w, r, err)
 			return
 		}
 		s.json(w, http.StatusOK, with(s.overview(r), map[string]any{
@@ -366,7 +388,7 @@ func (s *Server) routes() {
 	s.post("/api/move", func(w http.ResponseWriter, r *http.Request, a request) {
 		res, err := s.Mailbox.Move(r.Context(), a.allKeys(), a.Folder)
 		if err != nil {
-			s.translate(w, err)
+			s.translate(w, r, err)
 			return
 		}
 		s.json(w, http.StatusOK, with(s.overview(r), map[string]any{"moved": res}))
@@ -375,7 +397,7 @@ func (s *Server) routes() {
 	s.post("/api/delete", func(w http.ResponseWriter, r *http.Request, a request) {
 		n, err := s.Mailbox.Delete(r.Context(), a.allKeys(), false)
 		if err != nil {
-			s.translate(w, err)
+			s.translate(w, r, err)
 			return
 		}
 		s.json(w, http.StatusOK, with(s.overview(r), map[string]any{"deleted": n}))
@@ -384,7 +406,7 @@ func (s *Server) routes() {
 	s.post("/api/empty-trash", func(w http.ResponseWriter, r *http.Request, a request) {
 		n, err := s.Mailbox.EmptyTrash(r.Context())
 		if err != nil {
-			s.translate(w, err)
+			s.translate(w, r, err)
 			return
 		}
 		s.json(w, http.StatusOK, with(s.overview(r), map[string]any{"deleted": n}))
@@ -420,7 +442,7 @@ func (s *Server) routes() {
 			return
 		}
 		if err := s.Mailbox.State.Mutate(r.Context(), core.Op{T: "rules", Rules: clean}); err != nil {
-			s.translate(w, err)
+			s.translate(w, r, err)
 			return
 		}
 		s.json(w, http.StatusOK, with(s.overview(r), map[string]any{"rules": clean}))
@@ -441,7 +463,7 @@ func (s *Server) routes() {
 	s.post("/api/rules/apply", func(w http.ResponseWriter, r *http.Request, a request) {
 		n, err := s.Mailbox.ApplyRules(r.Context(), nil, true)
 		if err != nil {
-			s.translate(w, err)
+			s.translate(w, r, err)
 			return
 		}
 		s.json(w, http.StatusOK, with(s.overview(r), map[string]any{"moved": n}))
@@ -472,7 +494,7 @@ func (s *Server) midsOf(a request) []string {
 
 func (s *Server) mutate(w http.ResponseWriter, r *http.Request, op core.Op) {
 	if err := s.Mailbox.State.Mutate(r.Context(), op); err != nil {
-		s.translate(w, err)
+		s.translate(w, r, err)
 		return
 	}
 	s.json(w, http.StatusOK, with(s.overview(r), map[string]any{"ok": true}))
@@ -518,6 +540,21 @@ func (s *Server) localizedFolders(r *http.Request) []core.FolderInfo {
 		}
 	}
 	return folder
+}
+
+// localizedSubjects swaps the two subject placeholders for the reader's
+// language. They are written while indexing, and the index outlives every
+// language switch - so the swap has to happen here, not there.
+func (s *Server) localizedSubjects(r *http.Request, msgs []core.Message) []core.Message {
+	for i := range msgs {
+		switch msgs[i].Subject {
+		case mimeparse.SubjectUnreadable:
+			msgs[i].Subject = s.text(r, "mail.unreadable")
+		case mimeparse.SubjectNone:
+			msgs[i].Subject = s.text(r, "mail.noSubject")
+		}
+	}
+	return msgs
 }
 
 // text takes a sentence in the language of the request. For the handful of

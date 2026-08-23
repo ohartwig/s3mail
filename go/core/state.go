@@ -102,7 +102,7 @@ func Apply(d *Data, op Op) {
 		}
 	case "tags":
 		for _, tag := range op.Add {
-			if _, da := d.Tags[tag]; !da {
+			if _, present := d.Tags[tag]; !present {
 				d.Tags[tag] = TagColors[len(d.Tags)%len(TagColors)]
 			}
 		}
@@ -194,13 +194,13 @@ func MergeMissing(base, other *Data) *Data {
 	}
 	base.Normalize()
 	for mid, e := range other.Messages {
-		if _, da := base.Messages[mid]; !da {
+		if _, present := base.Messages[mid]; !present {
 			clone := *e
 			base.Messages[mid] = &clone
 		}
 	}
 	for tag, color := range other.Tags {
-		if _, da := base.Tags[tag]; !da {
+		if _, present := base.Tags[tag]; !present {
 			base.Tags[tag] = color
 		}
 	}

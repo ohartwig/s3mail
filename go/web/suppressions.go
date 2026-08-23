@@ -32,7 +32,7 @@ func (s *Server) suppressionRoutes() {
 		}
 		list, err := s.suppressions.List(r.Context())
 		if err != nil {
-			s.translate(w, err)
+			s.translate(w, r, err)
 			return
 		}
 		s.json(w, http.StatusOK, map[string]any{"blocked": list})
@@ -63,7 +63,7 @@ func (s *Server) changeSuppression(w http.ResponseWriter, r *http.Request, a req
 		err = s.suppressions.Unblock(r.Context(), address)
 	}
 	if err != nil {
-		s.translate(w, err)
+		s.translate(w, r, err)
 		return
 	}
 	list, err := s.suppressions.List(r.Context())
