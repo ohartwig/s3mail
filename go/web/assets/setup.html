@@ -108,8 +108,7 @@
 
   <div class="card">
     <h2><span class="num">3</span> {{t "setup.step3"}}</h2>
-    <div class="hint">Legt kurz ein Testobjekt an und löscht es wieder – so siehst du
-      sofort, ob alle Rechte da sind.</div>
+    <div class="hint">{{t "setup.testHint"}}</div>
     <button class="primary" id="test">{{t "setup.testConnection"}}</button>
     <div id="checks" style="margin-top:12px"></div>
     <div id="lifeBox" style="display:none;margin-top:14px">
@@ -123,8 +122,7 @@
         </select>
         <button id="setLife" style="flex:none">{{t "setup.setRule"}}</button>
       </div>
-      <div class="hint">Setzt eine S3-Lifecycle-Regel auf <code>…/trash/</code>.
-        AWS räumt dann selbst auf, ohne dass s3mail laufen muss.</div>
+      <div class="hint">{{t "setup.lifecycleHint"}}</div>
       <div id="lifeMsg" class="msg"></div>
     </div>
   </div>
@@ -145,7 +143,7 @@ let info = {};
 const api = async (path, body) => {
   const r = await fetch(path, {method:"POST", headers:{"Content-Type":"application/json"},
                                body: JSON.stringify(body || {})});
-  const d = await r.json().catch(() => ({error:"Antwort nicht lesbar"}));
+  const d = await r.json().catch(() => ({error: T["error.answerUnreadable"]}));
   if (!r.ok || d.error) throw new Error(d.error || ("HTTP " + r.status));
   return d;
 };
@@ -196,7 +194,7 @@ $("#saveCreds").onclick = async () => {
     $("#secret").value = "";
     $("#tabExisting").click();
     say("#credMsg", T["setup.profileSaved"].replace("%s", d.profile));
-    $("#loadBuckets").click();          // ein Klick weniger
+    $("#loadBuckets").click();          // one click less
   } catch (e) { say("#credMsg", e.message, true); }
 };
 
@@ -206,20 +204,20 @@ $("#loadBuckets").onclick = async () => {
     const d = await api("/api/setup/buckets", collect());
     $("#bucketSel").innerHTML = `<option value="">${T["setup.choose"]}</option>` +
       (d.buckets || []).map(x => `<option${x === $("#bucket").value ? " selected" : ""}>${x}</option>`).join("");
-    // Eine verifizierte DOMAIN erlaubt jede Adresse darunter - deshalb gehoert
-    // sie in dieselbe Liste, nur als Vorlage statt als fertige Adresse.
-    const adressen = (d.identities || []).map(x => `<option>${x}</option>`);
+    // A verified DOMAIN allows every address below it - which is why it belongs
+    // in the same list, as a template rather than as a finished address.
+    const addresses = (d.identities || []).map(x => `<option>${x}</option>`);
     const domains = (d.domains || []).map(x =>
       `<option value="@${x}">@${x} – ${T["setup.anyAddressBelow"]}</option>`);
     $("#identSel").innerHTML = `<option value="">${T["setup.sender.placeholder"]}</option>` +
-      adressen.join("") + domains.join("");
-    if (!adressen.length && domains.length) {
+      addresses.join("") + domains.join("");
+    if (!addresses.length && domains.length) {
       say("#fromMsg", T["setup.domainVerified"]
         .replace("%s", (d.domains || [])[0]).replace("%s", (d.domains || [])[0]));
     }
-    // Kein "true": das ist ein Hinweis, kein Fehlschlag. Fuer jeden
-    // Postfach-Benutzer ist die leere Liste der Normalfall.
-    if (d.found) uebernehmen(d.found);
+    // No "true": this is a hint, not a failure. For every mailbox user the
+    // empty list is the normal case.
+    if (d.found) adopt(d.found);
     if (d.note) say("#bucketMsg", d.note);
     else if (!(d.buckets || []).length) say("#bucketMsg",
       T["setup.noBuckets"], true);
@@ -227,19 +225,19 @@ $("#loadBuckets").onclick = async () => {
   } catch (e) { say("#bucketMsg", e.message, true); }
   finally { b.disabled = false; b.textContent = T["setup.loadBuckets"]; }
 };
-// uebernehmen traegt ein, was s3mail aus der eigenen IAM-Policy des Zugangs
-// gelesen hat. Leere Felder und der Vorgabewert "mail/" gelten als unbesetzt -
-// was der Nutzer selbst eingetippt hat, bleibt stehen.
-function uebernehmen(f) {
-  const setzen = (feld, wert, leer) => {
+// adopt fills in what s3mail read out of the access's own IAM policy. Empty
+// fields and the default "mail/" count as unoccupied - whatever the reader
+// typed themselves stays.
+function adopt(f) {
+  const fill = (feld, wert, leer) => {
     const e = $(feld), jetzt = e.value.trim();
     if (!wert || (jetzt && jetzt !== leer)) return false;
     e.value = wert; return true;
   };
   const teile = [];
-  if (setzen("#bucket", f.bucket, "")) teile.push(T["setup.bucket"] + " <code>" + f.bucket + "</code>");
-  if (setzen("#prefix", f.prefix, "mail/")) teile.push(T["setup.found.folder"] + " <code>" + f.prefix + "</code>");
-  if (setzen("#from", f.from, "")) teile.push(T["setup.found.sender"] + " <code>" + f.from + "</code>");
+  if (fill("#bucket", f.bucket, "")) teile.push(T["setup.bucket"] + " <code>" + f.bucket + "</code>");
+  if (fill("#prefix", f.prefix, "mail/")) teile.push(T["setup.found.folder"] + " <code>" + f.prefix + "</code>");
+  if (fill("#from", f.from, "")) teile.push(T["setup.found.sender"] + " <code>" + f.from + "</code>");
   if (f.region && $("#region").value !== f.region) {
     $("#region").value = f.region;
     teile.push(T["setup.region"] + " <code>" + f.region + "</code>");
@@ -247,7 +245,7 @@ function uebernehmen(f) {
   if (!teile.length) return;
   $("#fundMsg").innerHTML = '<span class="ok">\u2713</span> '
     + T["setup.readFromAccess"].replace("%s", teile.join(", "));
-  // Alles beisammen: dann gleich pruefen, statt es den Nutzer anklicken zu lassen.
+  // Everything together: then check right away instead of making the reader click.
   if ($("#bucket").value.trim() && $("#prefix").value.trim()) $("#test").click();
 }
 $("#bucketSel").onchange = e => { if (e.target.value) $("#bucket").value = e.target.value; };

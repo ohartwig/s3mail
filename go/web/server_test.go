@@ -347,7 +347,7 @@ func TestAutoRefreshIsShipped(t *testing.T) {
 	srv.Port = portOf(ts.URL)
 
 	page := string(callServer(t, ts, "GET", "/?t="+testToken, "", nil).Body)
-	if !strings.Contains(page, "autoAbgleichPlanen") {
+	if !strings.Contains(page, "scheduleAutoRefresh") {
 		t.Error("the automatic refresh is missing from the shipped page")
 	}
 	if !strings.Contains(page, `"refresh_seconds":45`) {

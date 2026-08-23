@@ -1,6 +1,7 @@
 package i18n
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -113,5 +114,23 @@ func TestPagesUseOnlyKnownKeys(t *testing.T) {
 	// came back empty would make every text fall through to its key.
 	if len(Get("en").All()) < 50 {
 		t.Errorf("the English catalogue holds only %d texts", len(Get("en").All()))
+	}
+}
+
+// TestNoMarkupInTheCatalogue keeps the trap shut that showed up in the Spanish
+// interface: two hints carried <code> tags, and the setup page renders through
+// html/template, which escapes them. The reader then saw the tags as text.
+//
+// The same string reached the mailbox page through innerHTML and looked right
+// there - so the mistake was invisible in one place and glaring in the other.
+// Markup belongs in the template, text in the catalogue.
+func TestNoMarkupInTheCatalogue(t *testing.T) {
+	tag := regexp.MustCompile(`<[a-zA-Z/]`)
+	for _, cat := range Available() {
+		for key, text := range cat.All() {
+			if tag.MatchString(text) {
+				t.Errorf("%s/%s carries markup: %q", cat.Code, key, text)
+			}
+		}
 	}
 }

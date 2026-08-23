@@ -30,8 +30,8 @@
            border-radius:var(--radius); padding:6px 11px; cursor:pointer; }
   button:hover:not(:disabled) { border-color:var(--accent); }
   button:disabled { opacity:.5; cursor:default; }
-  /* Der Sprachumschalter sieht aus wie die Knoepfe daneben - er steht in
-     derselben Reihe und tut dasselbe: er wechselt etwas an der Ansicht. */
+  /* The language switch looks like the buttons next to it - it sits in the
+     same row and does the same thing: it changes something about the view. */
   #lang { background:var(--panel2); border:1px solid var(--line);
           border-radius:var(--radius); padding:6px 8px; cursor:pointer; }
   #lang:hover { border-color:var(--accent); }
@@ -59,7 +59,7 @@
   .side-in input { flex:1; min-width:0; padding:4px 8px; border-radius:6px;
                    border:1px solid var(--line); background:var(--panel2); }
 
-  /* Liste */
+  /* List */
   #listwrap { width:432px; flex:none; border-right:1px solid var(--line);
               display:flex; flex-direction:column; background:var(--panel); }
   #tools { display:flex; align-items:center; gap:5px; padding:7px 10px;
@@ -88,7 +88,7 @@
           border:1px solid var(--line); color:var(--muted); }
   .flag.bad { color:var(--danger); border-color:var(--danger); }
 
-  /* Ansicht */
+  /* View */
   #view { flex:1; overflow-y:auto; padding:18px 24px; min-width:0; }
   #view h2 { margin:0 0 6px; font-size:19px; }
   .meta { color:var(--muted); font-size:13px; }
@@ -105,7 +105,7 @@
   .att:hover { border-color:var(--accent); }
   .empty { color:var(--muted); padding:40px; text-align:center; }
 
-  /* Menues + Dialoge */
+  /* Menus and dialogs */
   .menu { position:fixed; z-index:40; background:var(--panel); border:1px solid var(--line);
           border-radius:10px; box-shadow:0 10px 30px rgba(0,0,0,.35); padding:6px;
           min-width:200px; max-height:60vh; overflow:auto; }
@@ -266,18 +266,18 @@ function renderSide() {
       <input id="newFolderName" placeholder="${T["side.folderName"]}">
       <button id="newFolderOk">OK</button>
     </div>
-    <div class="sec">Filter</div>
-    <div class="nav${onlyUnread ? " sel" : ""}" id="fUnread"><span>●</span><span class="name">Ungelesen</span></div>
-    <div class="nav${onlyStar ? " sel" : ""}" id="fStar"><span>★</span><span class="name">Markiert</span></div>
-    <div class="sec">Tags</div>
+    <div class="sec">${T["side.filter"]}</div>
+    <div class="nav${onlyUnread ? " sel" : ""}" id="fUnread"><span>●</span><span class="name">${T["filter.unread"]}</span></div>
+    <div class="nav${onlyStar ? " sel" : ""}" id="fStar"><span>★</span><span class="name">${T["filter.starred"]}</span></div>
+    <div class="sec">${T["side.tags"]}</div>
     ${tags.length ? tags.map(([name, color]) => `
       <div class="nav${tagFilter === name ? " sel" : ""}" data-t="${esc(name)}">
         <span class="dot" style="background:${esc(color)}"></span>
         <span class="name">${esc(name)}</span>
         <span class="cnt">${tagCounts[name] || ""}</span>
         <span class="star" data-deltag="${esc(name)}" title="${T["side.deleteTag"]}">✕</span>
-      </div>`).join("") : '<div class="box" style="padding:2px 14px">noch keine</div>'}
-    ${over.state_remote === false ? '<div class="sec" style="color:var(--danger)">Zustand nur lokal<br>(kein Schreibrecht im Bucket)</div>' : ""}`;
+      </div>`).join("") : `<div class="box" style="padding:2px 14px">${T["side.noTags"]}</div>`}
+    ${over.state_remote === false ? `<div class="sec" style="color:var(--danger)">${T["sidebar.stateLocal"]}<br>${T["sidebar.stateLocalWhy"]}</div>` : ""}`;
 
   $("#side").querySelectorAll("[data-f]").forEach(el => el.onclick = () => {
     folder = el.dataset.f; tagFilter = null; current = null; checked.clear(); load();
@@ -311,7 +311,7 @@ function renderSide() {
   $("#newFolderName").onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); create(); } };
 }
 
-/* ---------------- Werkzeugleiste ---------------- */
+/* ---------------- Toolbar ---------------- */
 function renderTools() {
   const n = checked.size;
   const inTrash = folder === "trash";
@@ -360,7 +360,7 @@ function renderTools() {
   on("#mTag", e => tagMenu(e.target, [...checked]));
 }
 
-/* ---------------- Menues ---------------- */
+/* ---------------- Menus ---------------- */
 function closeMenus() { document.querySelectorAll(".menu").forEach(m => m.remove()); }
 document.addEventListener("click", e => {
   if (!e.target.closest(".menu") && !e.target.closest("button")) closeMenus();
@@ -413,7 +413,7 @@ function tagMenu(anchor, keys) {
   });
 }
 
-/* ---------------- Aktionen ---------------- */
+/* ---------------- Actions ---------------- */
 async function move(keys, target) {
   const res = await api("/api/move", {keys, folder: target});
   checked.clear();
@@ -438,11 +438,11 @@ function confirmDelete(keys) {
   });
 }
 
-/* ---------------- Liste ---------------- */
+/* ---------------- List ---------------- */
 function renderList() {
   const list = $("#list");
   if (!messages.length) {
-    list.innerHTML = `<div class="empty">${T["list.nothingHere"]}</div>`;
+    list.innerHTML = `<div class="empty">${T["list.nothingHere"]}<br>${T["list.reloadHint"]}</div>`;
     return;
   }
   list.innerHTML = messages.map((m, i) => `
@@ -502,7 +502,7 @@ async function load() {
   renderSide(); renderTools(); renderList();
 }
 
-/* ---------------- Mailansicht ---------------- */
+/* ---------------- Message view ---------------- */
 const open = guard(async key => {
   current = key;
   $("#view").innerHTML = `<div class="empty">${T["list.loading"]}</div>`;
@@ -573,7 +573,7 @@ const open = guard(async key => {
   on("#vPurge", () => confirmDelete([key]));
   on("#vMove", e => folderMenu(e.target, guard(async f => { await move([key], f); })));
   on("#vTag", e => tagMenu(e.target, [key]));
-  on("#vBlock", () => blockFragen(m.reply_to || m.from));
+  on("#vBlock", () => askToBlock(m.reply_to || m.from));
   on("#vStar", guard(async () => {
     await api("/api/flag", {keys:[key], star: !m.star});
     m.star = !m.star; open(key);
@@ -581,7 +581,7 @@ const open = guard(async key => {
   renderSide();
 });
 
-/* ---------------- Verfassen ---------------- */
+/* ---------------- Composing ---------------- */
 function quote(m) {
   return "\n\n" + T["compose.quoteLine"].replace("%s", new Date(m.date).toLocaleString()).replace("%s", m.from) + "\n"
        + (m.text || "").split("\n").map(l => "> " + l).join("\n") + "\n";
@@ -593,8 +593,8 @@ function compose(kind, all) {
   renderAtts();
   $("#c_bcc").value = "";
   $("#c_from").value = CFG.default_from || "";
-  // Eine neue Nachricht hat keine Vorlage - alles andere unten liest aus m,
-  // das dann gar nicht da ist (nichts ausgewaehlt, leeres Postfach).
+  // A new message has no template - everything below reads from m, which is
+  // then not there at all (nothing selected, empty mailbox).
   if (kind === "new" || !m) {
     mode = "new";
     $("#c_title").textContent = T["compose.new"];
@@ -619,10 +619,10 @@ function compose(kind, all) {
   $("#c_body").setSelectionRange(0, 0);
   $("#c_body").focus();
 }
-/* Anhaenge des offenen Entwurfs: hier liegen sie als Bytes, genau wie frisch
-   ausgewaehlte Dateien. Das kostet einen Weg ueber die Schleife (Server →
-   Browser → Server), spart dafuer jede Sonderbehandlung beim Senden - fuer den
-   Server ist ein weitergeschriebener Entwurf dasselbe wie eine neue Mail. */
+/* The attachments of the open draft: they lie here as bytes, exactly like
+   freshly picked files. That costs a round trip (server → browser → server) and
+   saves every special case when sending - to the server, a continued draft is
+   the same thing as a new message. */
 let attachments = [];
 let draftKey = "";
 let composeStart = "";
@@ -638,8 +638,8 @@ function renderAtts() {
   }
 }
 
-/* Der Browser liefert die Datei als ArrayBuffer; base64 ist, was JSON von einem
-   []byte auf der Go-Seite erwartet. */
+/* The browser hands the file over as an ArrayBuffer; base64 is what JSON
+   expects for a []byte on the Go side. */
 function toBase64(buf) {
   let s = "";
   const b = new Uint8Array(buf);
@@ -650,23 +650,23 @@ function attBytes() {
   return attachments.reduce((n, a) => n + a.content.length, 0);
 }
 async function addFiles(files) {
-  // Erst sammeln, dann eine Meldung setzen. Wer hier sofort schreibt, loescht
-  // sich die Zeile gleich wieder: eine abgelehnte Datei zaehlt nicht mit, die
-  // Summe ist danach klein, und der Hinweis auf die abgelehnte Datei ist weg.
-  let fehler = "";
+  // Collect first, then set one message. Writing immediately erases the line
+  // again: a refused file does not count towards the total, the total is small
+  // afterwards, and the note about the refused file is gone.
+  let problem = "";
   for (const f of files) {
-    if (f.size > MAX_MAIL) { fehler = T["compose.attachmentTooLarge"].replace("%s", f.name); continue; }
+    if (f.size > MAX_MAIL) { problem = T["compose.attachmentTooLarge"].replace("%s", f.name); continue; }
     const content = toBase64(await f.arrayBuffer());
-    // size ist die Datei, content die base64-Fassung davon: das eine steht im
-    // Chip, das andere zaehlt gegen die Grenze, die SES zieht.
+    // size is the file, content its base64 form: the first goes in the chip,
+    // the second counts against the limit SES draws.
     attachments.push({filename: f.name, content_type: f.type || "application/octet-stream",
       content, size: f.size});
   }
   renderAtts();
-  // Der Server lehnt zu grosse Mail ohnehin ab - nur erfaehrt es der Schreiber
-  // hier, bevor er auf "Senden" drueckt und den Text noch einmal tippen darf.
-  if (attBytes() > MAX_MAIL) fehler = T["compose.tooLarge"];
-  $("#c_err").textContent = fehler;
+  // The server refuses an oversized message anyway - only here the writer finds
+  // out before pressing "send" and getting to type the text a second time.
+  if (attBytes() > MAX_MAIL) problem = T["compose.tooLarge"];
+  $("#c_err").textContent = problem;
 }
 $("#c_attach").onclick = () => $("#c_files").click();
 $("#c_files").onchange = async e => { await addFiles(e.target.files); e.target.value = ""; };
@@ -676,8 +676,8 @@ function draftBody() {
     from: $("#c_from").value, to: $("#c_to").value, cc: $("#c_cc").value, bcc: $("#c_bcc").value,
     subject: $("#c_subject").value, body: $("#c_body").value, attachments};
 }
-// Woran sich erkennen laesst, ob seit dem Oeffnen etwas passiert ist. Ohne das
-// fragt der Dialog beim Schliessen auch dann nach, wenn niemand etwas getippt hat.
+// How to tell whether anything happened since the dialog opened. Without it,
+// closing would save a draft even when nobody typed a thing.
 function composeState() {
   return JSON.stringify([$("#c_to").value, $("#c_cc").value, $("#c_bcc").value,
     $("#c_subject").value, $("#c_body").value, attachments.length]);
@@ -698,9 +698,9 @@ $("#c_draft").onclick = guard(async () => {
   catch (e) { $("#c_err").textContent = e.message; }
 });
 
-/* Beim Schliessen nicht wortlos wegwerfen: getippter Text ist Arbeit. Gesichert
-   wird nur, wenn seit dem Oeffnen wirklich etwas entstanden ist, und der Toast
-   sagt es - sonst haette jemand einen Entwurf, von dem er nichts weiss. */
+/* Do not throw the text away without a word on close: typing is work. It is
+   saved only if something really came into being since it opened, and the toast
+   says so - otherwise somebody would own a draft they know nothing about. */
 $("#dlgCompose").addEventListener("close", async () => {
   if (composeState() === composeStart) return;
   try { await saveDraft(false); } catch (e) { toast(e.message, true); }
@@ -717,7 +717,7 @@ async function editDraft(key, m) {
   $("#c_bcc").value = m.bcc || "";
   $("#c_subject").value = m.subject || "";
   $("#c_body").value = m.text || "";
-  // Die Anhaenge zurueckholen, damit ein weitergeschriebener Entwurf sie behaelt.
+  // Fetch the attachments back, so a continued draft keeps them.
   for (const a of m.attachments || []) {
     try {
       const resp = await fetch(`/api/attachment?key=${encodeURIComponent(key)}&index=${a.index}`);
@@ -725,7 +725,7 @@ async function editDraft(key, m) {
       const buf = await resp.arrayBuffer();
       attachments.push({filename: a.filename, content_type: a.content_type || "application/octet-stream",
         content: toBase64(buf), size: buf.byteLength});
-    } catch (e) { /* ein fehlender Anhang darf den Entwurf nicht blockieren */ }
+    } catch (e) { /* a missing attachment must not block the draft */ }
   }
   renderAtts();
   composeStart = composeState();
@@ -735,7 +735,7 @@ $("#c_send").onclick = async () => {
   const b = $("#c_send"); b.disabled = true; b.textContent = T["compose.sending"];
   try {
     const r = await api("/api/send", draftBody());
-    composeStart = composeState();   // nichts mehr zu sichern, die Mail ist raus
+    composeStart = composeState();   // nothing left to save, the message is out
     $("#dlgCompose").close();
     toast(T["compose.sent"].replace("%s", r.message_id));
     if (r.warning) toast(r.warning, true);
@@ -745,37 +745,37 @@ $("#c_send").onclick = async () => {
   finally { b.disabled = false; b.textContent = T["compose.send"]; }
 };
 
-/* ---------------- Sperrliste ---------------- */
-// Die Liste gehoert dem Konto, nicht dem Postfach - deshalb fragt der Knopf
-// nach, und deshalb gibt es den Weg zurueck gleich daneben. Ein Tippfehler
-// sperrt sonst einen Geschaeftspartner fuer das ganze Team, ohne dass jemand
-// sieht, wo es klemmt.
-function blockFragen(adresse) {
+/* ---------------- Suppression list ---------------- */
+// The list belongs to the account, not to this mailbox - which is why the
+// button asks first, and why the way back sits right next to it. A typo would
+// otherwise block a business contact for the whole team, with nobody able to
+// see where it went wrong.
+function askToBlock(address) {
   $("#cf_title").textContent = T["blocked.confirmTitle"];
-  $("#cf_text").textContent = T["blocked.confirmText"].replace("%s", adresse);
+  $("#cf_text").textContent = T["blocked.confirmText"].replace("%s", address);
   const ok = $("#cf_ok"), text = ok.textContent;
   ok.textContent = T["blocked.block"];
   $("#dlgConfirm").showModal();
   ok.onclick = guard(async () => {
     $("#dlgConfirm").close();
     ok.textContent = text;
-    await api("/api/block", {address: adresse});
-    toast(T["blocked.blockedToast"].replace("%s", adresse));
+    await api("/api/block", {address: address});
+    toast(T["blocked.blockedToast"].replace("%s", address));
   });
   $("#dlgConfirm").addEventListener("close", () => { ok.textContent = text; }, {once: true});
 }
 
-async function zeigeGesperrte() {
+async function showBlocked() {
   $("#dlgBlocked").showModal();
   $("#bl_list").textContent = T["list.loading"];
   try {
     const d = await api("/api/blocked");
-    renderGesperrte(d.blocked || []);
+    renderBlocked(d.blocked || []);
   } catch (e) { $("#bl_list").textContent = e.message; }
 }
-function renderGesperrte(liste) {
-  if (!liste.length) { $("#bl_list").textContent = T["blocked.none"]; return; }
-  $("#bl_list").innerHTML = liste.map(e => `
+function renderBlocked(list) {
+  if (!list.length) { $("#bl_list").textContent = T["blocked.none"]; return; }
+  $("#bl_list").innerHTML = list.map(e => `
     <div class="check" style="justify-content:space-between">
       <div><b>${esc(e.address)}</b>
         <div class="d">${e.reason === "BOUNCE" ? T["blocked.bounce"] : T["blocked.complaint"]}${
@@ -786,12 +786,12 @@ function renderGesperrte(liste) {
     b.onclick = guard(async () => {
       const d = await api("/api/unblock", {address: b.dataset.a});
       toast(T["blocked.unblockedToast"].replace("%s", b.dataset.a));
-      renderGesperrte(d.blocked || []);
+      renderBlocked(d.blocked || []);
     });
   }
 }
 
-/* ---------------- Regeln ---------------- */
+/* ---------------- Rules ---------------- */
 function ruleRow(r) {
   r = r || {contains:"", field:"any", folder:null, tags:[], enabled:true};
   const div = document.createElement("div");
@@ -841,39 +841,39 @@ $("#ruleApply").onclick = guard(async () => {
   await load();
 });
 
-/* ---------------- Start / Tastatur ---------------- */
-/* ---------------- Automatischer Abgleich ----------------
-   Damit neue Mail von selbst auftaucht, statt auf "Neu laden" zu warten.
-   Kostet fast nichts: der Abgleich listet den Bucket und holt nur Objekte,
-   deren ETag sich geaendert hat.
+/* ---------------- Start and keyboard ---------------- */
+/* ---------------- Automatic refresh ----------------
+   So new mail turns up by itself instead of waiting for "reload". It costs
+   almost nothing: the refresh lists the bucket and fetches only objects whose
+   ETag has changed.
 
-   Zwei Zurueckhaltungen: nicht laufen, solange das Fenster im Hintergrund ist
-   (dort schaut niemand hin, und der Browser drosselt Timer ohnehin), und nicht
-   waehrend gerade geschrieben wird - ein Neuaufbau der Liste unter einem
-   offenen Entwurf ist schlimmer als eine Mail, die eine Minute spaeter kommt. */
+   Two restraints: do not run while the window is in the background (nobody is
+   looking, and the browser throttles timers there anyway), and not while
+   somebody is writing - rebuilding the list under an open draft is worse than
+   a message that arrives a minute later. */
 let autoTimer = null;
 
-function autoAbgleichPlanen() {
-  const sek = CFG.refresh_seconds | 0;
+function scheduleAutoRefresh() {
+  const secs = CFG.refresh_seconds | 0;
   if (autoTimer) clearInterval(autoTimer);
-  if (sek <= 0) return;
+  if (secs <= 0) return;
   autoTimer = setInterval(async () => {
     if (document.visibilityState !== "visible") return;
-    if (document.querySelector("#compose")) return;   // Entwurf offen
-    if ($("#refresh").disabled) return;               // laeuft schon
+    if (document.querySelector("#compose")) return;   // a draft is open
+    if ($("#refresh").disabled) return;               // already running
     try {
-      const vorher = messages.length;
+      const before = messages.length;
       const s = await api("/api/refresh", {});
       await load();
-      if (messages.length > vorher) {
-        toast((messages.length - vorher) + " neue Mail");
+      if (messages.length > before) {
+        toast(T["toast.newMail"].replace("%d", messages.length - before));
       }
-    } catch (e) { /* stiller Abgleich meldet keine Fehler weiter */ }
-  }, sek * 1000);
+    } catch (e) { /* a quiet refresh reports no errors */ }
+  }, secs * 1000);
 }
 
 document.addEventListener("visibilitychange", () => {
-  // Beim Zurueckkommen sofort nachsehen, statt bis zum naechsten Takt zu warten.
+  // On coming back, look right away instead of waiting for the next tick.
   if (document.visibilityState === "visible" && (CFG.refresh_seconds | 0) > 0) {
     if (!document.querySelector("#compose") && !$("#refresh").disabled) {
       api("/api/refresh", {}).then(() => load()).catch(() => {});
@@ -887,9 +887,9 @@ $("#quit").onclick = guard(async () => {
   document.body.innerHTML =
     '<div style="display:flex;height:100vh;align-items:center;justify-content:center;' +
     'flex-direction:column;gap:10px;color:var(--muted);font:15px/1.6 -apple-system,sans-serif">' +
-    '<div style="font-size:34px">\uD83D\uDC4B</div><div>s3mail ist beendet.</div>' +
-    '<div style="font-size:13px">Dieses Fenster kann geschlossen werden.</div></div>';
-  setTimeout(() => window.close(), 600);   // im App-Fenster schliesst das wirklich
+    `<div style="font-size:34px">\uD83D\uDC4B</div><div>${esc(T["quit.done"])}</div>` +
+    `<div style="font-size:13px">${esc(T["quit.closeWindow"])}</div></div>`;
+  setTimeout(() => window.close(), 600);   // in the app window this really closes
 });
 
 $("#refresh").onclick = guard(async () => {
@@ -905,14 +905,14 @@ $("#refresh").onclick = guard(async () => {
 
 if (CFG.can_send) {
   $("#new").onclick = () => compose("new");
-  $("#blockedBtn").onclick = zeigeGesperrte;
+  $("#blockedBtn").onclick = showBlocked;
 } else {
   $("#new").style.display = "none";
   $("#blockedBtn").style.display = "none";
 }
 
-// Sprachumschalter. Die Liste kommt aus dem Server (LANGS), die aktuelle
-// Sprache steht im lang-Attribut - so bleibt beides an einer Stelle richtig.
+// The language switch. The list comes from the server (LANGS), the current
+// language sits in the lang attribute - that way both stay right in one place.
 {
   const sel = $("#lang");
   if (sel) {
@@ -928,7 +928,7 @@ document.addEventListener("keydown", e => {
   if (document.querySelector("dialog[open]")) return;
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
   if (e.key === "/" && !typing) { e.preventDefault(); $("#q").focus(); return; }
-  // Vor der Abkuerzung unten: Schreiben geht auch im leeren Postfach, gerade da.
+  // Before the shortcut below: writing works in an empty mailbox too, especially there.
   if (e.key === "n" && !typing && CFG.can_send) { e.preventDefault(); compose("new"); return; }
   if (typing || !messages.length) return;
   const i = messages.findIndex(m => m.key === current);
@@ -943,7 +943,7 @@ document.addEventListener("keydown", e => {
 
 load().then(() => {
         if (!messages.length && !over.folders.some(f => f.count)) $("#refresh").click();
-        autoAbgleichPlanen();
+        scheduleAutoRefresh();
       }).catch(e => toast(e.message, true));
 </script>
 </body>
