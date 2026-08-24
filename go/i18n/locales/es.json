@@ -302,5 +302,8 @@
   "view.virusFail": "Veredicto de virus FALLIDO",
   "sending.unclear": "No está claro si este mensaje salió",
   "sending.wentOut": "Sí salió",
-  "sending.didNot": "No salió"
+  "sending.didNot": "No salió",
+  "cli.noCache": "No guardar nada en disco: sin índice, sin cuerpos de mensaje, sin estado local",
+  "auth.gone": "Ya no hay acceso a AWS",
+  "auth.retry": "Reintentar"
 }

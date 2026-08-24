@@ -302,5 +302,8 @@
   "view.virusFail": "Virus verdict FAIL",
   "sending.unclear": "Unclear whether this message went out",
   "sending.wentOut": "It went out",
-  "sending.didNot": "It did not"
+  "sending.didNot": "It did not",
+  "cli.noCache": "Keep nothing on disk: no index, no message bodies, no local state",
+  "auth.gone": "No access to AWS any more",
+  "auth.retry": "Try again"
 }

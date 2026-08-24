@@ -184,6 +184,7 @@ ein Schalter kann nicht sagen, welches von mehreren er meint:
 | `--no-delete` | Endgültiges Löschen sperren – dann geht nur Papierkorb |
 | `--port` / `--host` | Standard `127.0.0.1:8765` |
 | `--no-browser` | Browser nicht automatisch öffnen |
+| `--no-cache` | Nichts auf Platte zwischenspeichern (siehe [Grenzen](#grenzen)) |
 | `--refresh` | Sekunden zwischen automatischen Abgleichen, `0` schaltet ab (Standard 60) |
 | `--version` | Version ausgeben und beenden |
 | `--mcp` | Als MCP-Server über stdin/stdout laufen (siehe [unten](#für-ein-modell-erreichbar---mcp)) |
@@ -722,6 +723,19 @@ sie melden dann einen Rechtefehler im Klartext.
   Key beginnt mit einer neuen Version.
 - Bei sehr großen Postfächern (> ~50k Objekte) dauert das erste Indexieren; dann mit
   engerem Prefix arbeiten.
+- **Was auf der Platte liegt, liegt dort im Klartext.** In `~/.cache/s3mail/`
+  stehen der Index (Absender, Betreff, Vorschautext) **und die abgerufenen
+  Mailtexte**, nach ETag geschlüsselt. Die Dateien haben `0600` in einem
+  `0700`-Verzeichnis, ein anderer Benutzer desselben Rechners kommt also nicht
+  heran — wohl aber ein Backup (Time Machine), ein Ordnersync (Dropbox, iCloud)
+  und jeder, der die Platte ohne FileVault in die Hand bekommt.
+  **Das trifft auch client-seitig verschlüsselte Mail:** s3mail muss sie zum
+  Anzeigen entschlüsseln, und danach liegt sie dort entschlüsselt. Wer das nicht
+  will, startet mit `--no-cache` — dann bleibt nichts zurück, dafür wird bei
+  jedem Start neu indexiert und jede Mail bei jedem Öffnen neu geholt. Ein
+  verschlüsselter Cache mit einem Schlüssel aus dem Schlüsselbund des Systems
+  wäre der bessere Weg; er kostet plattformabhängigen Code (macOS Keychain,
+  Windows DPAPI, Linux Secret Service) und ist deshalb nicht gebaut.
 - Die **Windows**-Pakete sind nicht signiert, dort meldet sich SmartScreen. Die
   macOS-Pakete sind signiert und notarisiert, für Linux stellt sich die Frage nicht.
 

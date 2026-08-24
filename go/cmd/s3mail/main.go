@@ -50,12 +50,24 @@ func main() {
 		noSend      = flag.Bool("no-send", false, cat.T("cli.noSend"))
 		noDelete    = flag.Bool("no-delete", false, cat.T("cli.noDelete"))
 		noBrowser   = flag.Bool("no-browser", false, cat.T("cli.noBrowser"))
+		noCache     = flag.Bool("no-cache", false, cat.T("cli.noCache"))
 		showVersion = flag.Bool("version", false, cat.T("cli.version"))
 		refreshSecs = flag.Int("refresh", 60, cat.T("cli.refresh"))
 		mcpMode     = flag.Bool("mcp", false, cat.T("cli.mcp"))
 		mcpReadOnly = flag.Bool("mcp-readonly", false, cat.T("cli.mcpReadonly"))
 	)
 	flag.Parse()
+
+	// One place decides whether anything is written to disk, so that no caller
+	// can forget the switch. Everything that would land there hangs off this one
+	// string - index, message bodies and the local copy of the state - and
+	// store.NewMailbox writes nothing at all when it is empty.
+	cacheDir := func() string {
+		if *noCache {
+			return ""
+		}
+		return config.CacheDir()
+	}
 
 	if *showVersion {
 		fmt.Printf("s3mail %s (%s/%s, %s)\n", version, runtime.GOOS, runtime.GOARCH, runtime.Version())
@@ -69,7 +81,7 @@ func main() {
 	// tool in somebody else's hands, and stdin and stdout are the whole
 	// interface. Everything below - port, browser, token - is beside the point.
 	if *mcpMode || *mcpReadOnly {
-		if err := serveMCP(context.Background(), k, *mcpReadOnly); err != nil {
+		if err := serveMCP(context.Background(), k, *mcpReadOnly, cacheDir()); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
@@ -113,12 +125,12 @@ func main() {
 	// start" nobody should have to restart the program.
 	wiz := &wizard.Wizard{}
 	wiz.Activate = func(fresh config.Config) error {
-		return activate(ctx, srv, fresh, *noSend, *refreshSecs)
+		return activate(ctx, srv, fresh, *noSend, *refreshSecs, cacheDir())
 	}
 	srv.WithWizard(wiz)
 
 	if len(k.Accounts) > 0 && !*setup {
-		if err := activate(ctx, srv, k, *noSend, *refreshSecs); err != nil {
+		if err := activate(ctx, srv, k, *noSend, *refreshSecs, cacheDir()); err != nil {
 			// At startup there is no request and therefore no language from
 			// the browser - the one from the configuration has to do.
 			startErr = awsx.PlainText(err, k.First().Profile, cat)
@@ -212,7 +224,8 @@ func serverConfig(k config.Config, refreshSeconds int) map[string]any {
 // mistypes the profile of the second should still get at the first. The error
 // comes back so the start line can name it, but the program keeps running as
 // long as anything came up.
-func activate(ctx context.Context, srv *web.Server, k config.Config, noSend bool, refreshSeconds int) error {
+func activate(ctx context.Context, srv *web.Server, k config.Config, noSend bool,
+	refreshSeconds int, cacheDir string) error {
 	accounts := make([]web.Account, 0, len(k.Accounts))
 	var firstErr error
 	for _, a := range k.Accounts {
@@ -227,7 +240,7 @@ func activate(ctx context.Context, srv *web.Server, k config.Config, noSend bool
 			continue
 		}
 		mb := store.NewMailbox(ctx, awsx.NewS3(cfg, ""), awsx.NewKMS(cfg, ""),
-			a.Bucket, a.Prefix, config.CacheDir(), k.AllowDelete)
+			a.Bucket, a.Prefix, cacheDir, k.AllowDelete)
 		acc := web.Account{ID: a.ID(), Name: a.Name(), Mailbox: mb,
 			From: a.From, Signature: a.Signature, Snippets: a.Snippets}
 		if !noSend {
