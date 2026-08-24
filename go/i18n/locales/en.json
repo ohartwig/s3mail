@@ -304,8 +304,21 @@
   "sending.wentOut": "It went out",
   "sending.didNot": "It did not",
   "cli.noCache": "Keep nothing on disk: no index, no message bodies, no local state",
+  "cli.debug": "Log the calls to S3 and SES (keys, sizes, durations - no message content)",
   "auth.gone": "No access to AWS any more",
   "auth.retry": "Try again",
   "view.authFailShort": "Sender unverified",
-  "view.authFailTitle": "SPF, DKIM or DMARC failed - the sender address may be forged"
+  "view.authFailTitle": "SPF, DKIM or DMARC failed - the sender address may be forged",
+  "view.preview": "Preview",
+  "view.close": "Close",
+  "list.hits": "hits",
+  "list.someStuck": "%d of them would not move - they are still where they were",
+  "unsub.button": "Unsubscribe",
+  "unsub.title": "Write the unsubscribe mail - it is only sent when you press send",
+  "unsub.linkTitle": "Open the sender's unsubscribe page in the browser",
+  "unsub.alsoLink": "The sender also offers an unsubscribe page; s3mail does not call it by itself",
+  "rules.export": "Export",
+  "rules.import": "Import",
+  "rules.imported": "%a rules taken over, %s were already there, %t tags added",
+  "rules.importBroken": "That file is not valid JSON"
 }

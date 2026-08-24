@@ -27,6 +27,10 @@ type Fake struct {
 	CallLog []string
 	PutErr  error // when set, every Put fails
 	ListErr error // when set, every List fails
+	// CopyErrFor fails the copy for exactly these source keys. Needed to play
+	// the case a bulk move has to survive: one message that will not move while
+	// the rest do.
+	CopyErrFor map[string]error
 }
 
 func New() *Fake {
@@ -127,6 +131,9 @@ func (f *Fake) Copy(_ context.Context, _, src, dst string, o store.CopyOpts) err
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.record("copy " + src + " -> " + dst)
+	if err := f.CopyErrFor[src]; err != nil {
+		return err
+	}
 	body, present := f.Objs[src]
 	if !present {
 		return store.ErrNotFound

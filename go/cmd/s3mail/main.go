@@ -51,6 +51,7 @@ func main() {
 		noDelete    = flag.Bool("no-delete", false, cat.T("cli.noDelete"))
 		noBrowser   = flag.Bool("no-browser", false, cat.T("cli.noBrowser"))
 		noCache     = flag.Bool("no-cache", false, cat.T("cli.noCache"))
+		debug       = flag.Bool("debug", false, cat.T("cli.debug"))
 		showVersion = flag.Bool("version", false, cat.T("cli.version"))
 		refreshSecs = flag.Int("refresh", 60, cat.T("cli.refresh"))
 		mcpMode     = flag.Bool("mcp", false, cat.T("cli.mcp"))
@@ -76,6 +77,14 @@ func main() {
 
 	// The SDK has to look for the credentials where the wizard writes them.
 	awsx.SharedDir = config.AWSDir()
+
+	// --debug writes which call was made and what came back. Deliberately not
+	// the SDK's own request logging: that would put the mail itself into a file
+	// at the moment somebody is debugging and least expects it. See
+	// awsx/debug.go.
+	if *debug {
+		awsx.SetDebug(os.Stderr)
+	}
 
 	// As an MCP server there is no window and no web server: the program is a
 	// tool in somebody else's hands, and stdin and stdout are the whole
@@ -239,7 +248,7 @@ func activate(ctx context.Context, srv *web.Server, k config.Config, noSend bool
 			}
 			continue
 		}
-		mb := store.NewMailbox(ctx, awsx.NewS3(cfg, ""), awsx.NewKMS(cfg, ""),
+		mb := store.NewMailbox(ctx, awsx.NewS3Client(cfg, ""), awsx.NewKMS(cfg, ""),
 			a.Bucket, a.Prefix, cacheDir, k.AllowDelete)
 		acc := web.Account{ID: a.ID(), Name: a.Name(), Mailbox: mb, Profile: a.Profile,
 			From: a.From, Signature: a.Signature, Snippets: a.Snippets}

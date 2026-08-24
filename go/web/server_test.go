@@ -67,6 +67,9 @@ func portOf(u string) int {
 type call struct {
 	Code int
 	Body []byte
+	// Header matters wherever the answer is not JSON: a preview stands or falls
+	// on Content-Disposition and the CSP, not on its body.
+	Header http.Header
 }
 
 func (r call) json(t *testing.T) map[string]any {
@@ -105,7 +108,7 @@ func callServer(t *testing.T, ts *httptest.Server, method, path string, body str
 	}
 	defer resp.Body.Close()
 	blob, _ := io.ReadAll(resp.Body)
-	return call{resp.StatusCode, blob}
+	return call{resp.StatusCode, blob, resp.Header}
 }
 
 func TestMailboxRoutes(t *testing.T) {

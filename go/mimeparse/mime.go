@@ -314,13 +314,16 @@ type Full struct {
 	Cc      string `json:"cc"`
 	// Bcc appears in a draft only: a sent message never carries the header, or
 	// the recipients would have the blind copy in front of them.
-	Bcc         string           `json:"bcc"`
-	Date        string           `json:"date"`
-	MessageID   string           `json:"message_id"`
-	References  string           `json:"references"`
-	Spam        bool             `json:"spam"`
-	Virus       bool             `json:"virus"`
-	Auth        AuthResults      `json:"auth,omitempty"`
+	Bcc        string      `json:"bcc"`
+	Date       string      `json:"date"`
+	MessageID  string      `json:"message_id"`
+	References string      `json:"references"`
+	Spam       bool        `json:"spam"`
+	Virus      bool        `json:"virus"`
+	Auth       AuthResults `json:"auth,omitempty"`
+	// Unsub is the List-Unsubscribe offer. Only in the opened message, not in
+	// the index: nobody unsubscribes from a list view.
+	Unsub       Unsubscribe      `json:"unsubscribe,omitempty"`
 	Text        string           `json:"text"`
 	HTML        string           `json:"html"`
 	Attachments []FullAttachment `json:"attachments"`
@@ -362,6 +365,7 @@ func Read(raw []byte, fallback time.Time) Full {
 	v.Spam = strings.EqualFold(h.Get("X-Ses-Spam-Verdict"), "FAIL")
 	v.Virus = strings.EqualFold(h.Get("X-Ses-Virus-Verdict"), "FAIL")
 	v.Auth = authResults(h)
+	v.Unsub = unsubscribe(h)
 
 	var text, html []string
 	idx := 0

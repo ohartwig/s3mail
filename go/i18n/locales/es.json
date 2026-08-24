@@ -304,8 +304,21 @@
   "sending.wentOut": "Sí salió",
   "sending.didNot": "No salió",
   "cli.noCache": "No guardar nada en disco: sin índice, sin cuerpos de mensaje, sin estado local",
+  "cli.debug": "Registrar las llamadas a S3 y SES (claves, tamaños, duración; sin contenido de mensajes)",
   "auth.gone": "Ya no hay acceso a AWS",
   "auth.retry": "Reintentar",
   "view.authFailShort": "Remitente no verificado",
-  "view.authFailTitle": "SPF, DKIM o DMARC fallaron: la dirección del remitente podría estar falsificada"
+  "view.authFailTitle": "SPF, DKIM o DMARC fallaron: la dirección del remitente podría estar falsificada",
+  "view.preview": "Ver",
+  "view.close": "Cerrar",
+  "list.hits": "resultados",
+  "list.someStuck": "%d de ellos no se pudieron mover: siguen donde estaban",
+  "unsub.button": "Darse de baja",
+  "unsub.title": "Escribir el correo de baja: solo se envía cuando pulsas enviar",
+  "unsub.linkTitle": "Abrir la página de baja del remitente en el navegador",
+  "unsub.alsoLink": "El remitente también ofrece una página de baja; s3mail no la abre por su cuenta",
+  "rules.export": "Exportar",
+  "rules.import": "Importar",
+  "rules.imported": "%a reglas incorporadas, %s ya estaban, %t etiquetas añadidas",
+  "rules.importBroken": "El archivo no es JSON válido"
 }

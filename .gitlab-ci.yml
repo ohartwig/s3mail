@@ -16,6 +16,23 @@
 # Der Katalog unter devops/ci-cd-components ist PHP/TYPO3-seitig, für Go gibt es
 # dort nichts – deshalb hier von Hand.
 
+# Die Signatur über das Manifest kommt aus dem Bestand und nicht von Hand.
+# devops/ci-cd-components/build-provenance/sign-artifact macht genau das:
+# abgelöste cosign-Signatur über eine Datei, Schlüssel in KMS, Rolle über OIDC,
+# und sie prüft die eigene Signatur nach, bevor sie den Job verlässt. Ein
+# zweiter Weg zum selben Schlüssel wäre ein zweiter Weg, ihn falsch zu benutzen.
+include:
+  # Voller Tag und nicht ~latest oder @2: build-provenance ist kein
+  # Katalog-Projekt, und dort loest GitLab nur einen vollstaendigen Tag auf.
+  # Renovate haelt ihn nach.
+  # renovate: datasource=gitlab-tags depName=devops/ci-cd-components/build-provenance
+  - component: ${CI_SERVER_HOST}/devops/ci-cd-components/build-provenance/sign-artifact@2.0.46
+    inputs:
+      stage: release
+      artifact-file: SHA256SUMS
+      needs-config:
+        - job: manifest
+
 stages:
   - test
   - build
@@ -315,6 +332,36 @@ sign:macos:
       - go/dist/
     expire_in: 1 month
 
+# --------------------------------------------------------------------------- #
+# Ein Manifest über alle Pakete, damit sich prüfen lässt, was man geladen hat
+#
+# Je Paket liegt schon eine .sha256 daneben. Die beantwortet "ist die Datei heil
+# angekommen" und nicht "kommt sie von uns": wer das Paket austauscht, tauscht
+# die Prüfsumme daneben mit aus. Erst die Signatur über das Manifest macht aus
+# der Prüfsumme eine Aussage - und zwar eine über alle vier Pakete auf einmal.
+#
+# macOS ist zusätzlich notarisiert; das Manifest ist der Weg für Windows und
+# Linux, wo es keine Signatur im Paket gibt.
+# --------------------------------------------------------------------------- #
+manifest:
+  stage: release
+  image: ${GO_IMAGE}
+  before_script: []
+  needs:
+    - build:linux-amd64
+    - build:windows-amd64
+    - sign:macos
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
+  script:
+    # Sortiert, damit zwei Läufe desselben Standes dasselbe Manifest ergeben.
+    - cd go/dist && sha256sum *.zip | sort -k2 > "$CI_PROJECT_DIR/SHA256SUMS"
+    - cat "$CI_PROJECT_DIR/SHA256SUMS"
+  artifacts:
+    paths:
+      - SHA256SUMS
+    expire_in: 1 month
+
 upload:
   stage: release
   image: ${CURL_IMAGE}
@@ -325,6 +372,9 @@ upload:
     - build:linux-amd64
     - build:windows-amd64
     - sign:macos
+    - manifest
+    - job: sign-artifact
+      optional: true
   # Nur vollständige Versions-Tags veröffentlichen. Ein Vorab-Tag wie v0.9.0-rc1
   # durchläuft damit Bauen und Signieren vollständig - mit echtem Zertifikat,
   # denn IAM erlaubt jedes v* -, legt aber kein Paket ab und erzeugt kein
@@ -336,9 +386,14 @@ upload:
     # Paketversion ist der Tag, wie er ist - dieselbe Zeichenkette, die unten in
     # den Asset-Links steht. Ein hier abgeschnittenes "v" haette Links erzeugt,
     # die ins Leere zeigen.
+    # Manifest und Signatur liegen im Projektverzeichnis, nicht in go/dist - sie
+    # gehören zum Release und nicht zu einem Bauziel.
+    - cp "$CI_PROJECT_DIR/SHA256SUMS" go/dist/ || true
+    - cp "$CI_PROJECT_DIR/SHA256SUMS.sig" go/dist/ || true
     - cd go/dist
     - |
-      for f in *.zip *.sha256; do
+      for f in *.zip *.sha256 SHA256SUMS SHA256SUMS.sig; do
+        [ -f "$f" ] || continue
         echo "lade hoch: $f"
         curl --fail-with-body --silent --show-error \
           --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
@@ -370,7 +425,9 @@ release:
             {"name": "s3mail-windows-amd64.zip", "url": "${PACKAGE_URL}/${CI_COMMIT_TAG}/s3mail-windows-amd64.zip", "link_type": "package"},
             {"name": "s3mail-macos-arm64.zip (Apple Silicon)", "url": "${PACKAGE_URL}/${CI_COMMIT_TAG}/s3mail-macos-arm64.zip", "link_type": "package"},
             {"name": "s3mail-macos-amd64.zip (Intel)", "url": "${PACKAGE_URL}/${CI_COMMIT_TAG}/s3mail-macos-amd64.zip", "link_type": "package"},
-            {"name": "s3mail-linux-amd64.zip", "url": "${PACKAGE_URL}/${CI_COMMIT_TAG}/s3mail-linux-amd64.zip", "link_type": "package"}
+            {"name": "s3mail-linux-amd64.zip", "url": "${PACKAGE_URL}/${CI_COMMIT_TAG}/s3mail-linux-amd64.zip", "link_type": "package"},
+            {"name": "SHA256SUMS", "url": "${PACKAGE_URL}/${CI_COMMIT_TAG}/SHA256SUMS", "link_type": "other"},
+            {"name": "SHA256SUMS.sig", "url": "${PACKAGE_URL}/${CI_COMMIT_TAG}/SHA256SUMS.sig", "link_type": "other"}
           ]
         }
       }

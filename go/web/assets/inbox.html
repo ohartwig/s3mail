@@ -29,6 +29,11 @@
   button { background:var(--panel2); border:1px solid var(--line); color:var(--text);
            border-radius:var(--radius); padding:6px 11px; cursor:pointer; }
   button:hover:not(:disabled) { border-color:var(--accent); }
+  /* A link that has to sit in a row of buttons - the unsubscribe page of a
+     sender is a link on purpose, so that opening it is a visible navigation. */
+  a.btn { background:var(--panel2); border:1px solid var(--line); color:var(--text);
+    border-radius:var(--radius); padding:6px 11px; font:inherit; text-decoration:none; }
+  a.btn:hover { border-color:var(--accent); }
   button:disabled { opacity:.5; cursor:default; }
   /* The language switch looks like the buttons next to it - it sits in the
      same row and does the same thing: it changes something about the view. */
@@ -129,6 +134,12 @@
   .toast { position:fixed; bottom:18px; right:18px; z-index:60; background:var(--panel);
            border:1px solid var(--line); border-left:3px solid var(--accent);
            border-radius:8px; padding:10px 14px; box-shadow:0 8px 24px rgba(0,0,0,.3); }
+#preview{display:none;position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.55);
+  flex-direction:column;padding:24px;gap:0}
+#preview iframe{flex:1;width:100%;border:0;background:#fff;border-radius:0 0 4px 4px}
+.prevhead{display:flex;justify-content:space-between;align-items:center;gap:12px;
+  padding:8px 12px;background:var(--bg,#fff);border-radius:4px 4px 0 0;font-size:13px}
+.att .eye{padding:1px 6px;font-size:12px;line-height:1.4}
 .authbar{display:flex;align-items:center;justify-content:space-between;gap:14px;
   padding:9px 16px;background:var(--dangerbg,#fdecec);border-bottom:1px solid var(--dangerline,#e0a0a0);
   font-size:13px;flex-wrap:wrap}
@@ -152,6 +163,7 @@
   <select id="lang" title="{{t "nav.language"}}" aria-label="{{t "nav.language"}}"></select>
   <button id="quit" title="{{t "nav.quit.title"}}">{{t "nav.quit"}}</button>
 </header>
+<div id="preview"></div>
 <div id="authbar"></div>
 <div id="pending"></div>
 <main>
@@ -166,9 +178,10 @@
 <dialog id="dlgCompose"><form class="pad" method="dialog">
   <b id="c_title">{{t "compose.reply"}}</b>
   <div><label>{{t "compose.from"}}</label><input id="c_from"></div>
-  <div><label>{{t "compose.to"}}</label><input id="c_to"></div>
-  <div><label>Cc</label><input id="c_cc"></div>
-  <div><label>{{t "compose.bcc"}}</label><input id="c_bcc"></div>
+  <div><label>{{t "compose.to"}}</label><input id="c_to" list="addrbook" autocomplete="off"></div>
+  <div><label>Cc</label><input id="c_cc" list="addrbook" autocomplete="off"></div>
+  <div><label>{{t "compose.bcc"}}</label><input id="c_bcc" list="addrbook" autocomplete="off"></div>
+  <datalist id="addrbook"></datalist>
   <div><label>{{t "compose.subject"}}</label><input id="c_subject"></div>
   <div><label>{{t "compose.body"}}</label><textarea id="c_body"></textarea></div>
   <div><label>{{t "compose.attachments"}}</label><div>
@@ -194,6 +207,9 @@
   <div class="bar" style="margin:4px 0 0">
     <button type="button" id="ruleAdd">{{t "rules.add"}}</button>
     <button type="button" id="ruleApply">{{t "rules.applyAll"}}</button>
+    <a class="btn" id="ruleExport" href="/api/rules/export" download>{{t "rules.export"}}</a>
+    <button type="button" id="ruleImport">{{t "rules.import"}}</button>
+    <input type="file" id="ruleFile" accept="application/json,.json" style="display:none">
     <span class="grow" style="flex:1"></span>
     <button value="cancel">{{t "action.close"}}</button>
     <button type="button" class="primary" id="ruleSave">{{t "action.save"}}</button>
@@ -289,6 +305,48 @@ function authFlags(a) {
     return `<span class="flag${bad ? " bad" : ""}" title="${k.toUpperCase()}: ${esc(v)}">${
       k.toUpperCase()}${bad ? " ✗" : " ✓"}</span>`;
   }).join("");
+}
+
+/* ---------------- Addresses ----------------
+   Out of the index, not out of an address book. A <datalist> and not a menu of
+   our own: the browser then does the filtering, the keyboard works the way the
+   reader expects, and there is no second widget to keep accessible.
+
+   Only the part after the last comma is looked up - somebody typing a third
+   recipient is not searching for the first two. */
+let addrTimer = null;
+function wireAddresses(field) {
+  field.oninput = () => {
+    clearTimeout(addrTimer);
+    addrTimer = setTimeout(async () => {
+      const tail = field.value.split(",").pop().trim();
+      try {
+        const d = await api("/api/addresses?q=" + encodeURIComponent(tail));
+        $("#addrbook").innerHTML = (d.addresses || [])
+          .map(a => `<option value="${esc(a.label)}"></option>`).join("");
+      } catch { /* a field that suggests nothing is still a field */ }
+    }, 120);
+  };
+}
+
+/* showPreview puts an attachment on screen without letting it into the page.
+   The iframe is sandboxed and the server answers with a CSP that puts the file
+   into an opaque origin - so even a format that turns out to carry something
+   cannot reach the token cookie or call the API. Two locks, because one of them
+   protects against the browser being wrong about the other. */
+function showPreview(url, name) {
+  const box = $("#preview");
+  box.innerHTML = `
+    <div class="prevhead"><span>${esc(name)}</span>
+      <button id="prevclose">${T["view.close"]}</button></div>
+    <iframe sandbox="" src="${url}"></iframe>`;
+  box.style.display = "flex";
+  $("#prevclose").onclick = closePreview;
+}
+function closePreview() {
+  const box = $("#preview");
+  box.style.display = "none";
+  box.innerHTML = "";
 }
 
 /* ---------------- Access gone ----------------
@@ -436,7 +494,8 @@ function renderTools() {
   const inTrash = folder === "trash";
   $("#tools").innerHTML = n === 0 ? `
       <label style="display:flex;gap:6px;align-items:center">
-        <input type="checkbox" id="all"> <span class="box">${messages.length} ${T["list.messages"]}${tagFilter ? " · " + T["list.tag"] + ": " + esc(tagFilter) : ""}</span>
+        <input type="checkbox" id="all"> <span class="box">${messages.length} ${
+          ($("#q").value.trim() || conversation || waiting) ? T["list.hits"] : T["list.messages"]}${tagFilter ? " · " + T["list.tag"] + ": " + esc(tagFilter) : ""}</span>
       </label>
       <span class="grow"></span>
       ${inTrash && over.allow_delete ? `<button class="danger" id="emptyTrash">${T["tools.emptyTrash"]}</button>` : ""}
@@ -537,7 +596,15 @@ async function move(keys, target) {
   const res = await api("/api/move", {keys, folder: target});
   checked.clear();
   if (keys.includes(current)) { current = null; $("#view").innerHTML = `<div class="empty">${T["list.moved"]}</div>`; }
-  toast(keys.length + (keys.length === 1 ? " " + T["list.message"] : " " + T["list.messages"]) + " → " + folderLabel(target));
+  // Over a search result this is hundreds of messages, and single ones can get
+  // stuck. Reporting the round number would be the comfortable lie - the count
+  // that matters is the one that actually arrived.
+  const failed = (res.moved || []).filter(m => m.error);
+  const done = keys.length - failed.length;
+  toast(done + (done === 1 ? " " + T["list.message"] : " " + T["list.messages"]) + " → " + folderLabel(target));
+  if (failed.length) {
+    toast(T["list.someStuck"].replace("%d", failed.length), true);
+  }
   await load();
 }
 
@@ -651,9 +718,19 @@ const open = guard(async key => {
   renderList();
   if (wasUnread) api("/api/overview").then(renderSide).catch(() => {});
 
-  const atts = m.attachments.map(a => `
-    <a class="att" href="/api/attachment?key=${encodeURIComponent(key)}&index=${a.index}">
-      📎 ${esc(a.filename)} <span class="date">${fmtSize(a.size)}</span></a>`).join("");
+  const atts = m.attachments.map(a => {
+    const url = `/api/attachment?key=${encodeURIComponent(key)}&index=${a.index}`;
+    // Only what the server is willing to show inline gets an eye. The list is
+    // the same one previewable() keeps, and it is a whitelist for a reason:
+    // SVG is not on it.
+    const canView = ["image/png","image/jpeg","image/gif","image/webp","image/bmp",
+      "application/pdf"].includes((a.content_type||"").split(";")[0].trim().toLowerCase());
+    return `<span class="att">
+      ${canView ? `<button class="eye" data-view="${url}&view=1" data-name="${esc(a.filename)}"
+        title="${T["view.preview"]}">👁</button>` : ""}
+      <a href="${url}">📎 ${esc(a.filename)}</a>
+      <span class="date">${fmtSize(a.size)}</span></span>`;
+  }).join("");
 
   let bodyHtml;
   if (m.html) {
@@ -694,6 +771,8 @@ const open = guard(async key => {
         : `<button id="vTrash">🗑 ${T["folder.trash"]}</button>`}
       <button id="vHistory" title="${T["view.history.title"]}">${T["view.history"]}</button>
       ${over.can_block ? `<button id="vBlock" title="${T["blocked.buttonTitle"]}">${T["blocked.button"]}</button>` : ""}
+      ${m.unsubscribe && m.unsubscribe.mail ? `<button id="vUnsub" title="${T["unsub.title"]}">${T["unsub.button"]}</button>` : ""}
+      ${m.unsubscribe && !m.unsubscribe.mail && m.unsubscribe.link ? `<a class="btn" target="_blank" rel="noopener noreferrer" href="${esc(m.unsubscribe.link)}" title="${T["unsub.linkTitle"]}">${T["unsub.button"]}</a>` : ""}
       <a class="att" href="/api/raw?key=${encodeURIComponent(key)}">⬇︎ .eml</a>
       ${m.html ? `<button id="imgs">${showImages ? T["view.blockImages"] : T["view.loadImages"]}</button>` : ""}
     </div>
@@ -702,6 +781,8 @@ const open = guard(async key => {
 
   const on = (id, fn) => { const el = $(id); if (el) el.onclick = fn; };
   on("#imgs", () => { showImages = !showImages; open(key); });
+  $("#view").querySelectorAll("button[data-view]").forEach(b =>
+    b.onclick = () => showPreview(b.dataset.view, b.dataset.name));
   on("#reply", () => compose("reply", false));
   on("#replyall", () => compose("reply", true));
   on("#forward", () => compose("forward", false));
@@ -713,6 +794,17 @@ const open = guard(async key => {
   on("#vMove", e => folderMenu(e.target, guard(async f => { await move([key], f); })));
   on("#vTag", e => tagMenu(e.target, [key]));
   on("#vBlock", () => askToBlock(m.reply_to || m.from));
+  // The unsubscribe mail is written, not sent. s3mail never fires a request at
+  // a URL a stranger put in a header - the request alone would confirm that the
+  // address is read. A person presses send, as everywhere else here.
+  on("#vUnsub", () => {
+    const u = m.unsubscribe;
+    compose("new", false);
+    $("#c_to").value = u.mail;
+    $("#c_subject").value = decodeURIComponent((u.subject || "unsubscribe").replace(/\+/g, " "));
+    $("#c_body").value = "";
+    if (u.link) toast(T["unsub.alsoLink"], false);
+  });
   on("#vHistory", () => {
     // The bare address, not the display name: the same person writes under
     // three of those over a year.
@@ -738,6 +830,7 @@ function compose(kind, all) {
   attachments = []; draftKey = "";
   renderAtts();
   fillSnippets();
+  for (const f of ["#c_to", "#c_cc", "#c_bcc"]) wireAddresses($(f));
   $("#c_bcc").value = "";
   $("#c_from").value = over.default_from || "";
   // A new message has no template - everything below reads from m, which is
@@ -993,10 +1086,13 @@ function ruleRow(r) {
   div.querySelector(".r_del").onclick = () => div.remove();
   return div;
 }
-$("#rulesBtn").onclick = () => {
+function fillRules() {
   const box = $("#ruleRows"); box.innerHTML = "";
   (over.rules || []).forEach(r => box.appendChild(ruleRow(r)));
-  if (!over.rules.length) box.appendChild(ruleRow());
+  if (!(over.rules || []).length) box.appendChild(ruleRow());
+}
+$("#rulesBtn").onclick = () => {
+  fillRules();
   $("#r_err").textContent = "";
   $("#ruleTips").innerHTML = "";
   $("#dlgRules").showModal();
@@ -1032,6 +1128,32 @@ async function showSuggestions() {
   }
 }
 $("#ruleAdd").onclick = () => $("#ruleRows").appendChild(ruleRow());
+
+/* Import merges, it never replaces - see core/portable.go. So the button says
+   what it did afterwards: how many rules came in, how many were already there
+   under another name, which tags were added. "Imported" alone would leave
+   somebody wondering whether their own rules survived. */
+$("#ruleImport").onclick = () => $("#ruleFile").click();
+$("#ruleFile").onchange = guard(async () => {
+  const file = $("#ruleFile").files[0];
+  if (!file) return;
+  $("#ruleFile").value = "";
+  let parsed;
+  try {
+    parsed = JSON.parse(await file.text());
+  } catch {
+    $("#r_err").textContent = T["rules.importBroken"];
+    return;
+  }
+  const d = await api("/api/rules/import", {method: "POST", body: JSON.stringify(
+    {rules: parsed.rules || [], tags: parsed.tags || {}})});
+  const rep = d.imported || {};
+  toast(T["rules.imported"]
+    .replace("%a", rep.rules_added || 0)
+    .replace("%s", rep.rules_skipped || 0)
+    .replace("%t", (rep.tags_added || []).length));
+  over = d; renderSide(); fillRules();
+});
 function collectRules() {
   return [...$("#ruleRows").children].map(d => ({
     contains: d.querySelector(".r_contains").value.trim(),

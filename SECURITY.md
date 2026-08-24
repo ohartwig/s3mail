@@ -51,7 +51,7 @@ Ohne diese drei ist das Modell darunter gegenstandslos:
 | Wer an ein Backup kommt | Time Machine, Ordnersync, Platte ohne FileVault | Keine | **Der Cache liegt im Klartext**, samt der Mailtexte, und das schließt client-seitig verschlüsselte Mail ein: s3mail muss sie zum Anzeigen entschlüsseln. `--no-cache` schaltet das ab, ein verschlüsselter Cache ist nicht gebaut |
 | Zweiter Rechner am selben Bucket | Zustand kaputtschreiben | Op-Log, ein Schlüssel je Vorgang, alle Ops idempotent | Kein Schutz gegen absichtlich falsche Ops. Das ist dieselbe Vertrauensstufe wie Schreibrecht auf den Bucket |
 | Wer einen AWS-Schlüssel hat | Alles | Keine, und das ist richtig so | Außerhalb von s3mail. Empfehlung: SSO mit kurzen Sitzungen statt Langzeitschlüssel |
-| Lieferkette | Gefälschtes Programm | macOS: Developer ID signiert und bei Apple notarisiert. Alle Plattformen: SHA256 je Paket | Windows und Linux sind nicht signiert. Ein signiertes Release-Manifest ist geplant, aber nicht gebaut |
+| Lieferkette | Gefälschtes Programm | macOS: Developer ID signiert und bei Apple notarisiert. Alle Plattformen: `SHA256SUMS` über alle Pakete, mit abgelöster cosign-Signatur (`SHA256SUMS.sig`, Schlüssel in AWS KMS) | Das Paket selbst trägt unter Windows und Linux keine Signatur — wer das Manifest nicht prüft, prüft nichts. Die einzelne `.sha256` neben einem Paket ist keine Herkunftsaussage |
 | Netzwerk | Mitlesen auf dem Weg zu AWS | TLS über das AWS-SDK | — |
 
 ## Was ausdrücklich nicht abgedeckt ist

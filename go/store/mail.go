@@ -283,6 +283,10 @@ type MoveResult struct {
 	NewKey  string `json:"new_key"`
 	Folder  string `json:"folder"`
 	Skipped bool   `json:"skipped,omitempty"`
+	// Err is set when this one message could not be moved. The others were
+	// still moved: a bulk action that reports one failure as total failure
+	// leaves somebody guessing which half happened.
+	Err string `json:"error,omitempty"`
 }
 
 // Move copies and deletes - S3 knows no rename. Encryption and storage class of
@@ -294,6 +298,7 @@ func (m *Mailbox) Move(ctx context.Context, keys []string, folder string) ([]Mov
 		return nil, err
 	}
 	var out []MoveResult
+	failedInARow := 0
 	err = m.State.Batch(ctx, func() error {
 		for _, key := range keys {
 			if err := m.Own(key); err != nil {
@@ -312,12 +317,37 @@ func (m *Mailbox) Move(ctx context.Context, keys []string, folder string) ([]Mov
 			mid := m.Mid(key)
 			newKey, newMid := m.freeKey(mid, target)
 
+			// One message that will not move must not take the rest with it. A
+			// bulk move over a search result is the normal case, and reporting
+			// the first failure as total failure leaves somebody guessing which
+			// half happened - while the mailbox already shows both.
+			//
+			// The guard against the other extreme is failedInARow below: if the
+			// access is gone, every remaining message fails the same way, and a
+			// list of five thousand identical sentences helps nobody. store does
+			// not get to ask awsx what kind of error this is - that would turn
+			// the layering upside down - so it counts instead.
 			if err := m.s3.Copy(ctx, m.bucket, key, newKey, m.copyOpts(ctx, key)); err != nil {
-				return err
+				out = append(out, MoveResult{Key: key, Err: err.Error()})
+				failedInARow++
+				if failedInARow >= movesGiveUpAfter {
+					return err
+				}
+				continue
 			}
 			if err := m.s3.Delete(ctx, m.bucket, key); err != nil {
-				return err
+				// The copy is already there. Saying "not moved" now would be the
+				// worse lie: the message exists twice, and the new one is the one
+				// the reader will find.
+				out = append(out, MoveResult{Key: key, NewKey: newKey, Folder: target,
+					Err: err.Error()})
+				failedInARow++
+				if failedInARow >= movesGiveUpAfter {
+					return err
+				}
+				continue
 			}
+			failedInARow = 0
 			m.mu.Lock()
 			delete(m.index, key)
 			entry.Key, entry.Mid, entry.Folder = newKey, newMid, target
@@ -336,6 +366,12 @@ func (m *Mailbox) Move(ctx context.Context, keys []string, folder string) ([]Mov
 	m.writeCache()
 	return out, err
 }
+
+// movesGiveUpAfter is how many messages in a row may fail before Move stops.
+// Below it the failures are per message and the rest still moves; at it,
+// something systemic is wrong - the access, the bucket, the network - and
+// carrying on would only lengthen the list.
+const movesGiveUpAfter = 10
 
 // freeKey defuses a name collision in the target folder.
 func (m *Mailbox) freeKey(mid, target string) (string, string) {

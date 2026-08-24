@@ -362,6 +362,9 @@ type request struct {
 	Color   string      `json:"color"`
 	Rules   []core.Rule `json:"rules"`
 	Address string      `json:"address"`
+	// Tags carries the colour map of an imported file. Only /api/rules/import
+	// uses it; everywhere else tags travel as Add and Remove.
+	Tags map[string]string `json:"tags"`
 }
 
 func (a request) allKeys() []string {
@@ -480,6 +483,19 @@ func (s *Server) routes() {
 			if ct == "" {
 				ct = "application/octet-stream"
 			}
+			// view=1 asks for a preview instead of a download. It is granted only
+			// for the handful of types that cannot carry code, and even then the
+			// answer is locked down - see previewable.
+			if q.Get("view") == "1" && previewable(ct) {
+				w.Header().Set("Content-Type", ct)
+				w.Header().Set("Content-Disposition",
+					fmt.Sprintf(`inline; filename="%s"`, cleanName(a.Filename)))
+				w.Header().Set("Content-Security-Policy",
+					"default-src 'none'; img-src 'self' data:; object-src 'self'; sandbox")
+				w.Header().Set("X-Frame-Options", "SAMEORIGIN")
+				_, _ = w.Write(a.Content)
+				return
+			}
 			w.Header().Set("Content-Type", ct)
 			w.Header().Set("Content-Disposition",
 				fmt.Sprintf(`attachment; filename="%s"`, cleanName(a.Filename)))
@@ -487,6 +503,27 @@ func (s *Server) routes() {
 			return
 		}
 		s.writeError(w, http.StatusNotFound, s.text(r, "error.attachmentNotFound"))
+	})
+
+	// Addresses for the field somebody is typing into. Out of the index, not out
+	// of an address book: a second place to keep addresses is a second place to
+	// keep them wrong.
+	s.mux.HandleFunc("GET /api/addresses", func(w http.ResponseWriter, r *http.Request) {
+		acc, ok := s.pick(w, r)
+		if !ok {
+			return
+		}
+		q := r.URL.Query()
+		limit, _ := strconv.Atoi(q.Get("limit"))
+		if limit <= 0 || limit > 25 {
+			limit = 10
+		}
+		found := core.Addresses(acc.Mailbox.Index(), q.Get("q"), limit)
+		out := make([]map[string]any, 0, len(found))
+		for _, c := range found {
+			out = append(out, map[string]any{"addr": c.Addr, "name": c.Name, "label": c.Label()})
+		}
+		s.json(w, http.StatusOK, map[string]any{"addresses": out})
 	})
 
 	s.mux.HandleFunc("GET /api/raw", func(w http.ResponseWriter, r *http.Request) {
@@ -637,6 +674,44 @@ func (s *Server) routes() {
 
 	// Suggestions read the index and propose what somebody is already doing by
 	// hand. A GET, because it changes nothing - the reader decides.
+	// Rules and tags as a file. Export is a download so that it can be kept,
+	// mailed or put into version control without a copy-and-paste step.
+	s.mux.HandleFunc("GET /api/rules/export", func(w http.ResponseWriter, r *http.Request) {
+		acc, ok := s.pick(w, r)
+		if !ok {
+			return
+		}
+		blob, err := json.MarshalIndent(core.Export(acc.Mailbox.State.Data()), "", "  ")
+		if err != nil {
+			s.translate(w, r, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("Content-Disposition",
+			`attachment; filename="s3mail-regeln.json"`)
+		_, _ = w.Write(append(blob, '\n'))
+	})
+
+	// Import merges and never replaces. A file somebody hands over is an offer,
+	// not a command; replacing would destroy months of work in one click.
+	s.post("/api/rules/import", func(w http.ResponseWriter, r *http.Request, a request, acc *Account) {
+		in := core.Portable{Rules: a.Rules, Tags: a.Tags}
+		if len(in.Rules) == 0 && len(in.Tags) == 0 {
+			s.writeError(w, http.StatusBadRequest, s.text(r, "error.badInput"))
+			return
+		}
+		rules, tags, rep := core.Merge(acc.Mailbox.State.Data(), in)
+		ops := []core.Op{{T: "rules", Rules: rules}}
+		if len(tags) > 0 {
+			ops = append(ops, core.Op{T: "tags", Add: tags})
+		}
+		if err := acc.Mailbox.State.Mutate(r.Context(), ops...); err != nil {
+			s.translate(w, r, err)
+			return
+		}
+		s.json(w, http.StatusOK, with(s.overview(r, acc), map[string]any{"imported": rep}))
+	})
+
 	s.mux.HandleFunc("GET /api/rules/suggest", func(w http.ResponseWriter, r *http.Request) {
 		acc, ok := s.pick(w, r)
 		if !ok {

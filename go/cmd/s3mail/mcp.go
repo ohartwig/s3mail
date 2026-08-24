@@ -38,7 +38,7 @@ func serveMCP(ctx context.Context, k config.Config, readOnly bool, cacheDir stri
 			}
 			continue
 		}
-		mb := store.NewMailbox(ctx, awsx.NewS3(cfg, ""), awsx.NewKMS(cfg, ""),
+		mb := store.NewMailbox(ctx, awsx.NewS3Client(cfg, ""), awsx.NewKMS(cfg, ""),
 			a.Bucket, a.Prefix, cacheDir, k.AllowDelete)
 		// Once at the start, so the first search does not answer out of an empty
 		// index. After that the model works on what it has; it is not a window

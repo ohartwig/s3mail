@@ -185,6 +185,7 @@ ein Schalter kann nicht sagen, welches von mehreren er meint:
 | `--port` / `--host` | Standard `127.0.0.1:8765` |
 | `--no-browser` | Browser nicht automatisch öffnen |
 | `--no-cache` | Nichts auf Platte zwischenspeichern (siehe [Grenzen](#grenzen)) |
+| `--debug` | Aufrufe an S3 und SES protokollieren – Schlüssel, Größen, Dauer, **keine Mailinhalte** |
 | `--refresh` | Sekunden zwischen automatischen Abgleichen, `0` schaltet ab (Standard 60) |
 | `--version` | Version ausgeben und beenden |
 | `--mcp` | Als MCP-Server über stdin/stdout laufen (siehe [unten](#für-ein-modell-erreichbar---mcp)) |
@@ -262,6 +263,12 @@ S3-Konsole, und der Papierkorb lässt sich per Lifecycle-Regel automatisch leere
 - HTML-Mails rendern in einem `sandbox=""`-iframe mit CSP; externe Bilder sind
   standardmäßig blockiert (Tracking-Pixel) und per Klick nachladbar.
 - Anhänge einzeln herunterladbar, Rohmail als `.eml`.
+- **Anhänge ansehen statt nur laden**: Bilder (PNG, JPEG, GIF, WebP, BMP) und PDF
+  öffnen sich in einer Vorschau. Alles andere gibt es nur zum Herunterladen —
+  **SVG ausdrücklich eingeschlossen**: es sieht aus wie ein Bild, ist aber XML
+  mit Skriptunterstützung. Die Vorschau läuft in einem `sandbox=""`-iframe, und
+  der Server antwortet mit einer CSP, die die Datei in einen eigenen Ursprung
+  sperrt; sie kommt damit weder an das Token noch an die API.
 - SES-Verdicts (`X-SES-Spam-Verdict`, `X-SES-Virus-Verdict`) als Badge.
 - **SPF, DKIM und DMARC** aus `Authentication-Results`: in der Liste erscheint
   eine Marke, wenn eine der drei Prüfungen **fehlgeschlagen** ist – die
@@ -280,6 +287,11 @@ S3-Konsole, und der Papierkorb lässt sich per Lifecycle-Regel automatisch leere
 - **Signatur** aus den Einstellungen, unter jeder Mail. Sie steht **über** dem
   Zitat – am Ende eines langen Fadens sieht sie sonst niemand – und landet im
   Textfeld statt beim Versand, damit sie vorher noch kürzbar ist.
+- **Adressen werden vorgeschlagen**, während man tippt — aus dem Index, nicht aus
+  einem Adressbuch: ein zweiter Ort für Adressen ist ein zweiter Ort, an dem sie
+  falsch stehen. Sortiert nach Häufigkeit, bei Gleichstand nach Aktualität.
+  Gesucht wird in Adresse *und* Name; nachgeschlagen wird nur, was nach dem
+  letzten Komma steht.
 - **Anhänge**: Dateien anhängen, Cc und Blindkopie. Die Blindkopie geht über die
   Empfängerliste an SES und steht nie im Kopf der Mail – sonst hätten die
   Empfänger sie vor Augen. Bei mehr als 10 MB lehnt s3mail ab, bevor hochgeladen
@@ -333,7 +345,13 @@ Scheitert ein Postfach beim Start (falsches Profil, kein Zugriff), kommen die
 - Tags mit Farben, mehrere pro Mail, Klick in der Seitenleiste filtert.
 - Gelesen/ungelesen (Zähler pro Ordner), Stern.
 - Mehrfachauswahl per Checkbox, Shift-Klick wählt einen Bereich; dann verschieben,
-  taggen, markieren, löschen in einem Rutsch.
+  taggen, markieren, löschen in einem Rutsch. Das Kästchen in der Werkzeugleiste
+  wählt **alle Treffer** der aktuellen Suche — „alles von news@shop.io ins
+  Archiv" ist damit zwei Klicks.
+- Bleibt bei so einer Aktion eine Mail hängen, ziehen die anderen trotzdem um,
+  und die Meldung nennt die Zahl, die wirklich angekommen ist. Scheitern zehn
+  hintereinander, hört s3mail auf: dann stimmt etwas Grundsätzliches nicht, und
+  eine Liste mit fünftausend gleichen Sätzen hilft niemandem.
 
 **Automatische Regeln**
 
@@ -361,6 +379,19 @@ Spam fasst die Automatik nicht an.
 {"accounts": [{"bucket": "post", "prefix": "mail/", "from": "info@firma.de",
   "snippets": [{"name": "Terminvorschlag", "text": "passt Ihnen Dienstag 10 Uhr?"}]}]}
 ```
+
+**Regeln und Tags als Datei**
+
+Im Regeldialog stehen **Exportieren** und **Importieren**. Der Export ist eine
+JSON-Datei mit Regeln und Tagfarben — aufhebbar, weitergebbar, versionierbar.
+
+Der Import **fügt zusammen und ersetzt nie**. Eine Datei, die jemand
+herüberreicht, ist ein Angebot und kein Befehl; Ersetzen würde in einem Klick
+zerstören, was über Monate gewachsen ist. Doppelte werden dabei am *Verhalten*
+erkannt, nicht am Namen: jede Regel gegen Werbung heißt „Newsletter", und
+niemand will sie zweimal. Eine Tagfarbe, die schon in Gebrauch ist, bleibt.
+Danach steht da, was passiert ist — wie viele Regeln kamen, wie viele schon da
+waren, welche Tags dazu.
 
 **Regelvorschläge**
 
@@ -529,6 +560,22 @@ spctl -a -vvv -t install s3mail.app     # accepted, source=Notarized Developer I
 
 Windows bleibt unsigniert – dort meldet sich SmartScreen beim ersten Start mit
 *Weitere Informationen → Trotzdem ausführen*.
+
+**Nachprüfen, dass ein Paket von hier stammt.** Zu jedem Release liegen
+`SHA256SUMS` mit den Prüfsummen aller vier Pakete und `SHA256SUMS.sig`, eine
+abgelöste cosign-Signatur darüber. Die einzelnen `.sha256`-Dateien beantworten
+nur, ob eine Datei heil angekommen ist — wer ein Paket austauscht, tauscht die
+Prüfsumme daneben mit aus. Erst die Signatur sagt etwas darüber, **wer** es
+gebaut hat:
+
+```bash
+cosign verify-blob --key <öffentlicher-Schlüssel> \
+  --signature SHA256SUMS.sig --insecure-ignore-tlog=true SHA256SUMS
+sha256sum -c SHA256SUMS
+```
+
+Für macOS ist das die zweite Absicherung neben der Notarisierung; für Windows
+und Linux, wo im Paket selbst keine Signatur steckt, ist es die einzige.
 
 ### Wenn der Zugang wegfällt
 
@@ -700,6 +747,22 @@ jeden Bucket des Kontos, auch die, die mit Mail nichts zu tun haben. Bei einem
 Postfach-Zugang ist die leere Auswahlliste deshalb der Normalfall – der Name
 wird eingetippt oder kommt aus der Selbsteinrichtung.
 
+## Abmelden (List-Unsubscribe)
+
+Trägt eine Mail einen `List-Unsubscribe`-Kopf, steht in der Mailansicht ein
+Knopf **Abmelden** neben *Nicht mehr schreiben*. Er **schreibt** die
+Abmeldemail — Empfänger und Betreff aus dem Kopf, so wie die Liste sie sehen
+will — und legt sie in den Verfassen-Dialog. Gesendet wird sie, wenn du auf
+Senden drückst.
+
+Was s3mail **nicht** tut: den One-Click-Abmeldelink von selbst aufrufen (RFC
+8058). Ein Mailprogramm, das Anfragen an URLs schickt, die ein Fremder in einen
+Kopf geschrieben hat, hat einen Rückkanal — allein die Anfrage bestätigt, dass
+die Adresse gelesen wird, und sie passiert, ohne dass jemand es entschieden hat.
+Bietet der Absender nur eine Abmeldeseite an, steht sie als Link da; ihn
+anzuklicken ist eine Entscheidung. Reines `http://` wird gar nicht erst
+angeboten.
+
 ## Nicht mehr schreiben (SES-Sperrliste)
 
 Bittet jemand darum, nicht mehr angeschrieben zu werden, erledigt das der Knopf
@@ -728,6 +791,14 @@ sie melden dann einen Rechtefehler im Klartext.
 - Kein IMAP: ein normales Mailprogramm kann das Postfach nicht öffnen. Senden
   ginge dort über den SMTP-Endpunkt von SES, lesen nicht – SES kennt keinen
   Postfachdienst.
+- **Keine Thread-Gruppierung.** Die Liste zeigt einzelne Mails, keine Fäden.
+  Richtiges Threading braucht `References`, eine Normalisierung der Betreffs und
+  einen Umgang mit Fäden, die ein Ticketsystem abgeschnitten hat — eine Woche
+  Arbeit für etwas, das in einem Geschäftspostfach seltener trägt, als es
+  aussieht. Was den Zweck meistens erfüllt, gibt es schon: **Verlauf** in der
+  Mailansicht zeigt alle Mails mit dieser Adresse über alle Ordner, und der
+  bewusst nicht über den Faden, sondern über die Adresse — siehe
+  [Für die Arbeit am Kunden](#funktionen).
 - Push braucht eine Klingel in AWS: SES benachrichtigt ein SNS-Topic, das in eine
   SQS-Queue schreibt, an der s3mail hängt. Ist das eingerichtet, taucht neue Mail
   sofort auf; ohne läuft der Takt von `--refresh` (Standard 60 Sekunden) weiter.
@@ -756,7 +827,8 @@ sie melden dann einen Rechtefehler im Klartext.
   wäre der bessere Weg; er kostet plattformabhängigen Code (macOS Keychain,
   Windows DPAPI, Linux Secret Service) und ist deshalb nicht gebaut.
 - Die **Windows**-Pakete sind nicht signiert, dort meldet sich SmartScreen. Die
-  macOS-Pakete sind signiert und notarisiert, für Linux stellt sich die Frage nicht.
+  macOS-Pakete sind signiert und notarisiert. Für alle vier Plattformen gibt es
+  `SHA256SUMS` mit cosign-Signatur — siehe [Selbst bauen](#selbst-bauen).
 
 ## Sicherheit
 
