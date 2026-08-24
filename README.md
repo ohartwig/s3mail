@@ -18,9 +18,12 @@ macOS (Apple Silicon und Intel), Linux und Windows, jeweils amd64/arm64:
 
 ```bash
 unzip s3mail-macos-arm64.zip
-xattr -dr com.apple.quarantine s3mail   # einmalig, das Programm ist unsigniert
-./s3mail
+open s3mail.app
 ```
+
+Die macOS-Pakete sind signiert und notarisiert – kein `xattr`, kein Rechtsklick.
+Unter Linux und Windows liegt im ZIP die nackte Datei, dort genügt ein
+Doppelklick bzw. `./s3mail`.
 
 Wer selbst bauen will, braucht Go 1.25 oder neuer – siehe
 [Selbst bauen](#selbst-bauen).
@@ -473,19 +476,29 @@ Oberfläche steckt per `go:embed` mit drin, es gibt keinen Build-Schritt fürs
 Frontend und nichts nachzuinstallieren.
 
 Ausgeliefert wird als ZIP, und das mit Absicht: eine roh heruntergeladene Datei
-verliert ihr Ausführungs-Bit und lässt sich dann gar nicht erst starten. Dazu
-hängt macOS jedem Download ein Quarantäne-Attribut an, und weil das Programm
-nicht signiert ist, blockt Gatekeeper:
+verliert ihr Ausführungs-Bit und lässt sich dann gar nicht erst starten.
+
+Für macOS steckt im ZIP ein `.app`-Bundle, kein nacktes Programm. Es wird in der
+Pipeline mit einer Developer ID signiert und bei Apple notarisiert; das
+Notarisierungsticket ist ans Bundle geheftet, damit auch ein Rechner ohne Netz
+es prüfen kann. Für den Empfänger heißt das: doppelklicken, fertig – kein
+`xattr -dr com.apple.quarantine`, kein Rechtsklick → Öffnen, keine Warnung.
 
 ```bash
 unzip s3mail-macos-arm64.zip
-xattr -dr com.apple.quarantine s3mail
-./s3mail
+open s3mail.app
 ```
 
-Wer lieber klickt: Finder → Rechtsklick auf `s3mail` → Öffnen, dann bestätigen.
-Und wer den Empfängern das ersparen will, braucht ein Apple-Developer-Zertifikat
-und muss signieren und notarisieren.
+Nachsehen lässt sich das an jedem heruntergeladenen Paket:
+
+```bash
+codesign -dv --verbose=4 s3mail.app     # Authority: Developer ID Application
+xcrun stapler validate s3mail.app       # das geheftete Ticket
+spctl -a -vvv -t install s3mail.app     # accepted, source=Notarized Developer ID
+```
+
+Windows bleibt unsigniert – dort meldet sich SmartScreen beim ersten Start mit
+*Weitere Informationen → Trotzdem ausführen*.
 
 ## Verschlüsselte Buckets
 
@@ -689,8 +702,8 @@ sie melden dann einen Rechtefehler im Klartext.
   Key beginnt mit einer neuen Version.
 - Bei sehr großen Postfächern (> ~50k Objekte) dauert das erste Indexieren; dann mit
   engerem Prefix arbeiten.
-- Die Pakete sind **nicht signiert**. Auf macOS ist deshalb einmal
-  `xattr -dr com.apple.quarantine` nötig, unter Windows meldet sich SmartScreen.
+- Die **Windows**-Pakete sind nicht signiert, dort meldet sich SmartScreen. Die
+  macOS-Pakete sind signiert und notarisiert, für Linux stellt sich die Frage nicht.
 
 ## Tests
 
