@@ -320,5 +320,11 @@
   "rules.export": "Exportar",
   "rules.import": "Importar",
   "rules.imported": "%a reglas incorporadas, %s ya estaban, %t etiquetas añadidas",
-  "rules.importBroken": "El archivo no es JSON válido"
+  "rules.importBroken": "El archivo no es JSON válido",
+  "side.newTag": "Crear etiqueta",
+  "side.tagName": "Nombre de la etiqueta",
+  "side.newFilter": "Guardar la búsqueda actual como filtro",
+  "side.filterName": "Nombre del filtro",
+  "side.deleteFilter": "Quitar filtro",
+  "side.filterNeedsQuery": "Escribe algo en la búsqueda primero: el filtro recuerda lo que hay ahí"
 }
