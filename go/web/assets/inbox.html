@@ -207,6 +207,9 @@
   <div class="bar" style="margin:4px 0 0">
     <button type="button" id="ruleAdd">{{t "rules.add"}}</button>
     <button type="button" id="ruleApply">{{t "rules.applyAll"}}</button>
+    <a class="btn" id="ruleExport" href="/api/rules/export" download>{{t "rules.export"}}</a>
+    <button type="button" id="ruleImport">{{t "rules.import"}}</button>
+    <input type="file" id="ruleFile" accept="application/json,.json" style="display:none">
     <span class="grow" style="flex:1"></span>
     <button value="cancel">{{t "action.close"}}</button>
     <button type="button" class="primary" id="ruleSave">{{t "action.save"}}</button>
@@ -1083,10 +1086,13 @@ function ruleRow(r) {
   div.querySelector(".r_del").onclick = () => div.remove();
   return div;
 }
-$("#rulesBtn").onclick = () => {
+function fillRules() {
   const box = $("#ruleRows"); box.innerHTML = "";
   (over.rules || []).forEach(r => box.appendChild(ruleRow(r)));
-  if (!over.rules.length) box.appendChild(ruleRow());
+  if (!(over.rules || []).length) box.appendChild(ruleRow());
+}
+$("#rulesBtn").onclick = () => {
+  fillRules();
   $("#r_err").textContent = "";
   $("#ruleTips").innerHTML = "";
   $("#dlgRules").showModal();
@@ -1122,6 +1128,32 @@ async function showSuggestions() {
   }
 }
 $("#ruleAdd").onclick = () => $("#ruleRows").appendChild(ruleRow());
+
+/* Import merges, it never replaces - see core/portable.go. So the button says
+   what it did afterwards: how many rules came in, how many were already there
+   under another name, which tags were added. "Imported" alone would leave
+   somebody wondering whether their own rules survived. */
+$("#ruleImport").onclick = () => $("#ruleFile").click();
+$("#ruleFile").onchange = guard(async () => {
+  const file = $("#ruleFile").files[0];
+  if (!file) return;
+  $("#ruleFile").value = "";
+  let parsed;
+  try {
+    parsed = JSON.parse(await file.text());
+  } catch {
+    $("#r_err").textContent = T["rules.importBroken"];
+    return;
+  }
+  const d = await api("/api/rules/import", {method: "POST", body: JSON.stringify(
+    {rules: parsed.rules || [], tags: parsed.tags || {}})});
+  const rep = d.imported || {};
+  toast(T["rules.imported"]
+    .replace("%a", rep.rules_added || 0)
+    .replace("%s", rep.rules_skipped || 0)
+    .replace("%t", (rep.tags_added || []).length));
+  over = d; renderSide(); fillRules();
+});
 function collectRules() {
   return [...$("#ruleRows").children].map(d => ({
     contains: d.querySelector(".r_contains").value.trim(),

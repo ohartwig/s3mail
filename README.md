@@ -379,6 +379,19 @@ Spam fasst die Automatik nicht an.
   "snippets": [{"name": "Terminvorschlag", "text": "passt Ihnen Dienstag 10 Uhr?"}]}]}
 ```
 
+**Regeln und Tags als Datei**
+
+Im Regeldialog stehen **Exportieren** und **Importieren**. Der Export ist eine
+JSON-Datei mit Regeln und Tagfarben — aufhebbar, weitergebbar, versionierbar.
+
+Der Import **fügt zusammen und ersetzt nie**. Eine Datei, die jemand
+herüberreicht, ist ein Angebot und kein Befehl; Ersetzen würde in einem Klick
+zerstören, was über Monate gewachsen ist. Doppelte werden dabei am *Verhalten*
+erkannt, nicht am Namen: jede Regel gegen Werbung heißt „Newsletter", und
+niemand will sie zweimal. Eine Tagfarbe, die schon in Gebrauch ist, bleibt.
+Danach steht da, was passiert ist — wie viele Regeln kamen, wie viele schon da
+waren, welche Tags dazu.
+
 **Regelvorschläge**
 
 Im Regeldialog steht, was du ohnehin schon von Hand tust: „Du hast 11 von 12

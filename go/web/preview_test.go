@@ -129,3 +129,49 @@ func TestThePageOffersUnsubscribeWithoutCallingIt(t *testing.T) {
 		t.Error("the page calls the unsubscribe link by itself")
 	}
 }
+
+// Rules and tags as a file: the export is a download, the import merges.
+func TestRulesTravelAsAFile(t *testing.T) {
+	ts, _ := buildServer(t)
+
+	// Put a rule in, export, and check the file is a file.
+	callServer(t, ts, "POST", "/api/rules",
+		`{"rules":[{"name":"Newsletter","field":"from","contains":"news@shop.io","folder":"archiv","enabled":true}]}`, nil)
+	exp := callServer(t, ts, "GET", "/api/rules/export", "", nil)
+	if cd := exp.Header.Get("Content-Disposition"); !strings.Contains(cd, "attachment") {
+		t.Errorf("the export is not a download: %q", cd)
+	}
+	if !strings.Contains(string(exp.Body), "news@shop.io") {
+		t.Errorf("the rule is not in the export: %s", exp.Body)
+	}
+
+	// Import the same file again: nothing may double.
+	again := callServer(t, ts, "POST", "/api/rules/import", string(exp.Body), nil)
+	if again.Code != 200 {
+		t.Fatalf("HTTP %d: %s", again.Code, again.Body)
+	}
+	d := again.json(t)
+	rules, _ := d["rules"].([]any)
+	if len(rules) != 1 {
+		t.Errorf("%d rules after importing the same file - it doubled", len(rules))
+	}
+
+	// An import that brings something new adds it without touching the old one.
+	fresh := callServer(t, ts, "POST", "/api/rules/import",
+		`{"rules":[{"name":"Andere","field":"from","contains":"news@andere.io","folder":"archiv"}],"tags":{"werbung":"#00ff00"}}`, nil).json(t)
+	if got, _ := fresh["rules"].([]any); len(got) != 2 {
+		t.Errorf("%d rules after a real import", len(got))
+	}
+	tags, _ := fresh["tags"].(map[string]any)
+	if _, ok := tags["werbung"]; !ok {
+		t.Errorf("the tag did not come in: %v", tags)
+	}
+}
+
+func TestThePageCarriesExportAndImport(t *testing.T) {
+	for _, anchor := range []string{"/api/rules/export", "/api/rules/import", `id="ruleFile"`} {
+		if !strings.Contains(PageMailbox, anchor) {
+			t.Errorf("the mailbox page has lost %q", anchor)
+		}
+	}
+}

@@ -315,5 +315,9 @@
   "unsub.button": "Unsubscribe",
   "unsub.title": "Write the unsubscribe mail - it is only sent when you press send",
   "unsub.linkTitle": "Open the sender's unsubscribe page in the browser",
-  "unsub.alsoLink": "The sender also offers an unsubscribe page; s3mail does not call it by itself"
+  "unsub.alsoLink": "The sender also offers an unsubscribe page; s3mail does not call it by itself",
+  "rules.export": "Export",
+  "rules.import": "Import",
+  "rules.imported": "%a rules taken over, %s were already there, %t tags added",
+  "rules.importBroken": "That file is not valid JSON"
 }

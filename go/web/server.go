@@ -362,6 +362,9 @@ type request struct {
 	Color   string      `json:"color"`
 	Rules   []core.Rule `json:"rules"`
 	Address string      `json:"address"`
+	// Tags carries the colour map of an imported file. Only /api/rules/import
+	// uses it; everywhere else tags travel as Add and Remove.
+	Tags map[string]string `json:"tags"`
 }
 
 func (a request) allKeys() []string {
@@ -671,6 +674,44 @@ func (s *Server) routes() {
 
 	// Suggestions read the index and propose what somebody is already doing by
 	// hand. A GET, because it changes nothing - the reader decides.
+	// Rules and tags as a file. Export is a download so that it can be kept,
+	// mailed or put into version control without a copy-and-paste step.
+	s.mux.HandleFunc("GET /api/rules/export", func(w http.ResponseWriter, r *http.Request) {
+		acc, ok := s.pick(w, r)
+		if !ok {
+			return
+		}
+		blob, err := json.MarshalIndent(core.Export(acc.Mailbox.State.Data()), "", "  ")
+		if err != nil {
+			s.translate(w, r, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("Content-Disposition",
+			`attachment; filename="s3mail-regeln.json"`)
+		_, _ = w.Write(append(blob, '\n'))
+	})
+
+	// Import merges and never replaces. A file somebody hands over is an offer,
+	// not a command; replacing would destroy months of work in one click.
+	s.post("/api/rules/import", func(w http.ResponseWriter, r *http.Request, a request, acc *Account) {
+		in := core.Portable{Rules: a.Rules, Tags: a.Tags}
+		if len(in.Rules) == 0 && len(in.Tags) == 0 {
+			s.writeError(w, http.StatusBadRequest, s.text(r, "error.badInput"))
+			return
+		}
+		rules, tags, rep := core.Merge(acc.Mailbox.State.Data(), in)
+		ops := []core.Op{{T: "rules", Rules: rules}}
+		if len(tags) > 0 {
+			ops = append(ops, core.Op{T: "tags", Add: tags})
+		}
+		if err := acc.Mailbox.State.Mutate(r.Context(), ops...); err != nil {
+			s.translate(w, r, err)
+			return
+		}
+		s.json(w, http.StatusOK, with(s.overview(r, acc), map[string]any{"imported": rep}))
+	})
+
 	s.mux.HandleFunc("GET /api/rules/suggest", func(w http.ResponseWriter, r *http.Request) {
 		acc, ok := s.pick(w, r)
 		if !ok {

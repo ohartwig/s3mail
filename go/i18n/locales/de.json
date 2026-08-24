@@ -315,5 +315,9 @@
   "unsub.button": "Abmelden",
   "unsub.title": "Abmeldemail schreiben – gesendet wird sie erst, wenn du auf Senden drückst",
   "unsub.linkTitle": "Abmeldeseite des Absenders im Browser öffnen",
-  "unsub.alsoLink": "Der Absender bietet auch eine Abmeldeseite an; s3mail ruft sie nicht von selbst auf"
+  "unsub.alsoLink": "Der Absender bietet auch eine Abmeldeseite an; s3mail ruft sie nicht von selbst auf",
+  "rules.export": "Exportieren",
+  "rules.import": "Importieren",
+  "rules.imported": "%a Regeln übernommen, %s waren schon da, %t Tags dazu",
+  "rules.importBroken": "Die Datei ist kein gültiges JSON"
 }
