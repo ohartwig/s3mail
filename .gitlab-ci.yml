@@ -32,6 +32,13 @@ include:
       artifact-file: SHA256SUMS
       needs-config:
         - job: manifest
+      # Muss zur Regel von manifest passen. Die Voreinstellung der Komponente
+      # legt den Job auch auf dem Standardzweig an - dort gibt es kein manifest,
+      # und ein needs auf einen Job, den die Pipeline nicht kennt, ist ein
+      # Konfigurationsfehler: die Pipeline entsteht ohne einen einzigen Job und
+      # gilt als gescheitert. Genau das ist nach dem Merge dreimal passiert.
+      rules-config:
+        - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
 
 stages:
   - test
