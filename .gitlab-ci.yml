@@ -437,6 +437,21 @@ release:
   rules:
     - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
   script:
+    # Die Tag-Nachricht wird zur Release-Notiz. Bisher stand auf jeder
+    # Release-Seite derselbe Text; was sich in *dieser* Version geaendert hat,
+    # stand nirgends. Es als JSON-Zeichenkette einzusetzen verlangt Sorgfalt:
+    # Backslash, Anfuehrungszeichen und Zeilenumbrueche muessen escaped werden,
+    # sonst zerbricht das Dokument an einem Zeilenumbruch in der Nachricht.
+    - |
+      NOTIZ=$(printf '%s' "${CI_COMMIT_TAG_MESSAGE:-}" | awk '
+        { gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); printf "%s\\n", $0 }
+      ')
+      # Fuehrende und abschliessende Leerzeilen weg, damit die Seite nicht mit
+      # einem Absatz aus dem Nichts beginnt.
+      NOTIZ=$(printf '%s' "$NOTIZ" | sed -e 's/^\(\\n\)*//' -e 's/\(\\n\)*$//')
+      if [ -n "$NOTIZ" ]; then
+        NOTIZ="$NOTIZ\n\n---\n\n"
+      fi
     # Nur verlinken, was auch hochgeladen wurde - siehe upload.
     - |
       SIG_LINK=""
@@ -449,7 +464,7 @@ release:
       {
         "name": "s3mail ${CI_COMMIT_TAG}",
         "tag_name": "${CI_COMMIT_TAG}",
-        "description": "Gebaut aus ${CI_COMMIT_SHA}.\n\n**macOS:** ZIP entpacken, \`s3mail.app\` doppelklicken. Die Pakete sind mit einer Developer ID signiert und bei Apple notarisiert – kein \`xattr\`, kein Rechtsklick, keine Warnung.\n\n**Windows und Linux:** ZIP entpacken und \`s3mail\` ausführen. Unter Windows meldet sich SmartScreen mit *Weitere Informationen → Trotzdem ausführen* – dort ist nicht signiert.\n\nDas Fenster geht von selbst auf. Die Adresse trägt ein Token, **ohne das der Server nicht antwortet**; sie steht im Terminal und in \`adresse.txt\` im Konfigurationsverzeichnis, falls das Fenster zugeht.\n\nZu jedem Paket liegt eine \`.sha256\`-Datei daneben.",
+        "description": "${NOTIZ}Gebaut aus ${CI_COMMIT_SHA}.\n\n**macOS:** ZIP entpacken, \`s3mail.app\` doppelklicken. Die Pakete sind mit einer Developer ID signiert und bei Apple notarisiert – kein \`xattr\`, kein Rechtsklick, keine Warnung.\n\n**Windows und Linux:** ZIP entpacken und \`s3mail\` ausführen. Unter Windows meldet sich SmartScreen mit *Weitere Informationen → Trotzdem ausführen* – dort ist nicht signiert.\n\nDas Fenster geht von selbst auf. Die Adresse trägt ein Token, **ohne das der Server nicht antwortet**; sie steht im Terminal und in \`adresse.txt\` im Konfigurationsverzeichnis, falls das Fenster zugeht.\n\nZu jedem Paket liegt eine \`.sha256\`-Datei daneben.",
         "assets": {
           "links": [
             {"name": "s3mail-windows-amd64.zip", "url": "${PACKAGE_URL}/${CI_COMMIT_TAG}/s3mail-windows-amd64.zip", "link_type": "package"},
