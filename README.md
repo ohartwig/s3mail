@@ -184,6 +184,7 @@ ein Schalter kann nicht sagen, welches von mehreren er meint:
 | `--no-delete` | Endgültiges Löschen sperren – dann geht nur Papierkorb |
 | `--port` / `--host` | Standard `127.0.0.1:8765` |
 | `--no-browser` | Browser nicht automatisch öffnen |
+| `--no-cache` | Nichts auf Platte zwischenspeichern (siehe [Grenzen](#grenzen)) |
 | `--refresh` | Sekunden zwischen automatischen Abgleichen, `0` schaltet ab (Standard 60) |
 | `--version` | Version ausgeben und beenden |
 | `--mcp` | Als MCP-Server über stdin/stdout laufen (siehe [unten](#für-ein-modell-erreichbar---mcp)) |
@@ -262,6 +263,15 @@ S3-Konsole, und der Papierkorb lässt sich per Lifecycle-Regel automatisch leere
   standardmäßig blockiert (Tracking-Pixel) und per Klick nachladbar.
 - Anhänge einzeln herunterladbar, Rohmail als `.eml`.
 - SES-Verdicts (`X-SES-Spam-Verdict`, `X-SES-Virus-Verdict`) als Badge.
+- **SPF, DKIM und DMARC** aus `Authentication-Results`: in der Liste erscheint
+  eine Marke, wenn eine der drei Prüfungen **fehlgeschlagen** ist – die
+  Absenderadresse könnte gefälscht sein. In der geöffneten Mail steht, welche
+  geprüft wurde. Kein Haken auf jeder Mail: „bestanden" ist der Normalfall, und
+  eine Marke, die immer da ist, sieht bald niemand mehr an.
+  Geglaubt wird dabei **nur der oberste Kopf, der `amazonses.com` nennt**.
+  `Authentication-Results` ist gewöhnlicher Text in einer gewöhnlichen Mail:
+  jeder Absender kann sich einen mit `dkim=pass` hineinschreiben. Der
+  empfangende Server setzt seinen darüber, und nur der zählt.
 
 **Schreiben**
 
@@ -520,6 +530,16 @@ spctl -a -vvv -t install s3mail.app     # accepted, source=Notarized Developer I
 Windows bleibt unsigniert – dort meldet sich SmartScreen beim ersten Start mit
 *Weitere Informationen → Trotzdem ausführen*.
 
+### Wenn der Zugang wegfällt
+
+Läuft die SSO-Sitzung ab, wird ein Schlüssel zurückgezogen oder eine Policy
+enger, dann geht im Postfach nichts mehr — und keine Wiederholung im Browser
+ändert daran etwas. s3mail erkennt diese Fälle und zeigt einen **Balken über
+dem Postfach**, der stehen bleibt, mit dem Satz, der sagt, was zu tun ist
+(`aws sso login --profile NAME`) und einem Knopf zum Erneut-Versuchen. Kein
+Hinweis, der nach drei Sekunden verschwindet: das Problem ist nicht ein Klick,
+sondern das ganze Postfach.
+
 ## Verschlüsselte Buckets
 
 Es gibt zwei Sorten Verschlüsselung, und nur eine davon macht Arbeit.
@@ -722,8 +742,27 @@ sie melden dann einen Rechtefehler im Klartext.
   Key beginnt mit einer neuen Version.
 - Bei sehr großen Postfächern (> ~50k Objekte) dauert das erste Indexieren; dann mit
   engerem Prefix arbeiten.
+- **Was auf der Platte liegt, liegt dort im Klartext.** In `~/.cache/s3mail/`
+  stehen der Index (Absender, Betreff, Vorschautext) **und die abgerufenen
+  Mailtexte**, nach ETag geschlüsselt. Die Dateien haben `0600` in einem
+  `0700`-Verzeichnis, ein anderer Benutzer desselben Rechners kommt also nicht
+  heran — wohl aber ein Backup (Time Machine), ein Ordnersync (Dropbox, iCloud)
+  und jeder, der die Platte ohne FileVault in die Hand bekommt.
+  **Das trifft auch client-seitig verschlüsselte Mail:** s3mail muss sie zum
+  Anzeigen entschlüsseln, und danach liegt sie dort entschlüsselt. Wer das nicht
+  will, startet mit `--no-cache` — dann bleibt nichts zurück, dafür wird bei
+  jedem Start neu indexiert und jede Mail bei jedem Öffnen neu geholt. Ein
+  verschlüsselter Cache mit einem Schlüssel aus dem Schlüsselbund des Systems
+  wäre der bessere Weg; er kostet plattformabhängigen Code (macOS Keychain,
+  Windows DPAPI, Linux Secret Service) und ist deshalb nicht gebaut.
 - Die **Windows**-Pakete sind nicht signiert, dort meldet sich SmartScreen. Die
   macOS-Pakete sind signiert und notarisiert, für Linux stellt sich die Frage nicht.
+
+## Sicherheit
+
+Meldeweg, Annahmen und das Bedrohungsmodell stehen in
+[`SECURITY.md`](SECURITY.md) — samt dem, was **nicht** abgedeckt ist. Kurz:
+Lücken an `security@ole-hartwig.eu`, nicht als Issue.
 
 ## Lizenz
 

@@ -1,0 +1,9 @@
+Authentication-Results: mail.opfer.de; spf=pass; dkim=pass; dmarc=pass;
+From: Bank <info@x.de>
+To: post@firma.de
+Subject: Auch dringend
+Date: Mon, 10 Aug 2026 16:10:00 +0200
+Message-ID: <forged@x.de>
+Content-Type: text/plain; charset=utf-8
+
+Vertrau mir.

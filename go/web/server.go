@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"s3mail/awsx"
 	"s3mail/config"
 	"s3mail/core"
 	"s3mail/i18n"
@@ -38,6 +39,9 @@ type Account struct {
 	Signature string
 	Snippets  []config.Snippet
 	Blocked   SuppressionList
+	// Profile is the AWS profile this mailbox uses. Only needed to name it in
+	// the sentence about an expired access - "aws sso login --profile NAME".
+	Profile string
 }
 
 type Server struct {
@@ -233,6 +237,14 @@ func (s *Server) writeError(w http.ResponseWriter, code int, text string) {
 	s.json(w, code, map[string]string{"error": text})
 }
 
+// writeAuthError is the one error the page has to treat differently. Everything
+// else is about one message or one click; this is about the whole mailbox, and
+// it is not fixed by trying again but by a command in a terminal. The flag is
+// what lets the page put up a banner that stays instead of a toast that fades.
+func (s *Server) writeAuthError(w http.ResponseWriter, text string) {
+	s.json(w, http.StatusBadGateway, map[string]any{"error": text, "reauth": true})
+}
+
 // translate maps errors from the logic onto status codes - so the layers below
 // throw exceptions instead of building status codes.
 func (s *Server) translate(w http.ResponseWriter, r *http.Request, err error) {
@@ -261,6 +273,13 @@ func (s *Server) translate(w http.ResponseWriter, r *http.Request, err error) {
 		s.writeError(w, http.StatusBadRequest, s.text(r, "error.credentialsIncomplete"))
 	case errors.Is(err, config.ErrBadKeyID):
 		s.writeError(w, http.StatusBadRequest, s.text(r, "error.badKeyId"))
+	case awsx.IsAuthProblem(err):
+		// The access itself is gone - expired SSO session, a key that was
+		// withdrawn, a policy that no longer allows it. awsx.PlainText already
+		// turns every shape of this into a sentence that says what to do; until
+		// now that translation only ran in the wizard, and the running mailbox
+		// showed the raw SDK message instead.
+		s.writeAuthError(w, awsx.PlainText(err, s.profileFor(r), s.catalog(r)))
 	default:
 		// Everything else is a diagnosis, not a sentence for the reader: the SDK
 		// message goes through unchanged, because it is the only thing that says
@@ -737,4 +756,17 @@ func (s *Server) localizedSubjects(r *http.Request, msgs []core.Message) []core.
 // messages the server produces itself - everything else comes from the pages.
 func (s *Server) text(r *http.Request, key string) string {
 	return i18n.Get(s.language(r)).T(key)
+}
+
+func (s *Server) catalog(r *http.Request) i18n.Catalog { return i18n.Get(s.language(r)) }
+
+// profileFor is the AWS profile of the mailbox a request means. It goes into
+// the sentence about an expired access, because "aws sso login" without
+// --profile is the wrong command on a machine with more than one.
+func (s *Server) profileFor(r *http.Request) string {
+	a, err := s.account(r)
+	if err != nil || a == nil {
+		return ""
+	}
+	return a.Profile
 }

@@ -1,0 +1,9 @@
+Authentication-Results: amazonses.com; spf=pass (spfCheck: domain of x.de designates 1.2.3.4 as permitted sender) client-ip=1.2.3.4; dkim=pass header.i=@x.de; dmarc=pass header.from=x.de;
+From: Bank <info@x.de>
+To: post@firma.de
+Subject: Kontoauszug
+Date: Mon, 10 Aug 2026 16:00:00 +0200
+Message-ID: <pass@x.de>
+Content-Type: text/plain; charset=utf-8
+
+Alles geprueft.

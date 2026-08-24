@@ -302,5 +302,10 @@
   "view.virusFail": "Virus-Verdict FAIL",
   "sending.unclear": "Unklar, ob diese Mail rausgegangen ist",
   "sending.wentOut": "War raus",
-  "sending.didNot": "Ging nicht raus"
+  "sending.didNot": "Ging nicht raus",
+  "cli.noCache": "Nichts auf Platte zwischenspeichern: kein Index, keine Mailtexte, kein lokaler Zustand",
+  "auth.gone": "Kein Zugriff auf AWS mehr",
+  "auth.retry": "Erneut versuchen",
+  "view.authFailShort": "Absender ungeprüft",
+  "view.authFailTitle": "SPF, DKIM oder DMARC sind fehlgeschlagen – die Absenderadresse könnte gefälscht sein"
 }

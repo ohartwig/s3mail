@@ -1,0 +1,10 @@
+Authentication-Results: amazonses.com; spf=fail; dkim=fail; dmarc=fail;
+Authentication-Results: amazonses.com; spf=pass; dkim=pass; dmarc=pass;
+From: Bank <info@x.de>
+To: post@firma.de
+Subject: Noch dringender
+Date: Mon, 10 Aug 2026 16:15:00 +0200
+Message-ID: <below@x.de>
+Content-Type: text/plain; charset=utf-8
+
+Wirklich.
