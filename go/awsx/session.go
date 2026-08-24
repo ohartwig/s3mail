@@ -136,3 +136,39 @@ func PlainText(err error, profile string, cat i18n.Catalog) string {
 
 	return text // do not swallow the unknown
 }
+
+// IsAuthProblem says whether an error is about the access itself rather than
+// about what was asked for.
+//
+// The distinction matters upwards: a message that cannot be read is one
+// message, and the reader tries another. An access that has expired is the
+// whole mailbox, and no amount of clicking fixes it - the answer is a command
+// in a terminal. The interface has to tell those apart, or it shows a toast
+// that fades while nothing works any more.
+func IsAuthProblem(err error) bool {
+	if err == nil {
+		return false
+	}
+	var missingProfile config.SharedConfigProfileNotExistError
+	if errors.As(err, &missingProfile) {
+		return true
+	}
+	text := err.Error()
+	if strings.Contains(text, "sso") || strings.Contains(text, "SSO") ||
+		strings.Contains(text, "token") && strings.Contains(text, "expired") ||
+		strings.Contains(text, "no credentials") ||
+		strings.Contains(text, "failed to refresh cached credentials") {
+		return true
+	}
+	var api smithy.APIError
+	if errors.As(err, &api) {
+		switch api.ErrorCode() {
+		case "InvalidClientTokenId", "UnrecognizedClientException", "AuthFailure",
+			"InvalidAccessKeyId", "SignatureDoesNotMatch", "ExpiredToken",
+			"ExpiredTokenException", "TokenRefreshRequired", "AccessDenied",
+			"AccessDeniedException", "InvalidIdentityToken":
+			return true
+		}
+	}
+	return false
+}

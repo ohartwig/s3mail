@@ -129,6 +129,9 @@
   .toast { position:fixed; bottom:18px; right:18px; z-index:60; background:var(--panel);
            border:1px solid var(--line); border-left:3px solid var(--accent);
            border-radius:8px; padding:10px 14px; box-shadow:0 8px 24px rgba(0,0,0,.3); }
+.authbar{display:flex;align-items:center;justify-content:space-between;gap:14px;
+  padding:9px 16px;background:var(--dangerbg,#fdecec);border-bottom:1px solid var(--dangerline,#e0a0a0);
+  font-size:13px;flex-wrap:wrap}
 .pendbar{display:flex;align-items:center;justify-content:space-between;gap:14px;
   padding:9px 16px;background:var(--warnbg,#fff6e0);border-bottom:1px solid var(--warnline,#e0c98a);
   font-size:13px;flex-wrap:wrap}
@@ -149,6 +152,7 @@
   <select id="lang" title="{{t "nav.language"}}" aria-label="{{t "nav.language"}}"></select>
   <button id="quit" title="{{t "nav.quit.title"}}">{{t "nav.quit"}}</button>
 </header>
+<div id="authbar"></div>
 <div id="pending"></div>
 <main>
   <div id="side"></div>
@@ -254,6 +258,10 @@ async function api(path, body) {
                        body: JSON.stringify(body)} : undefined;
   const r = await fetch(path, opts);
   const d = await r.json().catch(() => ({error:T["error.unreadable"]}));
+  // An expired access is not one failed click, it is the whole mailbox. It gets
+  // a banner that stays, not a toast that fades while nothing works any more.
+  if (d.reauth) { authProblem = d.error; renderAuth(); }
+  else if (authProblem && r.ok) { authProblem = null; renderAuth(); }
   if (!r.ok || d.error) throw new Error(d.error || ("HTTP " + r.status));
   // Every answer that carries folders carries the whole overview with it. Taken
   // wholesale on purpose: a hand-picked list of fields silently drops whatever
@@ -266,6 +274,27 @@ async function api(path, body) {
   return d;
 }
 const guard = fn => (...a) => fn(...a).catch(e => toast(e.message, true));
+
+/* ---------------- Access gone ----------------
+   The AWS session has expired, a key was withdrawn, a policy no longer allows
+   it. Nothing in the mailbox works until that is fixed outside the browser, so
+   the banner names the command and stays until a retry succeeds. */
+let authProblem = null;
+function renderAuth() {
+  const box = $("#authbar");
+  if (!authProblem) { box.innerHTML = ""; return; }
+  box.innerHTML = `
+    <div class="authbar">
+      <div class="pendtext"><b>${T["auth.gone"]}</b><span>${esc(authProblem)}</span></div>
+      <div class="pendbtns"><button id="authretry">${T["auth.retry"]}</button></div>
+    </div>`;
+  $("#authretry").onclick = async () => {
+    try {
+      over = await api("/api/overview");
+      renderSide(); renderPending(); await load();
+    } catch (e) { toast(e.message, true); }
+  };
+}
 
 /* ---------------- Unfinished sends ----------------
    A send that was started and never finished, and whose outcome the bucket

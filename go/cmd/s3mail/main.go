@@ -241,7 +241,7 @@ func activate(ctx context.Context, srv *web.Server, k config.Config, noSend bool
 		}
 		mb := store.NewMailbox(ctx, awsx.NewS3(cfg, ""), awsx.NewKMS(cfg, ""),
 			a.Bucket, a.Prefix, cacheDir, k.AllowDelete)
-		acc := web.Account{ID: a.ID(), Name: a.Name(), Mailbox: mb,
+		acc := web.Account{ID: a.ID(), Name: a.Name(), Mailbox: mb, Profile: a.Profile,
 			From: a.From, Signature: a.Signature, Snippets: a.Snippets}
 		if !noSend {
 			acc.Sender = awsx.NewSES(cfg, "")

@@ -521,6 +521,16 @@ spctl -a -vvv -t install s3mail.app     # accepted, source=Notarized Developer I
 Windows bleibt unsigniert – dort meldet sich SmartScreen beim ersten Start mit
 *Weitere Informationen → Trotzdem ausführen*.
 
+### Wenn der Zugang wegfällt
+
+Läuft die SSO-Sitzung ab, wird ein Schlüssel zurückgezogen oder eine Policy
+enger, dann geht im Postfach nichts mehr — und keine Wiederholung im Browser
+ändert daran etwas. s3mail erkennt diese Fälle und zeigt einen **Balken über
+dem Postfach**, der stehen bleibt, mit dem Satz, der sagt, was zu tun ist
+(`aws sso login --profile NAME`) und einem Knopf zum Erneut-Versuchen. Kein
+Hinweis, der nach drei Sekunden verschwindet: das Problem ist nicht ein Klick,
+sondern das ganze Postfach.
+
 ## Verschlüsselte Buckets
 
 Es gibt zwei Sorten Verschlüsselung, und nur eine davon macht Arbeit.
