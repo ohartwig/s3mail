@@ -23,6 +23,10 @@ type Message struct {
 	HasAttachment bool     `json:"has_attachment"`
 	Spam          bool     `json:"spam"`
 	Virus         bool     `json:"virus"`
+	// AuthFailed means SES checked SPF, DKIM or DMARC and one of them did not
+	// pass. Only the failure is carried in the index: it is the only one worth a
+	// mark in a list, and the detail belongs in the open message.
+	AuthFailed bool `json:"auth_failed,omitempty"`
 
 	// Added from the state, not part of the index.
 	Read bool     `json:"read"`

@@ -42,6 +42,9 @@ type Summary struct {
 	Attachments []Attachment `json:"attachments"`
 	Spam        string       `json:"spam"`
 	Virus       string       `json:"virus"`
+	// Auth is what SES said about SPF, DKIM and DMARC. See authresults.go for
+	// why only the header SES itself wrote may be believed.
+	Auth AuthResults `json:"auth,omitempty"`
 }
 
 // The two placeholders a message can carry instead of a subject. They land in
@@ -229,6 +232,7 @@ func Summarize(raw []byte, fallback time.Time) Summary {
 	s.Date = ParseDate(h.Get("Date"), fallback).UTC().Format(time.RFC3339)
 	s.Spam = strings.ToUpper(h.Get("X-Ses-Spam-Verdict"))
 	s.Virus = strings.ToUpper(h.Get("X-Ses-Virus-Verdict"))
+	s.Auth = authResults(h)
 
 	var text, html strings.Builder
 	idx := 0
@@ -316,6 +320,7 @@ type Full struct {
 	References  string           `json:"references"`
 	Spam        bool             `json:"spam"`
 	Virus       bool             `json:"virus"`
+	Auth        AuthResults      `json:"auth,omitempty"`
 	Text        string           `json:"text"`
 	HTML        string           `json:"html"`
 	Attachments []FullAttachment `json:"attachments"`
@@ -356,6 +361,7 @@ func Read(raw []byte, fallback time.Time) Full {
 	v.References = strings.TrimSpace(h.Get("References"))
 	v.Spam = strings.EqualFold(h.Get("X-Ses-Spam-Verdict"), "FAIL")
 	v.Virus = strings.EqualFold(h.Get("X-Ses-Virus-Verdict"), "FAIL")
+	v.Auth = authResults(h)
 
 	var text, html []string
 	idx := 0

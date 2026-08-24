@@ -305,5 +305,7 @@
   "sending.didNot": "No salió",
   "cli.noCache": "No guardar nada en disco: sin índice, sin cuerpos de mensaje, sin estado local",
   "auth.gone": "Ya no hay acceso a AWS",
-  "auth.retry": "Reintentar"
+  "auth.retry": "Reintentar",
+  "view.authFailShort": "Remitente no verificado",
+  "view.authFailTitle": "SPF, DKIM o DMARC fallaron: la dirección del remitente podría estar falsificada"
 }

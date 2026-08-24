@@ -275,6 +275,22 @@ async function api(path, body) {
 }
 const guard = fn => (...a) => fn(...a).catch(e => toast(e.message, true));
 
+/* authFlags shows what SES checked about the sender: SPF, DKIM, DMARC. Only a
+   failure is loud - "pass" is the normal case, and a green tick on every message
+   teaches people to stop looking. "none" means the sender's domain published
+   nothing to check against, which is not the sender's fault and not a warning. */
+function authFlags(a) {
+  if (!a) return "";
+  return ["spf","dkim","dmarc"].map(k => {
+    const v = a[k];
+    if (!v) return "";
+    const bad = ["fail","softfail","permerror","temperror"].includes(v);
+    if (!bad && v !== "pass") return "";
+    return `<span class="flag${bad ? " bad" : ""}" title="${k.toUpperCase()}: ${esc(v)}">${
+      k.toUpperCase()}${bad ? " ✗" : " ✓"}</span>`;
+  }).join("");
+}
+
 /* ---------------- Access gone ----------------
    The AWS session has expired, a key was withdrawn, a policy no longer allows
    it. Nothing in the mailbox works until that is fixed outside the browser, so
@@ -559,6 +575,7 @@ function renderList() {
           ${m.has_attachment ? '<span class="flag">📎</span>' : ""}
           ${m.spam ? '<span class="flag bad">Spam</span>' : ""}
           ${m.virus ? '<span class="flag bad">Virus</span>' : ""}
+          ${m.auth_failed ? `<span class="flag bad" title="${T["view.authFailTitle"]}">${T["view.authFailShort"]}</span>` : ""}
           ${folder === "*" || tagFilter ? `<span class="flag">${esc(folderLabel(m.folder))}</span>` : ""}</div>
         <div class="snip">${esc(m.snippet)}</div>
         ${(m.tags || []).length ? `<div class="tag-line">${m.tags.map(t =>
@@ -656,7 +673,8 @@ const open = guard(async key => {
       m.bcc ? ` · <b>${T["compose.bcc"]}:</b> ${esc(m.bcc)}` : ""}</div>
     <div class="meta">${new Date(m.date).toLocaleString()} · ${esc(folderLabel(m.folder))}
       ${m.spam ? `<span class="flag bad">${T["view.spamFail"]}</span>` : ""}
-      ${m.virus ? `<span class="flag bad">${T["view.virusFail"]}</span>` : ""}</div>
+      ${m.virus ? `<span class="flag bad">${T["view.virusFail"]}</span>` : ""}
+      ${authFlags(m.auth)}</div>
     <div class="tag-line" style="margin-top:8px">${(m.tags||[]).map(t =>
       `<span class="chip" style="background:${esc(over.tags[t]||"#888")}">${esc(t)}</span>`).join("")}</div>
     <div class="bar">

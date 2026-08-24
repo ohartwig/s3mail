@@ -85,3 +85,17 @@ func TestThePageCarriesTheAccessBanner(t *testing.T) {
 		}
 	}
 }
+
+// SPF, DKIM and DMARC have to be reachable from the page - the list carries the
+// failure, the open message carries the detail.
+func TestThePageCarriesTheSenderChecks(t *testing.T) {
+	for _, anchor := range []string{
+		"m.auth_failed",           // the mark in the list
+		"authFlags",               // the renderer for the open message
+		`T["view.authFailShort"]`, // its text
+	} {
+		if !strings.Contains(PageMailbox, anchor) {
+			t.Errorf("the mailbox page has lost %q", anchor)
+		}
+	}
+}

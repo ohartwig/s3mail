@@ -272,6 +272,7 @@ func (m *Mailbox) fill(base core.Message, raw []byte, fallback time.Time) core.M
 	base.HasAttachment = len(s.Attachments) > 0
 	base.Spam = s.Spam == "FAIL"
 	base.Virus = s.Virus == "FAIL"
+	base.AuthFailed = s.Auth.Failed()
 	return base
 }
 
@@ -533,7 +534,7 @@ func (m *Mailbox) ApplyRules(ctx context.Context, pool []core.Message, force boo
 // Refresh only fetches what changed its ETag, so an entry written before the
 // field existed would keep its empty value forever. The version was written
 // from the start and not read - which made it a comment rather than a check.
-const indexVersion = 3
+const indexVersion = 4
 
 func (m *Mailbox) readCache() {
 	blob, err := os.ReadFile(m.CacheFile)

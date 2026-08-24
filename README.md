@@ -263,6 +263,15 @@ S3-Konsole, und der Papierkorb lässt sich per Lifecycle-Regel automatisch leere
   standardmäßig blockiert (Tracking-Pixel) und per Klick nachladbar.
 - Anhänge einzeln herunterladbar, Rohmail als `.eml`.
 - SES-Verdicts (`X-SES-Spam-Verdict`, `X-SES-Virus-Verdict`) als Badge.
+- **SPF, DKIM und DMARC** aus `Authentication-Results`: in der Liste erscheint
+  eine Marke, wenn eine der drei Prüfungen **fehlgeschlagen** ist – die
+  Absenderadresse könnte gefälscht sein. In der geöffneten Mail steht, welche
+  geprüft wurde. Kein Haken auf jeder Mail: „bestanden" ist der Normalfall, und
+  eine Marke, die immer da ist, sieht bald niemand mehr an.
+  Geglaubt wird dabei **nur der oberste Kopf, der `amazonses.com` nennt**.
+  `Authentication-Results` ist gewöhnlicher Text in einer gewöhnlichen Mail:
+  jeder Absender kann sich einen mit `dkim=pass` hineinschreiben. Der
+  empfangende Server setzt seinen darüber, und nur der zählt.
 
 **Schreiben**
 
