@@ -1,7 +1,8 @@
-# IMAP für s3mail — Entwurf, nicht begonnen
+# IMAP für s3mail — Entwurf, Schritt 1 gebaut
 
-Stand 2026-08-23. Aufgeschrieben, damit die Überlegung nicht zweimal gemacht
-werden muss. **Nichts davon ist gebaut.**
+Stand 2026-08-24. Aufgeschrieben, damit die Überlegung nicht zweimal gemacht
+werden muss. **Gebaut ist bisher die UID-Vergabe** (`core/uid.go`, Schritt 1
+unten); alles Weitere steht noch aus. Es gibt keinen IMAP-Server.
 
 ## Warum das der größte Hebel ist
 
@@ -75,6 +76,13 @@ setzen, die keine Abstimmung braucht:
   Rechner kommen so zum selben Ergebnis, egal in welcher Reihenfolge sie die
   Ops sehen.
 
+**Beim Bauen zeigte sich, dass der letzte Punkt billiger ist als gedacht.**
+`Load` spielt die Ops in lexikografischer Schlüsselreihenfolge ein (`listOps`
+sortiert, und `opName` stellt den Zeitstempel voran) — auf jedem Rechner
+dieselbe. „Wer zuerst zuweist, gewinnt" *ist* damit schon „kleinerer Schlüssel
+gewinnt", und `Apply` muss den Schlüssel gar nicht kennen. Die Regel bleibt rein,
+so wie der Rest von `core`.
+
 **Der Restfall, der ehrlich benannt gehört:** vergeben zwei Rechner gleichzeitig
 dieselbe Nummer an verschiedene Mails, löst die Regel oben das zwar eindeutig
 auf — aber ein Client, der die verlorene Zuordnung schon gesehen hat, hat dann
@@ -129,8 +137,17 @@ nicht als Abnahme am Ende.
 
 ## Reihenfolge, wenn es losgeht
 
-1. UID-Entwurf festklopfen und **zuerst testen** — die Op-Art, die Konvergenz
-   zweier Rechner, das UIDVALIDITY-Ventil. Ohne das ist der Rest verlorene Zeit.
+1. ~~UID-Entwurf festklopfen und **zuerst testen** — die Op-Art, die Konvergenz
+   zweier Rechner, das UIDVALIDITY-Ventil.~~ **Gebaut am 2026-08-24.**
+   `core/uid.go` trägt die Ops `uid` und `uidretire`, die reine Vergabe
+   `AssignUIDs` und die Ordnerzustände (`validity`, `next`, `uids`). Geprüft
+   sind: Vergabe in Reihenfolge, Wiedereinspielen ohne Wirkung, zwei Rechner mit
+   derselben Nummer (einer gewinnt, der Verlierer bleibt unnummeriert und
+   bekommt beim nächsten Durchgang eine frische Nummer, `UIDVALIDITY` steigt),
+   eine zurückgegebene Nummer wird nie erneut vergeben, Ordner nummerieren
+   unabhängig, und der Zustand übersteht Snapshot und Verdichtung.
+   **Noch nicht verdrahtet:** beim Indexieren wird keine Nummer vergeben, und
+   `Move` gibt die Nummer im Quellordner noch nicht zurück.
 2. `BODYSTRUCTURE` in `mimeparse`, mit dem vorhandenen Testkorpus.
 3. Minimaler Server: `SELECT`, `FETCH`, `STORE`, `SEARCH` gegen **Apple Mail**.
 4. `APPEND`, `MOVE`, `EXPUNGE`.
