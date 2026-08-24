@@ -1,0 +1,7 @@
+From: Ohne <ohne@example.de>
+To: post@firma.de
+Subject: Kein Message-ID-Kopf
+Date: Mon, 10 Aug 2026 12:00:00 +0200
+Content-Type: text/plain; charset=utf-8
+
+Manche Absender lassen ihn weg.

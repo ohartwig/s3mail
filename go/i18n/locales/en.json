@@ -112,6 +112,7 @@
   "compose.sending": "sending…",
   "compose.sent": "Sent · %s",
   "compose.sentNotStored": "The message went out – but the copy in the sent folder could not be stored.",
+  "compose.sendNotRecorded": "Sent. The attempt could not be recorded in the bucket - after a crash s3mail cannot tell whether the message went out.",
   "compose.snippet": "— snippet —",
   "compose.subject": "Subject",
   "compose.to": "To",
@@ -298,5 +299,8 @@
   "view.spamFail": "Spam verdict FAIL",
   "view.star": "star",
   "view.starred": "starred",
-  "view.virusFail": "Virus verdict FAIL"
+  "view.virusFail": "Virus verdict FAIL",
+  "sending.unclear": "Unclear whether this message went out",
+  "sending.wentOut": "It went out",
+  "sending.didNot": "It did not"
 }

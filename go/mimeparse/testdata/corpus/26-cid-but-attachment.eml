@@ -1,0 +1,22 @@
+From: Anna <anna@example.de>
+To: post@firma.de
+Subject: Bild als Anhang, nicht im Text
+Date: Mon, 10 Aug 2026 15:00:00 +0200
+Message-ID: <cidatt@example.de>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="M"
+
+--M
+Content-Type: text/plain; charset=utf-8
+
+Das Bild ist ein Anhang.
+
+--M
+Content-Type: image/png; name="foto.png"
+Content-Transfer-Encoding: base64
+Content-ID: <foto>
+Content-Disposition: attachment; filename="foto.png"
+
+iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGP4DwABAQEAGXreZgAAAABJRU5ErkJggg==
+
+--M--

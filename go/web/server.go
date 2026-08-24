@@ -51,6 +51,9 @@ type Server struct {
 	wizard   *wizard.Wizard
 	events   *events
 
+	// open holds the sends nobody could decide automatically - see sending.go.
+	open openSends
+
 	// OnShutdown is called by /api/quit. Without it the server keeps running after
 	// the window is closed, and nobody sees that it is still there.
 	OnShutdown func()
@@ -68,6 +71,7 @@ func NewServer(accounts []Account, token, bind string, port int, config map[stri
 	s.routes()
 	s.sendRoute()
 	s.draftRoute()
+	s.sendingRoutes()
 	s.eventsRoute()
 	s.suppressionRoutes()
 	s.wizardRoutes()
@@ -301,6 +305,9 @@ func (s *Server) overview(r *http.Request, acc *Account) map[string]any {
 		// Never nil to the interface: a nil slice becomes JSON `null`, and
 		// `null.map(...)` ends the page's script.
 		"snippets": notNilSnippets(acc.Snippets),
+		// A send that was started and never finished. Empty almost always; when
+		// it is not, it is the first thing somebody has to see.
+		"pending_sends": s.pendingSends(acc),
 	}
 }
 

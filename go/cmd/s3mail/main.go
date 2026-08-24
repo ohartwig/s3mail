@@ -252,6 +252,10 @@ func activate(ctx context.Context, srv *web.Server, k config.Config, noSend bool
 	}
 	srv.SetAccounts(accounts)
 	srv.Config = serverConfig(k, refreshSeconds)
+	// A send that was started and never finished: whatever can be finished
+	// without asking is finished here, before the window opens. What cannot
+	// waits as a question at the top of the mailbox - see store/sending.go.
+	srv.RecoverSends(ctx)
 	if len(accounts) == 0 && firstErr == nil {
 		firstErr = config.ErrNoBucket
 	}

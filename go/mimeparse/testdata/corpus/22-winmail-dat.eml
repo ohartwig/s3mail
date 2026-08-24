@@ -1,0 +1,21 @@
+From: Alt <alt@firma.example>
+To: post@firma.de
+Subject: Unterlagen
+Date: Mon, 10 Aug 2026 11:00:00 +0200
+Message-ID: <tnef@firma.example>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="TNEF"
+
+--TNEF
+Content-Type: text/plain; charset=us-ascii
+
+Siehe Anhang.
+
+--TNEF
+Content-Type: application/ms-tnef; name="winmail.dat"
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="winmail.dat"
+
+eJ8+IhkBAQaQCAAEAAAAAAABAAEAAQeQBgAIAAAA5AQAAAAAAADoAAA=
+
+--TNEF--

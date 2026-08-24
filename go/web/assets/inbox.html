@@ -129,6 +129,12 @@
   .toast { position:fixed; bottom:18px; right:18px; z-index:60; background:var(--panel);
            border:1px solid var(--line); border-left:3px solid var(--accent);
            border-radius:8px; padding:10px 14px; box-shadow:0 8px 24px rgba(0,0,0,.3); }
+.pendbar{display:flex;align-items:center;justify-content:space-between;gap:14px;
+  padding:9px 16px;background:var(--warnbg,#fff6e0);border-bottom:1px solid var(--warnline,#e0c98a);
+  font-size:13px;flex-wrap:wrap}
+.pendtext{display:flex;flex-direction:column;gap:2px;min-width:0}
+.pendtext span{color:var(--muted);overflow:hidden;text-overflow:ellipsis}
+.pendbtns{display:flex;gap:8px;flex-shrink:0}
 </style>
 </head>
 <body>
@@ -143,6 +149,7 @@
   <select id="lang" title="{{t "nav.language"}}" aria-label="{{t "nav.language"}}"></select>
   <button id="quit" title="{{t "nav.quit.title"}}">{{t "nav.quit"}}</button>
 </header>
+<div id="pending"></div>
 <main>
   <div id="side"></div>
   <div id="listwrap">
@@ -259,6 +266,33 @@ async function api(path, body) {
   return d;
 }
 const guard = fn => (...a) => fn(...a).catch(e => toast(e.message, true));
+
+/* ---------------- Unfinished sends ----------------
+   A send that was started and never finished, and whose outcome the bucket
+   cannot know: it sits above the mailbox until somebody says whether the mail
+   went out. Not a modal - the answer may need a look elsewhere first, and a
+   dialog that blocks the mailbox would push people into guessing. */
+function renderPending() {
+  const open = over.pending_sends || [];
+  const box = $("#pending");
+  if (!open.length) { box.innerHTML = ""; return; }
+  box.innerHTML = open.map(p => `
+    <div class="pendbar">
+      <div class="pendtext">
+        <b>${T["sending.unclear"]}</b>
+        <span>${esc(p.subject || "")} &middot; ${esc(p.to || "")}</span>
+      </div>
+      <div class="pendbtns">
+        <button data-sent="1" data-key="${esc(p.key)}">${T["sending.wentOut"]}</button>
+        <button data-sent="0" data-key="${esc(p.key)}">${T["sending.didNot"]}</button>
+      </div>
+    </div>`).join("");
+  box.querySelectorAll("button").forEach(b => b.onclick = guard(async () => {
+    await api("/api/sending/resolve", {method:"POST",
+      body: JSON.stringify({key: b.dataset.key, sent: b.dataset.sent === "1"})});
+    renderPending(); renderSide(); load();
+  }));
+}
 
 /* ---------------- Sidebar ---------------- */
 // renderAccounts fills the switcher. "Add mailbox" leads into the wizard with
@@ -1097,6 +1131,7 @@ document.addEventListener("keydown", e => {
   try {
     over = await api("/api/overview");
     renderSide();
+    renderPending();
   } catch (e) { toast(e.message, true); }
   try {
     await load();

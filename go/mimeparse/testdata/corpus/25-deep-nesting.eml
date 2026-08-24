@@ -1,0 +1,38 @@
+From: Tief <tief@example.de>
+To: post@firma.de
+Subject: Sechs Ebenen
+Date: Mon, 10 Aug 2026 14:00:00 +0200
+Message-ID: <tief@example.de>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="L0"
+
+--L0
+Content-Type: multipart/mixed; boundary="L1"
+
+--L1
+Content-Type: multipart/mixed; boundary="L2"
+
+--L2
+Content-Type: multipart/mixed; boundary="L3"
+
+--L3
+Content-Type: multipart/mixed; boundary="L4"
+
+--L4
+Content-Type: multipart/mixed; boundary="L5"
+
+--L5
+Content-Type: multipart/mixed; boundary="L6"
+
+--L6
+Content-Type: text/plain; charset=utf-8
+
+Ganz unten.
+
+--L6--
+--L5--
+--L4--
+--L3--
+--L2--
+--L1--
+--L0--
