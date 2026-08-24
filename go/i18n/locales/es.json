@@ -111,6 +111,7 @@
   "compose.sending": "enviando…",
   "compose.sent": "Enviado · %s",
   "compose.sentNotStored": "El correo ha salido, pero la copia en «Enviados» no se pudo guardar.",
+  "compose.sendNotRecorded": "Enviado. No se pudo registrar el intento en el bucket: tras un fallo s3mail no podrá saber si el mensaje salió.",
   "compose.snippet": "— fragmento —",
   "compose.subject": "Asunto",
   "compose.to": "Para",
@@ -297,5 +298,8 @@
   "view.spamFail": "Veredicto de spam FALLIDO",
   "view.star": "destacar",
   "view.starred": "destacado",
-  "view.virusFail": "Veredicto de virus FALLIDO"
+  "view.virusFail": "Veredicto de virus FALLIDO",
+  "sending.unclear": "No está claro si este mensaje salió",
+  "sending.wentOut": "Sí salió",
+  "sending.didNot": "No salió"
 }

@@ -111,6 +111,7 @@
   "compose.sending": "sendet…",
   "compose.sent": "Gesendet · %s",
   "compose.sentNotStored": "Die Mail ist raus – die Kopie im Ordner „Gesendet“ ließ sich aber nicht ablegen.",
+  "compose.sendNotRecorded": "Verschickt. Der Vorgang konnte nicht im Bucket vermerkt werden – bei einem Absturz kann s3mail dann nicht mehr sagen, ob die Mail raus war.",
   "compose.snippet": "— Baustein —",
   "compose.subject": "Betreff",
   "compose.to": "An",
@@ -297,5 +298,8 @@
   "view.spamFail": "Spam-Verdict FAIL",
   "view.star": "markieren",
   "view.starred": "markiert",
-  "view.virusFail": "Virus-Verdict FAIL"
+  "view.virusFail": "Virus-Verdict FAIL",
+  "sending.unclear": "Unklar, ob diese Mail rausgegangen ist",
+  "sending.wentOut": "War raus",
+  "sending.didNot": "Ging nicht raus"
 }

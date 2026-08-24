@@ -3,10 +3,12 @@ package web
 import (
 	"context"
 	"net/http"
+	"strings"
 	"time"
 
 	"s3mail/core"
 	"s3mail/mailer"
+	"s3mail/store"
 	"s3mail/wizard"
 )
 
@@ -55,8 +57,28 @@ func (s *Server) sendRoute() {
 			s.translate(w, r, err)
 			return
 		}
+		// Write down what is about to happen, before it happens. If the program
+		// dies between here and the SES answer, the next start finds this and
+		// asks - instead of seeing an unsent draft and offering to send it.
+		// See store/sending.go for the four states this produces.
+		//
+		// A marker that cannot be written does not stop the send. It is a safety
+		// net against a crash, not a permission to send: refusing here would turn
+		// a bucket write problem into "you cannot send mail", which is the bigger
+		// failure by far. Without the net the behaviour is what shipped until
+		// now - and the warning says so.
+		marker, err := acc.Mailbox.BeginSend(r.Context(), store.Sending{
+			To: strings.Join(n.To, ", "), Subject: e.Subject, DraftKey: e.DraftKey,
+			MessageID: n.ID, Raw: n.Raw})
+		markerWarning := err != nil
+
 		id, err := acc.Sender.Send(r.Context(), n)
 		if err != nil {
+			// Nothing went out, so the marker would only raise a question that has
+			// no content.
+			if !markerWarning {
+				_ = acc.Mailbox.AbandonSend(r.Context(), marker)
+			}
 			s.translate(w, r, err)
 			return
 		}
@@ -65,6 +87,14 @@ func (s *Server) sendRoute() {
 		// turn the answer into an error - it would read as "not sent" and get
 		// sent a second time.
 		out := map[string]any{"message_id": id}
+		if markerWarning {
+			out["warning"] = s.text(r, "compose.sendNotRecorded")
+		} else if err := acc.Mailbox.MarkSent(r.Context(), marker, id); err != nil {
+			// The mail is out and the marker does not know. Worst case the next
+			// start asks about a send that already happened - a question, not a
+			// second mail.
+			out["warning"] = s.text(r, "compose.sentNotStored")
+		}
 		if _, err := acc.Mailbox.Put(r.Context(), core.Sent, n.ID, n.Raw); err != nil {
 			out["warning"] = s.text(r, "compose.sentNotStored")
 		}
@@ -72,6 +102,9 @@ func (s *Server) sendRoute() {
 			if err := acc.Mailbox.DropDraft(r.Context(), e.DraftKey); err != nil {
 				out["warning"] = s.text(r, "compose.draftNotRemoved")
 			}
+		}
+		if !markerWarning {
+			_ = acc.Mailbox.AbandonSend(r.Context(), marker)
 		}
 		s.json(w, http.StatusOK, with(s.overview(r, acc), out))
 	})

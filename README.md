@@ -276,6 +276,14 @@ S3-Konsole, und der Papierkorb lässt sich per Lifecycle-Regel automatisch leere
 - **Gesendet**: jede verschickte Mail wird als Kopie in `<prefix>sent/` abgelegt.
   Schlägt das fehl, gilt die Mail trotzdem als verschickt – sie ist ja raus –,
   und es gibt einen Hinweis.
+- **Kein Doppelversand nach einem Absturz.** Bevor SES gefragt wird, legt s3mail
+  einen Vermerk neben den Entwurf (`<prefix>drafts/<name>.sending`) und streicht
+  ihn erst durch, wenn Kopie und Entwurf erledigt sind. Stirbt das Programm
+  dazwischen, holt der nächste Start nach, was feststeht; bleibt offen, ob SES
+  die Mail genommen hat, fragt ein Balken über dem Postfach danach – statt sie
+  stillschweigend ein zweites Mal zu verschicken. Der Vermerk ist ein Netz, keine
+  Bedingung: lässt er sich nicht schreiben, geht die Mail trotzdem raus, mit
+  Hinweis.
 - **Entwürfe** liegen als echte Mail in `<prefix>drafts/`, samt Blindkopie und
   Anhängen. Sie überleben damit das geschlossene Fenster und sind auch vom
   zweiten Rechner aus zu sehen. Wer den Dialog mit getipptem Text schließt,
