@@ -307,5 +307,7 @@
   "auth.gone": "Kein Zugriff auf AWS mehr",
   "auth.retry": "Erneut versuchen",
   "view.authFailShort": "Absender ungeprüft",
-  "view.authFailTitle": "SPF, DKIM oder DMARC sind fehlgeschlagen – die Absenderadresse könnte gefälscht sein"
+  "view.authFailTitle": "SPF, DKIM oder DMARC sind fehlgeschlagen – die Absenderadresse könnte gefälscht sein",
+  "view.preview": "Ansehen",
+  "view.close": "Schließen"
 }

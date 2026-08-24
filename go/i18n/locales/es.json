@@ -307,5 +307,7 @@
   "auth.gone": "Ya no hay acceso a AWS",
   "auth.retry": "Reintentar",
   "view.authFailShort": "Remitente no verificado",
-  "view.authFailTitle": "SPF, DKIM o DMARC fallaron: la dirección del remitente podría estar falsificada"
+  "view.authFailTitle": "SPF, DKIM o DMARC fallaron: la dirección del remitente podría estar falsificada",
+  "view.preview": "Ver",
+  "view.close": "Cerrar"
 }

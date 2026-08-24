@@ -480,6 +480,19 @@ func (s *Server) routes() {
 			if ct == "" {
 				ct = "application/octet-stream"
 			}
+			// view=1 asks for a preview instead of a download. It is granted only
+			// for the handful of types that cannot carry code, and even then the
+			// answer is locked down - see previewable.
+			if q.Get("view") == "1" && previewable(ct) {
+				w.Header().Set("Content-Type", ct)
+				w.Header().Set("Content-Disposition",
+					fmt.Sprintf(`inline; filename="%s"`, cleanName(a.Filename)))
+				w.Header().Set("Content-Security-Policy",
+					"default-src 'none'; img-src 'self' data:; object-src 'self'; sandbox")
+				w.Header().Set("X-Frame-Options", "SAMEORIGIN")
+				_, _ = w.Write(a.Content)
+				return
+			}
 			w.Header().Set("Content-Type", ct)
 			w.Header().Set("Content-Disposition",
 				fmt.Sprintf(`attachment; filename="%s"`, cleanName(a.Filename)))

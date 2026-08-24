@@ -262,6 +262,12 @@ S3-Konsole, und der Papierkorb lässt sich per Lifecycle-Regel automatisch leere
 - HTML-Mails rendern in einem `sandbox=""`-iframe mit CSP; externe Bilder sind
   standardmäßig blockiert (Tracking-Pixel) und per Klick nachladbar.
 - Anhänge einzeln herunterladbar, Rohmail als `.eml`.
+- **Anhänge ansehen statt nur laden**: Bilder (PNG, JPEG, GIF, WebP, BMP) und PDF
+  öffnen sich in einer Vorschau. Alles andere gibt es nur zum Herunterladen —
+  **SVG ausdrücklich eingeschlossen**: es sieht aus wie ein Bild, ist aber XML
+  mit Skriptunterstützung. Die Vorschau läuft in einem `sandbox=""`-iframe, und
+  der Server antwortet mit einer CSP, die die Datei in einen eigenen Ursprung
+  sperrt; sie kommt damit weder an das Token noch an die API.
 - SES-Verdicts (`X-SES-Spam-Verdict`, `X-SES-Virus-Verdict`) als Badge.
 - **SPF, DKIM und DMARC** aus `Authentication-Results`: in der Liste erscheint
   eine Marke, wenn eine der drei Prüfungen **fehlgeschlagen** ist – die
