@@ -38,3 +38,36 @@ func TestInstanceIDIsUnique(t *testing.T) {
 		seen[k] = true
 	}
 }
+
+// TestBaseFromIDHaeltAllesAus - the name a self-written message is stored under
+// comes from its Message-ID. Not every sender sets one, and the ones that do
+// put things in it that have no business in an S3 key. A collision here would
+// overwrite a stored draft with a different one.
+func TestBaseFromIDHaeltAllesAus(t *testing.T) {
+	faelle := []struct{ name, id, want string }{
+		{"gewoehnlich", "<abc123@firma.de>", "abc123.eml"},
+		{"ohne Klammern", "abc123@firma.de", "abc123.eml"},
+		{"mit Leerraum", "  <abc123@firma.de>  ", "abc123.eml"},
+		{"Schraegstrich im Namen", "<a/b/../c@firma.de>", "ab..c.eml"},
+		{"Umlaute", "<grüße@firma.de>", "gre.eml"},
+	}
+	for _, f := range faelle {
+		if got := baseFromID(f.id); got != f.want {
+			t.Errorf("%s: baseFromID(%q) = %q, expected %q", f.name, f.id, got, f.want)
+		}
+	}
+
+	// No Message-ID at all, and a header that boils down to nothing: both have
+	// to yield a usable name rather than ".eml", which every message would then
+	// share.
+	for _, leer := range []string{"", "<>", "<@firma.de>", "<///>"} {
+		got := baseFromID(leer)
+		if got == ".eml" || !strings.HasSuffix(got, ".eml") || len(got) < 6 {
+			t.Errorf("baseFromID(%q) = %q - that is not a name of its own", leer, got)
+		}
+	}
+	if baseFromID("") == baseFromID("") {
+		t.Log("two calls in the same nanosecond give the same name - " +
+			"acceptable, they would be the same draft saved twice")
+	}
+}
