@@ -35,6 +35,10 @@ type Data struct {
 	// has to see them, and local storage is where work quietly disappears.
 	Filters []Filter `json:"filters,omitempty"`
 	Upto    string   `json:"upto,omitempty"`
+
+	// UIDs is the per-folder IMAP numbering. Empty until something asks for a
+	// UID, so a state document from before this existed stays readable.
+	UIDs map[string]*FolderUIDs `json:"uids,omitempty"`
 }
 
 func NewData() *Data {
@@ -55,6 +59,14 @@ func (d *Data) Normalize() *Data {
 	}
 	if d.Filters == nil {
 		d.Filters = []Filter{}
+	}
+	if d.UIDs == nil {
+		d.UIDs = map[string]*FolderUIDs{}
+	}
+	for _, f := range d.UIDs {
+		if f != nil {
+			f.normalize()
+		}
 	}
 	return d
 }
@@ -91,6 +103,8 @@ type Op struct {
 	Color   string   `json:"color,omitempty"`
 	Rules   []Rule   `json:"rules,omitempty"`
 	Filters []Filter `json:"filters,omitempty"`
+	Folder  string   `json:"folder,omitempty"`
+	Nums    []uint32 `json:"nums,omitempty"`
 }
 
 // Apply applies one change to a state document - pure, without I/O.
@@ -139,6 +153,11 @@ func Apply(d *Data, op Op) {
 		for _, mid := range op.Mids {
 			delete(d.Messages, mid)
 		}
+		dropUIDs(d, op.Mids)
+	case "uid":
+		applyUID(d, op)
+	case "uidretire":
+		retireUID(d, op)
 	case "rekey":
 		if e, ok := d.Messages[op.Old]; ok && e != nil {
 			clone := *e
@@ -218,6 +237,32 @@ func MergeMissing(base, other *Data) *Data {
 	}
 	if len(base.Rules) == 0 && len(other.Rules) > 0 {
 		base.Rules = other.Rules
+	}
+	// UIDs: take over what the local copy knows and the snapshot does not. A
+	// number that was handed out offline must not be handed out a second time,
+	// so Next is pulled up as well, never down.
+	for name, of := range other.UIDs {
+		if of == nil {
+			continue
+		}
+		of.normalize()
+		bf := base.folder(name)
+		for mid, n := range of.UIDs {
+			if _, present := bf.UIDs[mid]; present {
+				continue
+			}
+			if _, taken := bf.owner[n]; taken {
+				continue
+			}
+			bf.UIDs[mid] = n
+			bf.owner[n] = mid
+		}
+		if of.Next > bf.Next {
+			bf.Next = of.Next
+		}
+		if of.Validity > bf.Validity {
+			bf.Validity = of.Validity
+		}
 	}
 	return base
 }

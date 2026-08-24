@@ -1,7 +1,8 @@
-# IMAP für s3mail — Entwurf, nicht begonnen
+# IMAP für s3mail — Entwurf, Schritt 1 gebaut
 
-Stand 2026-08-23. Aufgeschrieben, damit die Überlegung nicht zweimal gemacht
-werden muss. **Nichts davon ist gebaut.**
+Stand 2026-08-24. Aufgeschrieben, damit die Überlegung nicht zweimal gemacht
+werden muss. **Gebaut ist bisher die UID-Vergabe** (`core/uid.go`, Schritt 1
+unten); alles Weitere steht noch aus. Es gibt keinen IMAP-Server.
 
 ## Warum das der größte Hebel ist
 
@@ -33,6 +34,46 @@ hält.
    zu Hause, Tailscale oder WireGuard bringt das Telefon in dasselbe Netz.
    Apple Mail verbindet sich auf die private Adresse. Kein öffentlicher Port,
    kein Dienst zu betreiben, und das Telefon ist erreicht.
+
+### Variante 3 im Alltag: wie das Telefon den Rechner erreicht
+
+Die erste Frage, die jeder stellt, und sie ist berechtigt: *„Wie kommt das
+iPhone an den Mac, wenn ich unterwegs bin?"*
+
+Tailscale ist kein „gleiches WLAN", sondern ein eigenes Netz über das Internet.
+Beide Geräte melden sich im selben Tailnet an und bekommen feste Adressen
+(`100.x.y.z`). Von da an erreicht das Telefon den Rechner aus dem Zug, aus dem
+Hotel, aus fremdem WLAN — direkt zwischen den Geräten, notfalls über ein Relais,
+durchgehend verschlüsselt. In Apple Mail steht als Server der Name des Rechners.
+
+Drei Dinge, die dafür anders sein müssen als heute:
+
+- **Binden auf die Tailscale-Adresse**, nicht auf `0.0.0.0`. Sonst hängt der
+  Server auch am Café-WLAN, und das ist genau das, was Variante 3 vermeiden
+  will.
+- **Ein Passwort je Postfach** in der Konfiguration (siehe Tabelle unten). Nicht
+  die AWS-Zugangsdaten.
+- **TLS**, weil Apple Mail auf iOS es sehen will. `tailscale cert` stellt für den
+  Rechnernamen ein echtes Zertifikat aus; damit ist das erledigt, ohne
+  öffentlichen Port.
+
+**Der Haken, der die Variante wirklich begrenzt:** der Rechner muss an und wach
+sein. Klappt der Deckel zu, ist das Postfach weg — kein Abruf, kein `IDLE`,
+nichts. Ein Mailserver, der schläft, während man unterwegs ist, fehlt genau
+dann, wenn man ihn braucht. Das ist kein Implementierungsdetail, sondern die
+Eigenschaft, die über die Alltagstauglichkeit entscheidet.
+
+| Weg | was er kostet |
+|---|---|
+| Rechner wach halten (`caffeinate`, Ruhezustand aus) | Strom — und ein zugeklappter Laptop hilft trotzdem nicht |
+| **Kleiner Dauerläufer im Tailnet** — Raspberry Pi, Mac mini, NAS | ein Gerät mehr, aber es bleibt der eigene Rechner, kein Dienst |
+| Öffentlich erreichbarer Server | das ist Variante 2: ein Dienst, den jemand betreibt |
+
+Der Dauerläufer ist der ehrliche Weg für „unterwegs", und er ändert am Entwurf
+nichts: dasselbe Programm, dieselbe Konfiguration, nur auf einer Kiste, die
+durchläuft. Wer das nicht will, bekommt mit Variante 3 ein Postfach, das
+verfügbar ist, solange der Rechner läuft — was für viele reicht, aber gesagt
+gehört, bevor jemand sich darauf verlässt.
 
 **Variante 3 zuerst bauen.** Sie verlangt technisch dasselbe wie 1 und macht
 den Unterschied allein durch das Netz darunter. Variante 2 ist eine
@@ -74,6 +115,13 @@ setzen, die keine Abstimmung braucht:
   schon eine Nummer, gewinnt die aus dem Op mit dem kleineren Schlüssel. Beide
   Rechner kommen so zum selben Ergebnis, egal in welcher Reihenfolge sie die
   Ops sehen.
+
+**Beim Bauen zeigte sich, dass der letzte Punkt billiger ist als gedacht.**
+`Load` spielt die Ops in lexikografischer Schlüsselreihenfolge ein (`listOps`
+sortiert, und `opName` stellt den Zeitstempel voran) — auf jedem Rechner
+dieselbe. „Wer zuerst zuweist, gewinnt" *ist* damit schon „kleinerer Schlüssel
+gewinnt", und `Apply` muss den Schlüssel gar nicht kennen. Die Regel bleibt rein,
+so wie der Rest von `core`.
 
 **Der Restfall, der ehrlich benannt gehört:** vergeben zwei Rechner gleichzeitig
 dieselbe Nummer an verschiedene Mails, löst die Regel oben das zwar eindeutig
@@ -129,8 +177,17 @@ nicht als Abnahme am Ende.
 
 ## Reihenfolge, wenn es losgeht
 
-1. UID-Entwurf festklopfen und **zuerst testen** — die Op-Art, die Konvergenz
-   zweier Rechner, das UIDVALIDITY-Ventil. Ohne das ist der Rest verlorene Zeit.
+1. ~~UID-Entwurf festklopfen und **zuerst testen** — die Op-Art, die Konvergenz
+   zweier Rechner, das UIDVALIDITY-Ventil.~~ **Gebaut am 2026-08-24.**
+   `core/uid.go` trägt die Ops `uid` und `uidretire`, die reine Vergabe
+   `AssignUIDs` und die Ordnerzustände (`validity`, `next`, `uids`). Geprüft
+   sind: Vergabe in Reihenfolge, Wiedereinspielen ohne Wirkung, zwei Rechner mit
+   derselben Nummer (einer gewinnt, der Verlierer bleibt unnummeriert und
+   bekommt beim nächsten Durchgang eine frische Nummer, `UIDVALIDITY` steigt),
+   eine zurückgegebene Nummer wird nie erneut vergeben, Ordner nummerieren
+   unabhängig, und der Zustand übersteht Snapshot und Verdichtung.
+   **Noch nicht verdrahtet:** beim Indexieren wird keine Nummer vergeben, und
+   `Move` gibt die Nummer im Quellordner noch nicht zurück.
 2. `BODYSTRUCTURE` in `mimeparse`, mit dem vorhandenen Testkorpus.
 3. Minimaler Server: `SELECT`, `FETCH`, `STORE`, `SEARCH` gegen **Apple Mail**.
 4. `APPEND`, `MOVE`, `EXPUNGE`.
