@@ -50,3 +50,8 @@ func TestIsAuthProblem(t *testing.T) {
 		}
 	}
 }
+
+// testCacheKey encrypts what the tests write to disk, like the real thing.
+// Fixed rather than random: a test that wants to look at a cache file has to be
+// able to open it.
+var testCacheKey = []byte("0123456789abcdef0123456789abcdef")

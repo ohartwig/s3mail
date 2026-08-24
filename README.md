@@ -185,6 +185,7 @@ ein Schalter kann nicht sagen, welches von mehreren er meint:
 | `--port` / `--host` | Standard `127.0.0.1:8765` |
 | `--no-browser` | Browser nicht automatisch öffnen |
 | `--no-cache` | Nichts auf Platte zwischenspeichern (siehe [Grenzen](#grenzen)) |
+| `--cache-plaintext` | Cache unverschlüsselt schreiben, wenn kein Schlüsselbund da ist |
 | `--debug` | Aufrufe an S3 und SES protokollieren – Schlüssel, Größen, Dauer, **keine Mailinhalte** |
 | `--refresh` | Sekunden zwischen automatischen Abgleichen, `0` schaltet ab (Standard 60) |
 | `--version` | Version ausgeben und beenden |
@@ -820,19 +821,26 @@ sie melden dann einen Rechtefehler im Klartext.
   Key beginnt mit einer neuen Version.
 - Bei sehr großen Postfächern (> ~50k Objekte) dauert das erste Indexieren; dann mit
   engerem Prefix arbeiten.
-- **Was auf der Platte liegt, liegt dort im Klartext.** In `~/.cache/s3mail/`
+- **Was auf der Platte liegt, ist verschlüsselt** — mit AES-256-GCM und einem
+  Schlüssel, der **nicht im Heimatverzeichnis** steht, sondern im Schlüsselbund
+  des Systems: unter macOS im Anmeldeschlüsselbund, unter Windows über DPAPI an
+  das Windows-Konto gebunden, unter Linux im Secret Service (`secret-tool`).
+  Damit nützt ein Backup, ein Ordnersync oder eine Platte ohne FileVault
+  niemandem etwas — die Daten sind dort, der Schlüssel nicht.
+  Gibt es keinen Schlüsselbund, **startet s3mail nicht**, sondern verlangt eine
+  Entscheidung: `--no-cache` (nichts auf Platte) oder `--cache-plaintext` (wie
+  früher, bewusst gewählt). Ein stiller Klartext-Cache wäre genau die Zusage
+  wieder aufgehoben, die ein verschlüsselter Bucket gibt.
+- **Was früher im Klartext dort lag** (bis v1.0.0): In `~/.cache/s3mail/`
   stehen der Index (Absender, Betreff, Vorschautext) **und die abgerufenen
   Mailtexte**, nach ETag geschlüsselt. Die Dateien haben `0600` in einem
   `0700`-Verzeichnis, ein anderer Benutzer desselben Rechners kommt also nicht
   heran — wohl aber ein Backup (Time Machine), ein Ordnersync (Dropbox, iCloud)
   und jeder, der die Platte ohne FileVault in die Hand bekommt.
-  **Das trifft auch client-seitig verschlüsselte Mail:** s3mail muss sie zum
-  Anzeigen entschlüsseln, und danach liegt sie dort entschlüsselt. Wer das nicht
-  will, startet mit `--no-cache` — dann bleibt nichts zurück, dafür wird bei
-  jedem Start neu indexiert und jede Mail bei jedem Öffnen neu geholt. Ein
-  verschlüsselter Cache mit einem Schlüssel aus dem Schlüsselbund des Systems
-  wäre der bessere Weg; er kostet plattformabhängigen Code (macOS Keychain,
-  Windows DPAPI, Linux Secret Service) und ist deshalb nicht gebaut.
+  Der Index *und* die abgerufenen Mailtexte, client-seitig verschlüsselte Mail
+  eingeschlossen — s3mail muss sie zum Anzeigen entschlüsseln. Seit v1.0.1 ist
+  das erledigt; ein Cache aus einer älteren Fassung wird beim ersten Start
+  verworfen und neu aufgebaut.
 - Die **Windows**-Pakete sind nicht signiert, dort meldet sich SmartScreen. Die
   macOS-Pakete sind signiert und notarisiert. Für alle vier Plattformen gibt es
   `SHA256SUMS` mit cosign-Signatur — siehe [Selbst bauen](#selbst-bauen).

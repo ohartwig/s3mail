@@ -38,7 +38,7 @@ func serverWithSender(t *testing.T) (*httptest.Server, *store.Mailbox, *fakeSend
 	f := s3fake.New()
 	f.Store("mail/m1", rawMail("Anna <anna@kunde.de>", "Rechnung 1", "Anbei die Rechnung.",
 		"Mon, 03 Aug 2026 09:00:00 +0000"))
-	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), true)
+	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, true)
 	if _, err := mb.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,7 @@ func TestSentMailIsKept(t *testing.T) {
 func TestSendingSurvivesAFailedCopy(t *testing.T) {
 	ctx := context.Background()
 	f := s3fake.New()
-	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), true)
+	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, true)
 	accounts := one(mb)
 	accounts[0].Sender = &fakeSender{}
 	srv := NewServer(accounts, testToken, "127.0.0.1", 0, nil)
@@ -231,7 +231,7 @@ func TestSendingRemovesTheDraft(t *testing.T) {
 func TestDraftsGoDespiteNoDelete(t *testing.T) {
 	ctx := context.Background()
 	f := s3fake.New()
-	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), false)
+	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, false)
 	accounts := one(mb)
 	accounts[0].Sender = &fakeSender{}
 	srv := NewServer(accounts, testToken, "127.0.0.1", 0, nil)

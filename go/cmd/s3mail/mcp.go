@@ -19,7 +19,7 @@ import (
 // Deliberately without the sender: the MCP server has no way to send, and it
 // cannot grow one by accident here either. What it can do is write a draft,
 // which a human then sends from s3mail.
-func serveMCP(ctx context.Context, k config.Config, readOnly bool, cacheDir string) error {
+func serveMCP(ctx context.Context, k config.Config, readOnly bool, cacheDir string, cacheKey []byte) error {
 	if len(k.Accounts) == 0 {
 		return errors.New("s3mail is not set up yet - start it once without --mcp")
 	}
@@ -39,7 +39,7 @@ func serveMCP(ctx context.Context, k config.Config, readOnly bool, cacheDir stri
 			continue
 		}
 		mb := store.NewMailbox(ctx, awsx.NewS3Client(cfg, ""), awsx.NewKMS(cfg, ""),
-			a.Bucket, a.Prefix, cacheDir, k.AllowDelete)
+			a.Bucket, a.Prefix, cacheDir, cacheKey, k.AllowDelete)
 		// Once at the start, so the first search does not answer out of an empty
 		// index. After that the model works on what it has; it is not a window
 		// somebody watches.

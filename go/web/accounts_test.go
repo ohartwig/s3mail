@@ -33,7 +33,7 @@ func twoMailboxes(t *testing.T) (*httptest.Server, []Account) {
 		{"info", "mail/info/", "info@firma.de"},
 		{"support", "mail/support/", "support@firma.de"},
 	} {
-		mb := store.NewMailbox(ctx, f, nil, "test-bucket", spec.prefix, t.TempDir(), true)
+		mb := store.NewMailbox(ctx, f, nil, "test-bucket", spec.prefix, t.TempDir(), testCacheKey, true)
 		if _, err := mb.Refresh(ctx); err != nil {
 			t.Fatal(err)
 		}
@@ -209,7 +209,7 @@ func TestSuggestionsComeOutOfTheIndex(t *testing.T) {
 		f.Store(key, rawMail("Shop <news@shop.io>", "Angebot", "Text.",
 			"Mon, 03 Aug 2026 09:00:00 +0000"))
 	}
-	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), true)
+	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, true)
 	if _, err := mb.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -300,7 +300,7 @@ func TestTheConversationFindsBothDirections(t *testing.T) {
 		"Subject: Antwort\r\nDate: Tue, 04 Aug 2026 09:00:00 +0000\r\n\r\nText\r\n"))
 	f.Store("mail/in2", rawMail("Bert <bert@anders.de>", "Anderes", "Text.",
 		"Wed, 05 Aug 2026 09:00:00 +0000"))
-	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), true)
+	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, true)
 	if _, err := mb.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -321,3 +321,8 @@ func TestTheConversationFindsBothDirections(t *testing.T) {
 			len(d.Messages), d.Messages)
 	}
 }
+
+// testCacheKey encrypts what the tests write to disk, like the real thing.
+// Fixed rather than random: a test that wants to look at a cache file has to be
+// able to open it.
+var testCacheKey = []byte("0123456789abcdef0123456789abcdef")

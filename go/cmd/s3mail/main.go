@@ -24,6 +24,7 @@ import (
 	"s3mail/awsx"
 	"s3mail/config"
 	"s3mail/i18n"
+	"s3mail/keyring"
 	"s3mail/store"
 	"s3mail/web"
 	"s3mail/wizard"
@@ -52,6 +53,7 @@ func main() {
 		noBrowser   = flag.Bool("no-browser", false, cat.T("cli.noBrowser"))
 		noCache     = flag.Bool("no-cache", false, cat.T("cli.noCache"))
 		debug       = flag.Bool("debug", false, cat.T("cli.debug"))
+		plainCache  = flag.Bool("cache-plaintext", false, cat.T("cli.cachePlaintext"))
 		showVersion = flag.Bool("version", false, cat.T("cli.version"))
 		refreshSecs = flag.Int("refresh", 60, cat.T("cli.refresh"))
 		mcpMode     = flag.Bool("mcp", false, cat.T("cli.mcp"))
@@ -68,6 +70,20 @@ func main() {
 			return ""
 		}
 		return config.CacheDir()
+	}
+
+	// The key the cache is encrypted with. Without a keyring there is nowhere to
+	// keep it, and rather than quietly writing plain text - which would undo the
+	// bucket's own encryption for every message ever opened - s3mail stops and
+	// asks for a decision. See keyring/keyring.go.
+	var cacheKey []byte
+	if !*noCache && !*plainCache {
+		key, err := keyring.Key()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, cat.T("cli.noKeyring"))
+			os.Exit(1)
+		}
+		cacheKey = key
 	}
 
 	if *showVersion {
@@ -90,7 +106,7 @@ func main() {
 	// tool in somebody else's hands, and stdin and stdout are the whole
 	// interface. Everything below - port, browser, token - is beside the point.
 	if *mcpMode || *mcpReadOnly {
-		if err := serveMCP(context.Background(), k, *mcpReadOnly, cacheDir()); err != nil {
+		if err := serveMCP(context.Background(), k, *mcpReadOnly, cacheDir(), cacheKey); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
@@ -134,12 +150,12 @@ func main() {
 	// start" nobody should have to restart the program.
 	wiz := &wizard.Wizard{}
 	wiz.Activate = func(fresh config.Config) error {
-		return activate(ctx, srv, fresh, *noSend, *refreshSecs, cacheDir())
+		return activate(ctx, srv, fresh, *noSend, *refreshSecs, cacheDir(), cacheKey)
 	}
 	srv.WithWizard(wiz)
 
 	if len(k.Accounts) > 0 && !*setup {
-		if err := activate(ctx, srv, k, *noSend, *refreshSecs, cacheDir()); err != nil {
+		if err := activate(ctx, srv, k, *noSend, *refreshSecs, cacheDir(), cacheKey); err != nil {
 			// At startup there is no request and therefore no language from
 			// the browser - the one from the configuration has to do.
 			startErr = awsx.PlainText(err, k.First().Profile, cat)
@@ -234,7 +250,7 @@ func serverConfig(k config.Config, refreshSeconds int) map[string]any {
 // comes back so the start line can name it, but the program keeps running as
 // long as anything came up.
 func activate(ctx context.Context, srv *web.Server, k config.Config, noSend bool,
-	refreshSeconds int, cacheDir string) error {
+	refreshSeconds int, cacheDir string, cacheKey []byte) error {
 	accounts := make([]web.Account, 0, len(k.Accounts))
 	var firstErr error
 	for _, a := range k.Accounts {
@@ -249,7 +265,7 @@ func activate(ctx context.Context, srv *web.Server, k config.Config, noSend bool
 			continue
 		}
 		mb := store.NewMailbox(ctx, awsx.NewS3Client(cfg, ""), awsx.NewKMS(cfg, ""),
-			a.Bucket, a.Prefix, cacheDir, k.AllowDelete)
+			a.Bucket, a.Prefix, cacheDir, cacheKey, k.AllowDelete)
 		acc := web.Account{ID: a.ID(), Name: a.Name(), Mailbox: mb, Profile: a.Profile,
 			From: a.From, Signature: a.Signature, Snippets: a.Snippets}
 		if !noSend {

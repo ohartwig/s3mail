@@ -22,7 +22,7 @@ func mailbox(t *testing.T) *store.Mailbox {
 	f.Store("mail/m1", []byte("From: Anna <anna@kunde.de>\r\nTo: post@firma.de\r\n"+
 		"Subject: Rechnung 1\r\nDate: Mon, 03 Aug 2026 09:00:00 +0000\r\n"+
 		"Content-Type: text/plain; charset=utf-8\r\n\r\nAnbei die Rechnung.\r\n"))
-	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), true)
+	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, true)
 	if _, err := mb.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -209,3 +209,8 @@ func TestSearchFindsAndStaysWithinTheLimit(t *testing.T) {
 		t.Errorf("the message was not found: %q", got)
 	}
 }
+
+// testCacheKey encrypts what the tests write to disk, like the real thing.
+// Fixed rather than random: a test that wants to look at a cache file has to be
+// able to open it.
+var testCacheKey = []byte("0123456789abcdef0123456789abcdef")

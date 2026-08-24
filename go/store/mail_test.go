@@ -31,7 +31,7 @@ func buildMailbox(t *testing.T) (*s3fake.Fake, *store.Mailbox) {
 	f.Objs["mail/archiv/alt1"] = buildMail("Alt <alt@firma.de>", "post@firma.de",
 		"Altes", "Alter Text.", "Wed, 01 Jul 2026 08:00:00 +0000", "<alt1@x>")
 	f.Objs["andere/nicht-meins"] = []byte("ausserhalb")
-	m := store.NewMailbox(context.Background(), f, nil, "test-bucket", "mail/", t.TempDir(), true)
+	m := store.NewMailbox(context.Background(), f, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, true)
 	return f, m
 }
 
@@ -203,7 +203,7 @@ func TestDeleteBlocked(t *testing.T) {
 	f := s3fake.New()
 	f.Objs["mail/trash/m1"] = buildMail("a@b.de", "c@d.de", "x", "y",
 		"Mon, 03 Aug 2026 09:00:00 +0000", "<m1@x>")
-	m := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), false)
+	m := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, false)
 	if _, err := m.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -222,7 +222,7 @@ func TestEncryptedMeansNoRangeGet(t *testing.T) {
 	f.Objs["mail/enc1"] = body
 	f.Meta["mail/enc1"] = cases["gcm"].Meta
 
-	m := store.NewMailbox(ctx, f, &fakeKMS{key: key}, "test-bucket", "mail/", t.TempDir(), true)
+	m := store.NewMailbox(ctx, f, &fakeKMS{key: key}, "test-bucket", "mail/", t.TempDir(), testCacheKey, true)
 	raw, err := m.Fetch(ctx, "mail/enc1", store.HeaderChunk)
 	if err != nil {
 		t.Fatal(err)
@@ -256,7 +256,7 @@ func TestEncryptedWithoutPermissionFailsOnlyThatMail(t *testing.T) {
 		"Mon, 03 Aug 2026 09:00:00 +0000", "<k@x>")
 
 	m := store.NewMailbox(ctx, f, &fakeKMS{err: errors.New("AccessDenied")},
-		"test-bucket", "mail/", t.TempDir(), true)
+		"test-bucket", "mail/", t.TempDir(), testCacheKey, true)
 	if _, err := m.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}

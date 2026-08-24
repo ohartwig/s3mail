@@ -25,7 +25,7 @@ const draftRaw = "From: post@firma.de\r\nTo: kunde@x.de\r\n" +
 func mailboxFor(t *testing.T) (*s3fake.Fake, *store.Mailbox) {
 	t.Helper()
 	f := s3fake.New()
-	mb := store.NewMailbox(context.Background(), f, nil, "test-bucket", "mail/", t.TempDir(), true)
+	mb := store.NewMailbox(context.Background(), f, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, true)
 	return f, mb
 }
 
@@ -91,7 +91,7 @@ func TestCrashAfterSESIsFinishedQuietly(t *testing.T) {
 	}
 	// crash here: no copy, no draft removed, no marker deleted.
 
-	second := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), true)
+	second := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, true)
 	questions, err := second.RecoverSends(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -122,7 +122,7 @@ func TestCrashBeforeTheAnswerAsks(t *testing.T) {
 	}
 	// crash here: SES may have taken it, or not.
 
-	second := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), true)
+	second := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, true)
 	questions, err := second.RecoverSends(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -260,7 +260,7 @@ func TestMarkerIsNotAMessage(t *testing.T) {
 	if _, err := mb.BeginSend(ctx, sendingFor(draft)); err != nil {
 		t.Fatal(err)
 	}
-	second := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), true)
+	second := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, true)
 	if _, err := second.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
