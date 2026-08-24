@@ -309,5 +309,7 @@
   "view.authFailShort": "Absender ungeprüft",
   "view.authFailTitle": "SPF, DKIM oder DMARC sind fehlgeschlagen – die Absenderadresse könnte gefälscht sein",
   "view.preview": "Ansehen",
-  "view.close": "Schließen"
+  "view.close": "Schließen",
+  "list.hits": "Treffer",
+  "list.someStuck": "%d davon ließen sich nicht verschieben – sie stehen noch, wo sie waren"
 }

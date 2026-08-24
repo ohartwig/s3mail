@@ -309,5 +309,7 @@
   "view.authFailShort": "Remitente no verificado",
   "view.authFailTitle": "SPF, DKIM o DMARC fallaron: la dirección del remitente podría estar falsificada",
   "view.preview": "Ver",
-  "view.close": "Cerrar"
+  "view.close": "Cerrar",
+  "list.hits": "resultados",
+  "list.someStuck": "%d de ellos no se pudieron mover: siguen donde estaban"
 }

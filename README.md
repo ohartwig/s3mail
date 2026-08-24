@@ -344,7 +344,13 @@ Scheitert ein Postfach beim Start (falsches Profil, kein Zugriff), kommen die
 - Tags mit Farben, mehrere pro Mail, Klick in der Seitenleiste filtert.
 - Gelesen/ungelesen (Zähler pro Ordner), Stern.
 - Mehrfachauswahl per Checkbox, Shift-Klick wählt einen Bereich; dann verschieben,
-  taggen, markieren, löschen in einem Rutsch.
+  taggen, markieren, löschen in einem Rutsch. Das Kästchen in der Werkzeugleiste
+  wählt **alle Treffer** der aktuellen Suche — „alles von news@shop.io ins
+  Archiv" ist damit zwei Klicks.
+- Bleibt bei so einer Aktion eine Mail hängen, ziehen die anderen trotzdem um,
+  und die Meldung nennt die Zahl, die wirklich angekommen ist. Scheitern zehn
+  hintereinander, hört s3mail auf: dann stimmt etwas Grundsätzliches nicht, und
+  eine Liste mit fünftausend gleichen Sätzen hilft niemandem.
 
 **Automatische Regeln**
 

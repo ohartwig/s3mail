@@ -309,5 +309,7 @@
   "view.authFailShort": "Sender unverified",
   "view.authFailTitle": "SPF, DKIM or DMARC failed - the sender address may be forged",
   "view.preview": "Preview",
-  "view.close": "Close"
+  "view.close": "Close",
+  "list.hits": "hits",
+  "list.someStuck": "%d of them would not move - they are still where they were"
 }
