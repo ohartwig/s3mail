@@ -35,6 +35,46 @@ hält.
    Apple Mail verbindet sich auf die private Adresse. Kein öffentlicher Port,
    kein Dienst zu betreiben, und das Telefon ist erreicht.
 
+### Variante 3 im Alltag: wie das Telefon den Rechner erreicht
+
+Die erste Frage, die jeder stellt, und sie ist berechtigt: *„Wie kommt das
+iPhone an den Mac, wenn ich unterwegs bin?"*
+
+Tailscale ist kein „gleiches WLAN", sondern ein eigenes Netz über das Internet.
+Beide Geräte melden sich im selben Tailnet an und bekommen feste Adressen
+(`100.x.y.z`). Von da an erreicht das Telefon den Rechner aus dem Zug, aus dem
+Hotel, aus fremdem WLAN — direkt zwischen den Geräten, notfalls über ein Relais,
+durchgehend verschlüsselt. In Apple Mail steht als Server der Name des Rechners.
+
+Drei Dinge, die dafür anders sein müssen als heute:
+
+- **Binden auf die Tailscale-Adresse**, nicht auf `0.0.0.0`. Sonst hängt der
+  Server auch am Café-WLAN, und das ist genau das, was Variante 3 vermeiden
+  will.
+- **Ein Passwort je Postfach** in der Konfiguration (siehe Tabelle unten). Nicht
+  die AWS-Zugangsdaten.
+- **TLS**, weil Apple Mail auf iOS es sehen will. `tailscale cert` stellt für den
+  Rechnernamen ein echtes Zertifikat aus; damit ist das erledigt, ohne
+  öffentlichen Port.
+
+**Der Haken, der die Variante wirklich begrenzt:** der Rechner muss an und wach
+sein. Klappt der Deckel zu, ist das Postfach weg — kein Abruf, kein `IDLE`,
+nichts. Ein Mailserver, der schläft, während man unterwegs ist, fehlt genau
+dann, wenn man ihn braucht. Das ist kein Implementierungsdetail, sondern die
+Eigenschaft, die über die Alltagstauglichkeit entscheidet.
+
+| Weg | was er kostet |
+|---|---|
+| Rechner wach halten (`caffeinate`, Ruhezustand aus) | Strom — und ein zugeklappter Laptop hilft trotzdem nicht |
+| **Kleiner Dauerläufer im Tailnet** — Raspberry Pi, Mac mini, NAS | ein Gerät mehr, aber es bleibt der eigene Rechner, kein Dienst |
+| Öffentlich erreichbarer Server | das ist Variante 2: ein Dienst, den jemand betreibt |
+
+Der Dauerläufer ist der ehrliche Weg für „unterwegs", und er ändert am Entwurf
+nichts: dasselbe Programm, dieselbe Konfiguration, nur auf einer Kiste, die
+durchläuft. Wer das nicht will, bekommt mit Variante 3 ein Postfach, das
+verfügbar ist, solange der Rechner läuft — was für viele reicht, aber gesagt
+gehört, bevor jemand sich darauf verlässt.
+
 **Variante 3 zuerst bauen.** Sie verlangt technisch dasselbe wie 1 und macht
 den Unterschied allein durch das Netz darunter. Variante 2 ist eine
 Produktentscheidung, keine Ausbaustufe.
