@@ -45,7 +45,7 @@ variables:
   GOTOOLCHAIN: "local"
   GOFLAGS: "-mod=readonly"
   GOPATH: "${CI_PROJECT_DIR}/.go"
-  PAKET_URL: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/s3mail"
+  PACKAGE_URL: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/s3mail"
 
 default:
   image: ${GO_IMAGE}
@@ -98,9 +98,9 @@ test:
     # LDFLAGS trägt bei Windows zusätzlich -H windowsgui: sonst reißt der
     # Doppelklick ein Konsolenfenster auf, dessen Schließen den Server killt.
     - |
-      CGO_ENABLED=0 GOOS="$ZIEL_OS" GOARCH="$ZIEL_ARCH" \
+      CGO_ENABLED=0 GOOS="$TARGET_OS" GOARCH="$TARGET_ARCH" \
         go build -trimpath -ldflags="-s -w -X main.version=${VERSION} ${EXTRA_LDFLAGS:-}" \
-        -o "dist/${DATEI}" ./cmd/s3mail
+        -o "dist/${BINARY}" ./cmd/s3mail
     # macOS bekommt ein App-Bundle statt einer nackten Unix-Datei. Ein Bundle ist
     # nur eine Verzeichnisstruktur mit einer Info.plist – das entsteht auch auf
     # Linux, ohne Apple-Werkzeug und ohne den Mac, den die Portierung losgeworden ist.
@@ -108,7 +108,7 @@ test:
     # nach der Signatur wird gezippt. Andersherum müsste das ZIP wieder geöffnet
     # werden, und geheftet (`staple`) wird ohnehin das Bundle, nicht das Archiv.
     - |
-      if [ "$ZIEL_OS" = "darwin" ]; then
+      if [ "$TARGET_OS" = "darwin" ]; then
         # CFBundleVersion vertraegt nur Zahlen und Punkte. Was hier als VERSION
         # ankommt, ist aber ein Tag wie v0.9.0 oder v0.9.0-rc1, bei Zweiglaeufen
         # sogar eine Commit-Kurz-ID. Also zurechtschneiden: fuehrendes v weg,
@@ -119,13 +119,13 @@ test:
         case "$PLIST_VERSION" in
           ''|*[!0-9.]*) PLIST_VERSION=0.0.0 ;;
         esac
-        tools/bundle/bauen.sh "dist/${DATEI}" dist "${PLIST_VERSION}"
-        rm "dist/${DATEI}"
+        tools/bundle/build.sh "dist/${BINARY}" dist "${PLIST_VERSION}"
+        rm "dist/${BINARY}"
         mv dist/s3mail.app "dist/s3mail-${LABEL}.app"
         exit 0
       fi
-      go run tools/zip.go "dist/s3mail-${LABEL}.zip" "dist/${DATEI}"
-      rm -rf "dist/${DATEI}"
+      go run tools/zip.go "dist/s3mail-${LABEL}.zip" "dist/${BINARY}"
+      rm -rf "dist/${BINARY}"
     # Als ZIP, damit Ausführungs-Bit und Bundle-Struktur den Download überstehen –
     # eine roh heruntergeladene Datei kommt ohne +x an und startet nicht.
     # Gepackt wird mit Go, nicht mit /usr/bin/zip: das golang-Image bringt es
@@ -139,20 +139,20 @@ test:
 
 build:windows-amd64:
   extends: .build
-  variables: { ZIEL_OS: windows, ZIEL_ARCH: amd64, LABEL: windows-amd64, DATEI: s3mail.exe,
+  variables: { TARGET_OS: windows, TARGET_ARCH: amd64, LABEL: windows-amd64, BINARY: s3mail.exe,
                EXTRA_LDFLAGS: "-H windowsgui" }
 
 build:macos-arm64:
   extends: .build
-  variables: { ZIEL_OS: darwin, ZIEL_ARCH: arm64, LABEL: macos-arm64, DATEI: s3mail }
+  variables: { TARGET_OS: darwin, TARGET_ARCH: arm64, LABEL: macos-arm64, BINARY: s3mail }
 
 build:macos-amd64:
   extends: .build
-  variables: { ZIEL_OS: darwin, ZIEL_ARCH: amd64, LABEL: macos-amd64, DATEI: s3mail }
+  variables: { TARGET_OS: darwin, TARGET_ARCH: amd64, LABEL: macos-amd64, BINARY: s3mail }
 
 build:linux-amd64:
   extends: .build
-  variables: { ZIEL_OS: linux, ZIEL_ARCH: amd64, LABEL: linux-amd64, DATEI: s3mail }
+  variables: { TARGET_OS: linux, TARGET_ARCH: amd64, LABEL: linux-amd64, BINARY: s3mail }
 
 # --------------------------------------------------------------------------- #
 # Signieren – nur macOS
@@ -342,7 +342,7 @@ upload:
         echo "lade hoch: $f"
         curl --fail-with-body --silent --show-error \
           --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
-          --upload-file "$f" "${PAKET_URL}/${CI_COMMIT_TAG}/${f}"
+          --upload-file "$f" "${PACKAGE_URL}/${CI_COMMIT_TAG}/${f}"
         echo
       done
 
@@ -367,10 +367,10 @@ release:
         "description": "Gebaut aus ${CI_COMMIT_SHA}.\n\n**macOS:** ZIP entpacken, \`s3mail.app\` doppelklicken. Die Pakete sind mit einer Developer ID signiert und bei Apple notarisiert – kein \`xattr\`, kein Rechtsklick, keine Warnung.\n\n**Windows und Linux:** ZIP entpacken und \`s3mail\` ausführen. Unter Windows meldet sich SmartScreen mit *Weitere Informationen → Trotzdem ausführen* – dort ist nicht signiert.\n\nDas Fenster geht von selbst auf. Die Adresse trägt ein Token, **ohne das der Server nicht antwortet**; sie steht im Terminal und in \`adresse.txt\` im Konfigurationsverzeichnis, falls das Fenster zugeht.\n\nZu jedem Paket liegt eine \`.sha256\`-Datei daneben.",
         "assets": {
           "links": [
-            {"name": "s3mail-windows-amd64.zip", "url": "${PAKET_URL}/${CI_COMMIT_TAG}/s3mail-windows-amd64.zip", "link_type": "package"},
-            {"name": "s3mail-macos-arm64.zip (Apple Silicon)", "url": "${PAKET_URL}/${CI_COMMIT_TAG}/s3mail-macos-arm64.zip", "link_type": "package"},
-            {"name": "s3mail-macos-amd64.zip (Intel)", "url": "${PAKET_URL}/${CI_COMMIT_TAG}/s3mail-macos-amd64.zip", "link_type": "package"},
-            {"name": "s3mail-linux-amd64.zip", "url": "${PAKET_URL}/${CI_COMMIT_TAG}/s3mail-linux-amd64.zip", "link_type": "package"}
+            {"name": "s3mail-windows-amd64.zip", "url": "${PACKAGE_URL}/${CI_COMMIT_TAG}/s3mail-windows-amd64.zip", "link_type": "package"},
+            {"name": "s3mail-macos-arm64.zip (Apple Silicon)", "url": "${PACKAGE_URL}/${CI_COMMIT_TAG}/s3mail-macos-arm64.zip", "link_type": "package"},
+            {"name": "s3mail-macos-amd64.zip (Intel)", "url": "${PACKAGE_URL}/${CI_COMMIT_TAG}/s3mail-macos-amd64.zip", "link_type": "package"},
+            {"name": "s3mail-linux-amd64.zip", "url": "${PACKAGE_URL}/${CI_COMMIT_TAG}/s3mail-linux-amd64.zip", "link_type": "package"}
           ]
         }
       }
