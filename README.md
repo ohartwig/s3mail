@@ -717,6 +717,22 @@ jeden Bucket des Kontos, auch die, die mit Mail nichts zu tun haben. Bei einem
 Postfach-Zugang ist die leere Auswahlliste deshalb der Normalfall – der Name
 wird eingetippt oder kommt aus der Selbsteinrichtung.
 
+## Abmelden (List-Unsubscribe)
+
+Trägt eine Mail einen `List-Unsubscribe`-Kopf, steht in der Mailansicht ein
+Knopf **Abmelden** neben *Nicht mehr schreiben*. Er **schreibt** die
+Abmeldemail — Empfänger und Betreff aus dem Kopf, so wie die Liste sie sehen
+will — und legt sie in den Verfassen-Dialog. Gesendet wird sie, wenn du auf
+Senden drückst.
+
+Was s3mail **nicht** tut: den One-Click-Abmeldelink von selbst aufrufen (RFC
+8058). Ein Mailprogramm, das Anfragen an URLs schickt, die ein Fremder in einen
+Kopf geschrieben hat, hat einen Rückkanal — allein die Anfrage bestätigt, dass
+die Adresse gelesen wird, und sie passiert, ohne dass jemand es entschieden hat.
+Bietet der Absender nur eine Abmeldeseite an, steht sie als Link da; ihn
+anzuklicken ist eine Entscheidung. Reines `http://` wird gar nicht erst
+angeboten.
+
 ## Nicht mehr schreiben (SES-Sperrliste)
 
 Bittet jemand darum, nicht mehr angeschrieben zu werden, erledigt das der Knopf

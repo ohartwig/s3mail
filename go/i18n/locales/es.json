@@ -311,5 +311,9 @@
   "view.preview": "Ver",
   "view.close": "Cerrar",
   "list.hits": "resultados",
-  "list.someStuck": "%d de ellos no se pudieron mover: siguen donde estaban"
+  "list.someStuck": "%d de ellos no se pudieron mover: siguen donde estaban",
+  "unsub.button": "Darse de baja",
+  "unsub.title": "Escribir el correo de baja: solo se envía cuando pulsas enviar",
+  "unsub.linkTitle": "Abrir la página de baja del remitente en el navegador",
+  "unsub.alsoLink": "El remitente también ofrece una página de baja; s3mail no la abre por su cuenta"
 }

@@ -29,6 +29,11 @@
   button { background:var(--panel2); border:1px solid var(--line); color:var(--text);
            border-radius:var(--radius); padding:6px 11px; cursor:pointer; }
   button:hover:not(:disabled) { border-color:var(--accent); }
+  /* A link that has to sit in a row of buttons - the unsubscribe page of a
+     sender is a link on purpose, so that opening it is a visible navigation. */
+  a.btn { background:var(--panel2); border:1px solid var(--line); color:var(--text);
+    border-radius:var(--radius); padding:6px 11px; font:inherit; text-decoration:none; }
+  a.btn:hover { border-color:var(--accent); }
   button:disabled { opacity:.5; cursor:default; }
   /* The language switch looks like the buttons next to it - it sits in the
      same row and does the same thing: it changes something about the view. */
@@ -763,6 +768,8 @@ const open = guard(async key => {
         : `<button id="vTrash">🗑 ${T["folder.trash"]}</button>`}
       <button id="vHistory" title="${T["view.history.title"]}">${T["view.history"]}</button>
       ${over.can_block ? `<button id="vBlock" title="${T["blocked.buttonTitle"]}">${T["blocked.button"]}</button>` : ""}
+      ${m.unsubscribe && m.unsubscribe.mail ? `<button id="vUnsub" title="${T["unsub.title"]}">${T["unsub.button"]}</button>` : ""}
+      ${m.unsubscribe && !m.unsubscribe.mail && m.unsubscribe.link ? `<a class="btn" target="_blank" rel="noopener noreferrer" href="${esc(m.unsubscribe.link)}" title="${T["unsub.linkTitle"]}">${T["unsub.button"]}</a>` : ""}
       <a class="att" href="/api/raw?key=${encodeURIComponent(key)}">⬇︎ .eml</a>
       ${m.html ? `<button id="imgs">${showImages ? T["view.blockImages"] : T["view.loadImages"]}</button>` : ""}
     </div>
@@ -784,6 +791,17 @@ const open = guard(async key => {
   on("#vMove", e => folderMenu(e.target, guard(async f => { await move([key], f); })));
   on("#vTag", e => tagMenu(e.target, [key]));
   on("#vBlock", () => askToBlock(m.reply_to || m.from));
+  // The unsubscribe mail is written, not sent. s3mail never fires a request at
+  // a URL a stranger put in a header - the request alone would confirm that the
+  // address is read. A person presses send, as everywhere else here.
+  on("#vUnsub", () => {
+    const u = m.unsubscribe;
+    compose("new", false);
+    $("#c_to").value = u.mail;
+    $("#c_subject").value = decodeURIComponent((u.subject || "unsubscribe").replace(/\+/g, " "));
+    $("#c_body").value = "";
+    if (u.link) toast(T["unsub.alsoLink"], false);
+  });
   on("#vHistory", () => {
     // The bare address, not the display name: the same person writes under
     // three of those over a year.

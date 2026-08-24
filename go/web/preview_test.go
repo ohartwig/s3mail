@@ -111,3 +111,21 @@ func TestThePageAsksForAddresses(t *testing.T) {
 		}
 	}
 }
+
+// Unsubscribing is offered, but s3mail never fires the request itself.
+func TestThePageOffersUnsubscribeWithoutCallingIt(t *testing.T) {
+	for _, anchor := range []string{`id="vUnsub"`, `T["unsub.button"]`} {
+		if !strings.Contains(PageMailbox, anchor) {
+			t.Errorf("the mailbox page has lost %q", anchor)
+		}
+	}
+	// One-click unsubscribe means POSTing to a URL a stranger put in a header.
+	// The request alone confirms the address is read.
+	if strings.Contains(PageMailbox, "List-Unsubscribe=One-Click") {
+		t.Error("the page does one-click unsubscribe")
+	}
+	if strings.Contains(PageMailbox, "unsubscribe.link, {method") ||
+		strings.Contains(PageMailbox, `fetch(u.link`) {
+		t.Error("the page calls the unsubscribe link by itself")
+	}
+}

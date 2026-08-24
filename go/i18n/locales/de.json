@@ -311,5 +311,9 @@
   "view.preview": "Ansehen",
   "view.close": "Schließen",
   "list.hits": "Treffer",
-  "list.someStuck": "%d davon ließen sich nicht verschieben – sie stehen noch, wo sie waren"
+  "list.someStuck": "%d davon ließen sich nicht verschieben – sie stehen noch, wo sie waren",
+  "unsub.button": "Abmelden",
+  "unsub.title": "Abmeldemail schreiben – gesendet wird sie erst, wenn du auf Senden drückst",
+  "unsub.linkTitle": "Abmeldeseite des Absenders im Browser öffnen",
+  "unsub.alsoLink": "Der Absender bietet auch eine Abmeldeseite an; s3mail ruft sie nicht von selbst auf"
 }
