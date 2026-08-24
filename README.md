@@ -791,6 +791,14 @@ sie melden dann einen Rechtefehler im Klartext.
 - Kein IMAP: ein normales Mailprogramm kann das Postfach nicht öffnen. Senden
   ginge dort über den SMTP-Endpunkt von SES, lesen nicht – SES kennt keinen
   Postfachdienst.
+- **Keine Thread-Gruppierung.** Die Liste zeigt einzelne Mails, keine Fäden.
+  Richtiges Threading braucht `References`, eine Normalisierung der Betreffs und
+  einen Umgang mit Fäden, die ein Ticketsystem abgeschnitten hat — eine Woche
+  Arbeit für etwas, das in einem Geschäftspostfach seltener trägt, als es
+  aussieht. Was den Zweck meistens erfüllt, gibt es schon: **Verlauf** in der
+  Mailansicht zeigt alle Mails mit dieser Adresse über alle Ordner, und der
+  bewusst nicht über den Faden, sondern über die Adresse — siehe
+  [Für die Arbeit am Kunden](#funktionen).
 - Push braucht eine Klingel in AWS: SES benachrichtigt ein SNS-Topic, das in eine
   SQS-Queue schreibt, an der s3mail hängt. Ist das eingerichtet, taucht neue Mail
   sofort auf; ohne läuft der Takt von `--refresh` (Standard 60 Sekunden) weiter.
