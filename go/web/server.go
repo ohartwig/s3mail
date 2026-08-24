@@ -502,6 +502,27 @@ func (s *Server) routes() {
 		s.writeError(w, http.StatusNotFound, s.text(r, "error.attachmentNotFound"))
 	})
 
+	// Addresses for the field somebody is typing into. Out of the index, not out
+	// of an address book: a second place to keep addresses is a second place to
+	// keep them wrong.
+	s.mux.HandleFunc("GET /api/addresses", func(w http.ResponseWriter, r *http.Request) {
+		acc, ok := s.pick(w, r)
+		if !ok {
+			return
+		}
+		q := r.URL.Query()
+		limit, _ := strconv.Atoi(q.Get("limit"))
+		if limit <= 0 || limit > 25 {
+			limit = 10
+		}
+		found := core.Addresses(acc.Mailbox.Index(), q.Get("q"), limit)
+		out := make([]map[string]any, 0, len(found))
+		for _, c := range found {
+			out = append(out, map[string]any{"addr": c.Addr, "name": c.Name, "label": c.Label()})
+		}
+		s.json(w, http.StatusOK, map[string]any{"addresses": out})
+	})
+
 	s.mux.HandleFunc("GET /api/raw", func(w http.ResponseWriter, r *http.Request) {
 		acc, ok := s.pick(w, r)
 		if !ok {

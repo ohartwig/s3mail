@@ -173,9 +173,10 @@
 <dialog id="dlgCompose"><form class="pad" method="dialog">
   <b id="c_title">{{t "compose.reply"}}</b>
   <div><label>{{t "compose.from"}}</label><input id="c_from"></div>
-  <div><label>{{t "compose.to"}}</label><input id="c_to"></div>
-  <div><label>Cc</label><input id="c_cc"></div>
-  <div><label>{{t "compose.bcc"}}</label><input id="c_bcc"></div>
+  <div><label>{{t "compose.to"}}</label><input id="c_to" list="addrbook" autocomplete="off"></div>
+  <div><label>Cc</label><input id="c_cc" list="addrbook" autocomplete="off"></div>
+  <div><label>{{t "compose.bcc"}}</label><input id="c_bcc" list="addrbook" autocomplete="off"></div>
+  <datalist id="addrbook"></datalist>
   <div><label>{{t "compose.subject"}}</label><input id="c_subject"></div>
   <div><label>{{t "compose.body"}}</label><textarea id="c_body"></textarea></div>
   <div><label>{{t "compose.attachments"}}</label><div>
@@ -296,6 +297,28 @@ function authFlags(a) {
     return `<span class="flag${bad ? " bad" : ""}" title="${k.toUpperCase()}: ${esc(v)}">${
       k.toUpperCase()}${bad ? " ✗" : " ✓"}</span>`;
   }).join("");
+}
+
+/* ---------------- Addresses ----------------
+   Out of the index, not out of an address book. A <datalist> and not a menu of
+   our own: the browser then does the filtering, the keyboard works the way the
+   reader expects, and there is no second widget to keep accessible.
+
+   Only the part after the last comma is looked up - somebody typing a third
+   recipient is not searching for the first two. */
+let addrTimer = null;
+function wireAddresses(field) {
+  field.oninput = () => {
+    clearTimeout(addrTimer);
+    addrTimer = setTimeout(async () => {
+      const tail = field.value.split(",").pop().trim();
+      try {
+        const d = await api("/api/addresses?q=" + encodeURIComponent(tail));
+        $("#addrbook").innerHTML = (d.addresses || [])
+          .map(a => `<option value="${esc(a.label)}"></option>`).join("");
+      } catch { /* a field that suggests nothing is still a field */ }
+    }, 120);
+  };
 }
 
 /* showPreview puts an attachment on screen without letting it into the page.
@@ -777,6 +800,7 @@ function compose(kind, all) {
   attachments = []; draftKey = "";
   renderAtts();
   fillSnippets();
+  for (const f of ["#c_to", "#c_cc", "#c_bcc"]) wireAddresses($(f));
   $("#c_bcc").value = "";
   $("#c_from").value = over.default_from || "";
   // A new message has no template - everything below reads from m, which is

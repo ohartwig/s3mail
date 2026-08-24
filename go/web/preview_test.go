@@ -89,3 +89,25 @@ func TestTheRouteOnlyShowsWhatItMay(t *testing.T) {
 		t.Errorf("an SVG was shown instead of downloaded: %q", got)
 	}
 }
+
+// Addresses come out of the index, and the field has to be able to ask.
+func TestAddressesAreOffered(t *testing.T) {
+	ts, _ := buildServer(t)
+	d := callServer(t, ts, "GET", "/api/addresses?q=anna", "", nil).json(t)
+	list, _ := d["addresses"].([]any)
+	if len(list) == 0 {
+		t.Fatalf("no address found: %v", d)
+	}
+	first, _ := list[0].(map[string]any)
+	if !strings.Contains(first["label"].(string), "@") {
+		t.Errorf("the label is not usable in the field: %v", first)
+	}
+}
+
+func TestThePageAsksForAddresses(t *testing.T) {
+	for _, anchor := range []string{"/api/addresses", `id="addrbook"`, "wireAddresses"} {
+		if !strings.Contains(PageMailbox, anchor) {
+			t.Errorf("the mailbox page has lost %q", anchor)
+		}
+	}
+}

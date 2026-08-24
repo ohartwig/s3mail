@@ -286,6 +286,11 @@ S3-Konsole, und der Papierkorb lässt sich per Lifecycle-Regel automatisch leere
 - **Signatur** aus den Einstellungen, unter jeder Mail. Sie steht **über** dem
   Zitat – am Ende eines langen Fadens sieht sie sonst niemand – und landet im
   Textfeld statt beim Versand, damit sie vorher noch kürzbar ist.
+- **Adressen werden vorgeschlagen**, während man tippt — aus dem Index, nicht aus
+  einem Adressbuch: ein zweiter Ort für Adressen ist ein zweiter Ort, an dem sie
+  falsch stehen. Sortiert nach Häufigkeit, bei Gleichstand nach Aktualität.
+  Gesucht wird in Adresse *und* Name; nachgeschlagen wird nur, was nach dem
+  letzten Komma steht.
 - **Anhänge**: Dateien anhängen, Cc und Blindkopie. Die Blindkopie geht über die
   Empfängerliste an SES und steht nie im Kopf der Mail – sonst hätten die
   Empfänger sie vor Augen. Bei mehr als 10 MB lehnt s3mail ab, bevor hochgeladen
