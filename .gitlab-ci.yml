@@ -22,20 +22,26 @@ stages:
   - release
 
 variables:
-  # Beide Images aus unserem Mirror, nicht von Docker Hub – siehe
+  # GO_IMAGE aus einem eigenen goldenen Bild (devops/images/golang), nicht
+  # mehr aus dem Minimus-Spiegel: Minimus stellt am 2026-10-22 den Betrieb
+  # ein, und Go ist ein eigenständig gepflegtes Wolfi-Paket – kein Umweg
+  # über einen dritten Spiegel nötig. Internal-sichtbare devops/images/*-
+  # Projekte sind estate-weit ohne Allowlist-Eintrag ziehbar; die Job-Token-
+  # Allowlist unten gilt nur noch für CURL_IMAGE aus devops/ci-mirrors.
+  #
+  # Bei 1.27 geblieben, nicht auf 1.25 zurückgefallen: das Bild-Repository
+  # baut bewusst auf go-1.27, weil dieses Projekt hier schon einmal
+  # (Commit 3f87e3d, 2026-08-23) von 1.25 auf 1.27 gewechselt ist – eine
+  # bereits getroffene Entscheidung, die dieser Umbau fortsetzt, nicht
+  # rückgängig macht. `:1.27` ist der mitlaufende Tag mit der echten
+  # Go-Version, nicht die Release-Zählung des Bild-Repositories selbst (die
+  # steht zusätzlich als unveränderlicher Tag daneben).
+  GO_IMAGE: "registry.ole-hartwig.eu/devops/images/golang:1.27"
+  # Aus unserem Mirror, nicht von Docker Hub – siehe
   # okf://core/engineering/ci-image-access.md und die Katalog-Konvention in
   # devops/ci-cd-components. `development/s3mail` steht auf der
   # Job-Token-Allowlist von devops/ci-mirrors; ohne die kämen bot-getriggerte
-  # Pipelines nicht an die Images, während von Hand angestoßene noch liefen.
-  # Minimus since 2026-08-23 (mirrored as ci-mirrors/golang, the destination
-  # name is ours). `-dev` is required, not preferred: this job compiles, and the
-  # default Minimus variant is distroless -- verified by starting each candidate
-  # as a real job image first.
-  #
-  # This is Go 1.25 -> 1.27. With GOTOOLCHAIN=local below, that is what actually
-  # compiles rather than something the toolchain quietly downloads, which is why
-  # this pipeline is the check for the swap rather than a formality.
-  GO_IMAGE: "registry.ole-hartwig.eu/devops/ci-mirrors/golang:v1.27.0-dev"
+  # Pipelines nicht an das Image, während von Hand angestoßene noch liefen.
   CURL_IMAGE: "registry.ole-hartwig.eu/devops/ci-mirrors/curl:8.19.0-dev"
   # Nicht heimlich eine andere Go-Version ziehen: was im Image ist, gilt.
   GOTOOLCHAIN: "local"
