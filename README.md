@@ -758,6 +758,12 @@ sie melden dann einen Rechtefehler im Klartext.
 - Die **Windows**-Pakete sind nicht signiert, dort meldet sich SmartScreen. Die
   macOS-Pakete sind signiert und notarisiert, für Linux stellt sich die Frage nicht.
 
+## Sicherheit
+
+Meldeweg, Annahmen und das Bedrohungsmodell stehen in
+[`SECURITY.md`](SECURITY.md) — samt dem, was **nicht** abgedeckt ist. Kurz:
+Lücken an `security@ole-hartwig.eu`, nicht als Issue.
+
 ## Lizenz
 
 Apache-2.0. Der volle Text steht in [`LICENSE`](LICENSE), die Namensnennung in
