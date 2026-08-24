@@ -373,7 +373,12 @@ upload:
     - build:windows-amd64
     - sign:macos
     - manifest
-    - job: sign-artifact
+    # Der Jobname der Komponente ist sign:artifact:<Datei> und nicht
+    # sign-artifact. Mit dem falschen Namen zieht GitLab das Artefakt nicht,
+    # der Job laeuft trotzdem gruen, und am Ende verlinkt die Release-Seite
+    # eine Signatur, die nirgends liegt. optional bleibt es, weil die Komponente
+    # den Job nur dort anlegt, wo Signieren ueberhaupt moeglich ist.
+    - job: sign:artifact:SHA256SUMS
       optional: true
   # Nur vollständige Versions-Tags veröffentlichen. Ein Vorab-Tag wie v0.9.0-rc1
   # durchläuft damit Bauen und Signieren vollständig - mit echtem Zertifikat,
@@ -388,8 +393,22 @@ upload:
     # die ins Leere zeigen.
     # Manifest und Signatur liegen im Projektverzeichnis, nicht in go/dist - sie
     # gehören zum Release und nicht zu einem Bauziel.
-    - cp "$CI_PROJECT_DIR/SHA256SUMS" go/dist/ || true
-    - cp "$CI_PROJECT_DIR/SHA256SUMS.sig" go/dist/ || true
+    #
+    # Das Manifest MUSS da sein; fehlt es, ist etwas grundsätzlich schief, und
+    # der Job soll das sagen statt still ein Release ohne Prüfsummen zu bauen.
+    - cp "$CI_PROJECT_DIR/SHA256SUMS" go/dist/
+    # Die Signatur darf fehlen - die Komponente legt ihren Job nur dort an, wo
+    # Signieren möglich ist. Ob sie da war, entscheidet unten, ob die
+    # Release-Seite einen Link darauf bekommt: ein Link auf eine Signatur, die
+    # nirgends liegt, ist schlimmer als kein Link. Genau das ist bei v1.0.0
+    # passiert.
+    - |
+      if cp "$CI_PROJECT_DIR/SHA256SUMS.sig" go/dist/ 2>/dev/null; then
+        echo "SIGNIERT=ja" > "$CI_PROJECT_DIR/release.env"
+      else
+        echo "SIGNIERT=nein" > "$CI_PROJECT_DIR/release.env"
+        echo "Hinweis: keine Signatur zum Manifest - das Release verlinkt keine"
+      fi
     - cd go/dist
     - |
       for f in *.zip *.sha256 SHA256SUMS SHA256SUMS.sig; do
@@ -400,6 +419,10 @@ upload:
           --upload-file "$f" "${PACKAGE_URL}/${CI_COMMIT_TAG}/${f}"
         echo
       done
+  artifacts:
+    reports:
+      # Sagt dem release-Job, ob es eine Signatur zu verlinken gibt.
+      dotenv: release.env
 
 release:
   stage: release
@@ -414,6 +437,13 @@ release:
   rules:
     - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
   script:
+    # Nur verlinken, was auch hochgeladen wurde - siehe upload.
+    - |
+      SIG_LINK=""
+      if [ "${SIGNIERT:-nein}" = "ja" ]; then
+        SIG_LINK=',
+            {"name": "SHA256SUMS.sig", "url": "'"${PACKAGE_URL}/${CI_COMMIT_TAG}"'/SHA256SUMS.sig", "link_type": "other"}'
+      fi
     - |
       cat > /tmp/release.json <<EOF
       {
@@ -426,8 +456,7 @@ release:
             {"name": "s3mail-macos-arm64.zip (Apple Silicon)", "url": "${PACKAGE_URL}/${CI_COMMIT_TAG}/s3mail-macos-arm64.zip", "link_type": "package"},
             {"name": "s3mail-macos-amd64.zip (Intel)", "url": "${PACKAGE_URL}/${CI_COMMIT_TAG}/s3mail-macos-amd64.zip", "link_type": "package"},
             {"name": "s3mail-linux-amd64.zip", "url": "${PACKAGE_URL}/${CI_COMMIT_TAG}/s3mail-linux-amd64.zip", "link_type": "package"},
-            {"name": "SHA256SUMS", "url": "${PACKAGE_URL}/${CI_COMMIT_TAG}/SHA256SUMS", "link_type": "other"},
-            {"name": "SHA256SUMS.sig", "url": "${PACKAGE_URL}/${CI_COMMIT_TAG}/SHA256SUMS.sig", "link_type": "other"}
+            {"name": "SHA256SUMS", "url": "${PACKAGE_URL}/${CI_COMMIT_TAG}/SHA256SUMS", "link_type": "other"}${SIG_LINK}
           ]
         }
       }
