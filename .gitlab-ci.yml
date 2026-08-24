@@ -37,12 +37,10 @@ variables:
   # Go-Version, nicht die Release-Zählung des Bild-Repositories selbst (die
   # steht zusätzlich als unveränderlicher Tag daneben).
   GO_IMAGE: "registry.ole-hartwig.eu/devops/images/golang:1.27"
-  # Aus unserem Mirror, nicht von Docker Hub – siehe
-  # okf://core/engineering/ci-image-access.md und die Katalog-Konvention in
-  # devops/ci-cd-components. `development/s3mail` steht auf der
-  # Job-Token-Allowlist von devops/ci-mirrors; ohne die kämen bot-getriggerte
-  # Pipelines nicht an das Image, während von Hand angestoßene noch liefen.
-  CURL_IMAGE: "registry.ole-hartwig.eu/devops/ci-mirrors/curl:8.19.0-dev"
+  # CURL_IMAGE ebenfalls aus einem eigenen goldenen Bild (devops/images/curl),
+  # nicht mehr aus dem Minimus-Spiegel - selbe Begründung wie bei GO_IMAGE.
+  # `:8.21` ist der mitlaufende Tag mit der echten curl-Version.
+  CURL_IMAGE: "registry.ole-hartwig.eu/devops/images/curl:8.21"
   # Nicht heimlich eine andere Go-Version ziehen: was im Image ist, gilt.
   GOTOOLCHAIN: "local"
   GOFLAGS: "-mod=readonly"
