@@ -11,7 +11,12 @@ import (
 // Folders are real S3 prefixes below the root. What sits directly under it is
 // the inbox; anything with a slash is a subfolder.
 const (
-	Inbox   = ""
+	Inbox = ""
+	// SendingSuffix marks a send in progress - see store/sending.go. It lives
+	// here because Internal has to know it, and Internal is the one place that
+	// decides what counts as mail.
+	SendingSuffix = ".sending"
+
 	Trash   = "trash"
 	Spam    = "spam"
 	Archive = "archiv"
@@ -106,6 +111,12 @@ func (s *Store) KeyFor(mid, folder string) (string, error) {
 // snapshot and the ops folder below it. If any path segment under the root
 // starts with a dot, it is ours - not the mailbox's.
 func (s *Store) Internal(key string) bool {
+	// A send marker lies next to the draft it belongs to, so that no new prefix
+	// appears in the bucket and the proposed IAM policy keeps covering it. It is
+	// bookkeeping, not mail, and must not turn up in the mailbox as a message.
+	if strings.HasSuffix(key, SendingSuffix) {
+		return true
+	}
 	for _, part := range strings.Split(strings.TrimPrefix(key, s.Root), "/") {
 		if strings.HasPrefix(part, ".") {
 			return true

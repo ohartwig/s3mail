@@ -23,7 +23,7 @@ import (
 // deliberate rather than obviously right, the comment says so - a later change
 // should then be a decision too, not an accident.
 
-func korpus(t *testing.T, name string) []byte {
+func corpusFile(t *testing.T, name string) []byte {
 	t.Helper()
 	raw, err := os.ReadFile(filepath.Join("testdata", "corpus", name+".eml"))
 	if err != nil {
@@ -32,13 +32,13 @@ func korpus(t *testing.T, name string) []byte {
 	return raw
 }
 
-var epoche = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+var epoch = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
 
 // Three encoded words, three character sets, one line - and a bare word between
 // them. RFC 2047 allows it, senders do it, and a parser that decodes only the
 // first one produces a subject that looks almost right.
-func TestSubjectInDreiZeichensaetzen(t *testing.T) {
-	got := Summarize(korpus(t, "20-mixed-charset-subject"), epoche).Subject
+func TestSubjectInThreeCharsets(t *testing.T) {
+	got := Summarize(corpusFile(t, "20-mixed-charset-subject"), epoch).Subject
 	want := "Grüße aus München und Zürich"
 	if got != want {
 		t.Errorf("subject:\n  want %q\n  got  %q", want, got)
@@ -48,10 +48,10 @@ func TestSubjectInDreiZeichensaetzen(t *testing.T) {
 // What Outlook actually sends: multipart/related nested inside
 // multipart/alternative, the boundary folded onto the next line with a tab, and
 // quoted-printable that carries its own CRLF as =0D=0A.
-func TestOutlookVerschachtelt(t *testing.T) {
-	raw := korpus(t, "21-outlook-related")
-	s := Summarize(raw, epoche)
-	f := Read(raw, epoche)
+func TestOutlookNesting(t *testing.T) {
+	raw := corpusFile(t, "21-outlook-related")
+	s := Summarize(raw, epoch)
+	f := Read(raw, epoch)
 
 	if !s.HasHTML {
 		t.Error("the HTML part in the nested multipart/related was not found")
@@ -77,8 +77,8 @@ func TestOutlookVerschachtelt(t *testing.T) {
 
 // The other side of that rule: a part that carries a Content-ID *and* says
 // attachment is an attachment. Without this the rule would swallow files.
-func TestContentIDMachtNochKeinenInlineTeil(t *testing.T) {
-	f := Read(korpus(t, "26-cid-but-attachment"), epoche)
+func TestContentIDAloneDoesNotMakeItInline(t *testing.T) {
+	f := Read(corpusFile(t, "26-cid-but-attachment"), epoch)
 	if len(f.Attachments) != 1 {
 		t.Fatalf("%d attachments, expected 1: %+v", len(f.Attachments), f.Attachments)
 	}
@@ -91,8 +91,8 @@ func TestContentIDMachtNochKeinenInlineTeil(t *testing.T) {
 // itself. s3mail does not unpack it - that would be a decoder of its own - but
 // it has to show the blob rather than swallow it. Whoever gets one at least
 // sees that something is there.
-func TestWinmailDatBleibtSichtbar(t *testing.T) {
-	f := Read(korpus(t, "22-winmail-dat"), epoche)
+func TestWinmailDatStaysVisible(t *testing.T) {
+	f := Read(corpusFile(t, "22-winmail-dat"), epoch)
 	if len(f.Attachments) != 1 {
 		t.Fatalf("%d attachments, expected 1", len(f.Attachments))
 	}
@@ -110,10 +110,10 @@ func TestWinmailDatBleibtSichtbar(t *testing.T) {
 
 // Not every sender sets a Message-ID. Nothing may fall over because of it -
 // neither the index nor, further up, the name a draft is stored under.
-func TestOhneMessageID(t *testing.T) {
-	raw := korpus(t, "23-no-message-id")
-	s := Summarize(raw, epoche)
-	f := Read(raw, epoche)
+func TestWithoutMessageID(t *testing.T) {
+	raw := corpusFile(t, "23-no-message-id")
+	s := Summarize(raw, epoch)
+	f := Read(raw, epoch)
 
 	if s.MessageID != "" || f.MessageID != "" {
 		t.Errorf("a Message-ID appeared out of nowhere: %q / %q", s.MessageID, f.MessageID)
@@ -129,10 +129,10 @@ func TestOhneMessageID(t *testing.T) {
 // A character set that does not exist, in the header and in the body. Refusing
 // to read the message would be the wrong answer: the text is almost always
 // readable anyway.
-func TestErfundenerZeichensatz(t *testing.T) {
-	raw := korpus(t, "24-header-latin1-raw")
-	s := Summarize(raw, epoche)
-	f := Read(raw, epoche)
+func TestInventedCharset(t *testing.T) {
+	raw := corpusFile(t, "24-header-latin1-raw")
+	s := Summarize(raw, epoch)
+	f := Read(raw, epoch)
 
 	if s.Subject == "" {
 		t.Error("subject lost over an unknown character set")
@@ -147,12 +147,12 @@ func TestErfundenerZeichensatz(t *testing.T) {
 
 // Six levels of multipart. Deep nesting is what a mail bomb looks like, and it
 // is also what a forwarded forward of a forward looks like.
-func TestSechsEbenenTief(t *testing.T) {
-	raw := korpus(t, "25-deep-nesting")
+func TestSixLevelsDeep(t *testing.T) {
+	raw := corpusFile(t, "25-deep-nesting")
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		f := Read(raw, epoche)
+		f := Read(raw, epoch)
 		if !strings.Contains(f.Text, "Ganz unten") {
 			t.Errorf("the innermost text was not found: %q", f.Text)
 		}
@@ -167,21 +167,21 @@ func TestSechsEbenenTief(t *testing.T) {
 // None of these may panic - that is the floor below every assertion above.
 // Summarize runs on every message during indexing; one bad message would
 // otherwise take the whole mailbox with it.
-func TestKeineDerHaesslichenBringtDenParserUm(t *testing.T) {
+func TestNoneOfThemKillsTheParser(t *testing.T) {
 	for _, name := range []string{
 		"20-mixed-charset-subject", "21-outlook-related", "22-winmail-dat",
 		"23-no-message-id", "24-header-latin1-raw", "25-deep-nesting",
 		"26-cid-but-attachment",
 	} {
-		raw := korpus(t, name)
+		raw := corpusFile(t, name)
 		t.Run(name, func(t *testing.T) {
-			_ = Summarize(raw, epoche)
-			_ = Read(raw, epoche)
+			_ = Summarize(raw, epoch)
+			_ = Read(raw, epoch)
 			// Truncated in the middle: that is what a range GET delivers, and
 			// during indexing it is the normal case rather than the exception.
 			for _, cut := range []int{len(raw) / 2, len(raw) / 3, 64, 1, 0} {
-				_ = Summarize(raw[:cut], epoche)
-				_ = Read(raw[:cut], epoche)
+				_ = Summarize(raw[:cut], epoch)
+				_ = Read(raw[:cut], epoch)
 			}
 		})
 	}
