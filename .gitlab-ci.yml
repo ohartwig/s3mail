@@ -163,6 +163,19 @@ build:linux-amd64:
 # Notarisierung – Gatekeeper lehnt das Ergebnis ab, aber die Mechanik ist
 # geprüft. Sonst fiele ein kaputter Signaturschritt erst auf, wenn ein Release
 # ansteht, und dann ist er teuer.
+#
+# Dass die Grenze der Tag ist und nicht der Zweig, steht nicht nur hier: die
+# Vertrauensrichtlinie der Rolle gitlab-ci-code-signing-role lässt
+# AssumeRoleWithWebIdentity nur für sub=...ref_type:tag:ref:v* zu. Ein Zweiglauf
+# kommt an die Secrets also gar nicht erst heran - er scheitert beim ersten
+# GetSecretValue mit UnrecognizedClientException, was wie ein kaputter Zugang
+# aussieht und keiner ist: die Rollenübernahme davor ist es, die nicht
+# stattfindet. Wer den Schalter hier aufmachte, müsste auch die Richtlinie
+# aufmachen - und damit wäre das Zertifikat über jeden Zweig erreichbar.
+#
+# Für den Probelauf mit echtem Material gibt es deshalb den Vorab-Tag: ein
+# v0.9.0-rc1 wird signiert und notarisiert wie ein Release, veröffentlicht aber
+# keins. upload und release verlangen einen Tag der Form vX.Y.Z, siehe unten.
 # --------------------------------------------------------------------------- #
 sign:macos:
   stage: build
@@ -203,7 +216,7 @@ sign:macos:
           --query SecretString --output text > /tmp/id.pw
         aws secretsmanager get-secret-value --secret-id koh-code-signing/apple-notary-api-key \
           --query SecretString --output text > /tmp/notary.json
-        ECHT=ja
+        REAL=yes
       else
         # Mit openssl statt `rcodesign generate-self-signed-certificate`, und
         # zwar absichtlich: dieselbe openssl-Zeile muss auch den echten
@@ -222,7 +235,7 @@ sign:macos:
           -keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES -macalg sha1 \
           -out /tmp/id.p12 -passout pass:wegwerf
         printf 'wegwerf' > /tmp/id.pw
-        ECHT=nein
+        REAL=no
       fi
     # Absoluter Pfad, nicht `cd go/dist`: GitLab fuehrt alle script-Zeilen in
     # derselben Shell aus, ein zweites relatives cd landet also in go/dist/go/dist.
@@ -230,7 +243,7 @@ sign:macos:
       cd "$CI_PROJECT_DIR/go/dist"
       for LABEL in macos-arm64 macos-amd64; do
         APP="s3mail-${LABEL}.app"
-        if [ "$ECHT" = "ja" ]; then
+        if [ "$REAL" = "yes" ]; then
           # --for-notarization macht drei Dinge auf einmal: verlangt ein echtes
           # Developer-ID-Zertifikat, erzwingt den Zeitstempel und setzt den
           # Hardened Runtime - ohne den lehnt Apple die Notarisierung ab.
@@ -283,8 +296,13 @@ upload:
     - build:linux-amd64
     - build:windows-amd64
     - sign:macos
+  # Nur vollständige Versions-Tags veröffentlichen. Ein Vorab-Tag wie v0.9.0-rc1
+  # durchläuft damit Bauen und Signieren vollständig - mit echtem Zertifikat,
+  # denn IAM erlaubt jedes v* -, legt aber kein Paket ab und erzeugt kein
+  # Release. Das ist der Weg, den Signaturpfad zu prüfen, ohne dass jemand das
+  # Ergebnis herunterladen kann.
   rules:
-    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
   script:
     # Paketversion ist der Tag, wie er ist - dieselbe Zeichenkette, die unten in
     # den Asset-Links steht. Ein hier abgeschnittenes "v" haette Links erzeugt,
@@ -308,15 +326,16 @@ release:
   image: ${CURL_IMAGE}
   before_script: []
   needs: [upload]
+  # Dieselbe Schranke wie bei upload: Vorab-Tags erzeugen kein Release.
   rules:
-    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
   script:
     - |
       cat > /tmp/release.json <<EOF
       {
         "name": "s3mail ${CI_COMMIT_TAG}",
         "tag_name": "${CI_COMMIT_TAG}",
-        "description": "Gebaut aus ${CI_COMMIT_SHA}.\n\n**Starten:** ZIP entpacken und \`s3mail\` ausführen. Auf macOS blockt Gatekeeper das unsignierte Programm beim ersten Mal – einmal \`xattr -dr com.apple.quarantine s3mail\` genügt; unter Windows meldet sich SmartScreen mit *Weitere Informationen → Trotzdem ausführen*.\n\nDanach steht im Terminal eine Adresse mit Token; **ohne die antwortet der Server nicht.** Sie steht außerdem in \`adresse.txt\` im Konfigurationsverzeichnis, falls das Fenster zugeht.\n\nZu jedem Paket liegt eine \`.sha256\`-Datei daneben.",
+        "description": "Gebaut aus ${CI_COMMIT_SHA}.\n\n**macOS:** ZIP entpacken, \`s3mail.app\` doppelklicken. Die Pakete sind mit einer Developer ID signiert und bei Apple notarisiert – kein \`xattr\`, kein Rechtsklick, keine Warnung.\n\n**Windows und Linux:** ZIP entpacken und \`s3mail\` ausführen. Unter Windows meldet sich SmartScreen mit *Weitere Informationen → Trotzdem ausführen* – dort ist nicht signiert.\n\nDas Fenster geht von selbst auf. Die Adresse trägt ein Token, **ohne das der Server nicht antwortet**; sie steht im Terminal und in \`adresse.txt\` im Konfigurationsverzeichnis, falls das Fenster zugeht.\n\nZu jedem Paket liegt eine \`.sha256\`-Datei daneben.",
         "assets": {
           "links": [
             {"name": "s3mail-windows-amd64.zip", "url": "${PAKET_URL}/${CI_COMMIT_TAG}/s3mail-windows-amd64.zip", "link_type": "package"},
