@@ -342,7 +342,8 @@ Scheitert ein Postfach beim Start (falsches Profil, kein Zugriff), kommen die
   geschrieben.
 - Endgültiges Löschen nur aus dem Papierkorb heraus und nur nach Bestätigung
   (serverseitig erzwungen, nicht nur in der UI).
-- Tags mit Farben, mehrere pro Mail, Klick in der Seitenleiste filtert.
+- Tags mit Farben, mehrere pro Mail, Klick in der Seitenleiste filtert. Neue
+  Tags legt das **+** neben der Überschrift an — ohne den Umweg über eine Mail.
 - Gelesen/ungelesen (Zähler pro Ordner), Stern.
 - Mehrfachauswahl per Checkbox, Shift-Klick wählt einen Bereich; dann verschieben,
   taggen, markieren, löschen in einem Rutsch. Das Kästchen in der Werkzeugleiste
@@ -416,6 +417,12 @@ Freie Wörter suchen in Von/An/Betreff/Vorschau/Tags. Dazu Filter, kombinierbar:
 rechnung from:kunde@x.de subject:"Angebot" after:2026-01-01 before:2026-08-01
 has:anhang has:spam is:ungelesen is:stern tag:wichtig in:archiv
 ```
+
+**Eigene Filter.** Was in der Suchzeile steht, merkt das **+** neben *Filter* in
+der Seitenleiste unter einem Namen. Ein Klick darauf schreibt die Suche zurück
+in die Zeile und führt sie aus — sichtbar, änderbar, und nebenbei lernt man die
+Syntax. Die Filter liegen wie Tags und Regeln **im Bucket**: der zweite Rechner
+sieht sie, und nichts davon verschwindet, wenn jemand den Browser-Cache leert.
 
 **Tastatur:** `n` neue Nachricht · `j`/`k` blättern · `x` auswählen · `s` Stern ·
 `e` archivieren · `Entf` Papierkorb · `/` Suche.

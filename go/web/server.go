@@ -313,6 +313,7 @@ func (s *Server) overview(r *http.Request, acc *Account) map[string]any {
 		"folders":      s.localizedFolders(r, acc),
 		"tags":         d.Tags,
 		"rules":        d.Rules,
+		"filters":      notNilFilters(d.Filters),
 		"state_remote": acc.Mailbox.State.RemoteOK(),
 		"allow_delete": acc.Mailbox.AllowDelete,
 		"accounts":     boxes,
@@ -328,6 +329,15 @@ func (s *Server) overview(r *http.Request, acc *Account) map[string]any {
 		// it is not, it is the first thing somebody has to see.
 		"pending_sends": s.pendingSends(acc),
 	}
+}
+
+// notNilFilters keeps the page from reading null.map(...) - the same reason the
+// snippets get this treatment.
+func notNilFilters(l []core.Filter) []core.Filter {
+	if l == nil {
+		return []core.Filter{}
+	}
+	return l
 }
 
 func notNilSnippets(l []config.Snippet) []config.Snippet {
@@ -364,7 +374,8 @@ type request struct {
 	Address string      `json:"address"`
 	// Tags carries the colour map of an imported file. Only /api/rules/import
 	// uses it; everywhere else tags travel as Add and Remove.
-	Tags map[string]string `json:"tags"`
+	Tags    map[string]string `json:"tags"`
+	Filters []core.Filter     `json:"filters"`
 }
 
 func (a request) allKeys() []string {
@@ -609,6 +620,18 @@ func (s *Server) routes() {
 		default:
 			s.writeError(w, http.StatusBadRequest, s.text(r, "error.unknownTagAction"))
 		}
+	})
+
+	// Saved searches. The whole list is written back at once, like the rules -
+	// a filter is small, and a partial update would need an identity for
+	// something that has none.
+	s.post("/api/filters", func(w http.ResponseWriter, r *http.Request, a request, acc *Account) {
+		clean := core.CleanFilters(a.Filters)
+		if err := acc.Mailbox.State.Mutate(r.Context(), core.Op{T: "filters", Filters: clean}); err != nil {
+			s.translate(w, r, err)
+			return
+		}
+		s.json(w, http.StatusOK, with(s.overview(r, acc), map[string]any{"filters": clean}))
 	})
 
 	s.post("/api/rules", func(w http.ResponseWriter, r *http.Request, a request, acc *Account) {

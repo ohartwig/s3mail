@@ -31,7 +31,10 @@ type Data struct {
 	Messages map[string]*Entry `json:"messages"`
 	Tags     map[string]string `json:"tags"`
 	Rules    []Rule            `json:"rules"`
-	Upto     string            `json:"upto,omitempty"`
+	// Filters are saved searches. Here and not in the browser: a second machine
+	// has to see them, and local storage is where work quietly disappears.
+	Filters []Filter `json:"filters,omitempty"`
+	Upto    string   `json:"upto,omitempty"`
 }
 
 func NewData() *Data {
@@ -49,6 +52,9 @@ func (d *Data) Normalize() *Data {
 	}
 	if d.Rules == nil {
 		d.Rules = []Rule{}
+	}
+	if d.Filters == nil {
+		d.Filters = []Filter{}
 	}
 	return d
 }
@@ -73,17 +79,18 @@ func (d *Data) entry(mid string) *Entry {
 // at a time - never a copy of the whole document. Read and Star are pointers
 // because "do not touch" is a different thing from "set to false".
 type Op struct {
-	T      string   `json:"t"`
-	Mids   []string `json:"mids,omitempty"`
-	Read   *bool    `json:"read,omitempty"`
-	Star   *bool    `json:"star,omitempty"`
-	Add    []string `json:"add,omitempty"`
-	Remove []string `json:"remove,omitempty"`
-	Old    string   `json:"old,omitempty"`
-	New    string   `json:"new,omitempty"`
-	Name   string   `json:"name,omitempty"`
-	Color  string   `json:"color,omitempty"`
-	Rules  []Rule   `json:"rules,omitempty"`
+	T       string   `json:"t"`
+	Mids    []string `json:"mids,omitempty"`
+	Read    *bool    `json:"read,omitempty"`
+	Star    *bool    `json:"star,omitempty"`
+	Add     []string `json:"add,omitempty"`
+	Remove  []string `json:"remove,omitempty"`
+	Old     string   `json:"old,omitempty"`
+	New     string   `json:"new,omitempty"`
+	Name    string   `json:"name,omitempty"`
+	Color   string   `json:"color,omitempty"`
+	Rules   []Rule   `json:"rules,omitempty"`
+	Filters []Filter `json:"filters,omitempty"`
 }
 
 // Apply applies one change to a state document - pure, without I/O.
@@ -176,6 +183,8 @@ func Apply(d *Data, op Op) {
 		}
 	case "rules":
 		d.Rules = op.Rules
+	case "filters":
+		d.Filters = op.Filters
 	}
 }
 

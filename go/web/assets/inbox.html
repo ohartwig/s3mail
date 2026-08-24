@@ -441,11 +441,24 @@ function renderSide() {
       <input id="newFolderName" placeholder="${T["side.folderName"]}">
       <button id="newFolderOk">OK</button>
     </div>
-    <div class="sec">${T["side.filter"]}</div>
+    <div class="sec">${T["side.filter"]} <button class="ghost" id="addFilter" title="${T["side.newFilter"]}">+</button></div>
     <div class="nav${onlyUnread ? " sel" : ""}" id="fUnread"><span>●</span><span class="name">${T["filter.unread"]}</span></div>
     <div class="nav${onlyStar ? " sel" : ""}" id="fStar"><span>★</span><span class="name">${T["filter.starred"]}</span></div>
     <div class="nav${waiting ? " sel" : ""}" id="fWaiting"><span>⏳</span><span class="name">${T["filter.waiting"]}</span></div>
-    <div class="sec">${T["side.tags"]}</div>
+    ${(over.filters || []).map(f => `
+      <div class="nav${$("#q").value.trim() === f.query ? " sel" : ""}" data-fq="${esc(f.query)}" title="${esc(f.query)}">
+        <span>🔎</span><span class="name">${esc(f.name)}</span>
+        <span class="star" data-delfilter="${esc(f.name)}" title="${T["side.deleteFilter"]}">✕</span>
+      </div>`).join("")}
+    <div class="side-in" id="newFilterBox" style="display:none">
+      <input id="newFilterName" placeholder="${T["side.filterName"]}">
+      <button id="newFilterOk">OK</button>
+    </div>
+    <div class="sec">${T["side.tags"]} <button class="ghost" id="addTag" title="${T["side.newTag"]}">+</button></div>
+    <div class="side-in" id="newTagBox" style="display:none">
+      <input id="newTagName" placeholder="${T["side.tagName"]}">
+      <button id="newTagOk">OK</button>
+    </div>
     ${tags.length ? tags.map(([name, color]) => `
       <div class="nav${tagFilter === name ? " sel" : ""}" data-t="${esc(name)}">
         <span class="dot" style="background:${esc(color)}"></span>
@@ -468,6 +481,57 @@ function renderSide() {
     if (tagFilter === el.dataset.deltag) tagFilter = null;
     load();
   }));
+  // A saved search puts its query into the search line rather than filtering
+  // behind the scenes: the reader then sees what is being searched for, can
+  // change it, and learns the syntax by using it.
+  $("#side").querySelectorAll("[data-fq]").forEach(el => el.onclick = e => {
+    if (e.target.dataset.delfilter) return;
+    const q = el.dataset.fq;
+    plain();
+    $("#q").value = $("#q").value.trim() === q ? "" : q;
+    load();
+  });
+  $("#side").querySelectorAll("[data-delfilter]").forEach(el => el.onclick = guard(async e => {
+    e.stopPropagation();
+    const rest = (over.filters || []).filter(f => f.name !== el.dataset.delfilter);
+    over = await api("/api/filters", {filters: rest});
+    renderSide();
+  }));
+  $("#addFilter").onclick = e => {
+    e.stopPropagation();
+    if (!$("#q").value.trim()) { toast(T["side.filterNeedsQuery"], true); return; }
+    const box = $("#newFilterBox");
+    box.style.display = box.style.display === "none" ? "flex" : "none";
+    if (box.style.display === "flex") $("#newFilterName").focus();
+  };
+  const saveFilter = guard(async () => {
+    const name = $("#newFilterName").value.trim();
+    const query = $("#q").value.trim();
+    if (!name || !query) return;
+    const rest = (over.filters || []).filter(f => f.name.toLowerCase() !== name.toLowerCase());
+    over = await api("/api/filters", {filters: [...rest, {name, query}]});
+    $("#newFilterName").value = "";
+    renderSide();
+  });
+  $("#newFilterOk").onclick = saveFilter;
+  $("#newFilterName").onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); saveFilter(); } };
+
+  $("#addTag").onclick = e => {
+    e.stopPropagation();
+    const box = $("#newTagBox");
+    box.style.display = box.style.display === "none" ? "flex" : "none";
+    if (box.style.display === "flex") $("#newTagName").focus();
+  };
+  const makeTag = guard(async () => {
+    const name = $("#newTagName").value.trim();
+    if (!name) return;
+    over = await api("/api/tags", {action: "create", name});
+    $("#newTagName").value = "";
+    renderSide();
+  });
+  $("#newTagOk").onclick = makeTag;
+  $("#newTagName").onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); makeTag(); } };
+
   $("#fUnread").onclick = () => { plain(); onlyUnread = !onlyUnread; load(); };
   $("#fStar").onclick = () => { plain(); onlyStar = !onlyStar; load(); };
   $("#fWaiting").onclick = () => { const on = waiting; plain(); waiting = !on; load(); };
@@ -1145,8 +1209,8 @@ $("#ruleFile").onchange = guard(async () => {
     $("#r_err").textContent = T["rules.importBroken"];
     return;
   }
-  const d = await api("/api/rules/import", {method: "POST", body: JSON.stringify(
-    {rules: parsed.rules || [], tags: parsed.tags || {}})});
+  const d = await api("/api/rules/import",
+    {rules: parsed.rules || [], tags: parsed.tags || {}});
   const rep = d.imported || {};
   toast(T["rules.imported"]
     .replace("%a", rep.rules_added || 0)
