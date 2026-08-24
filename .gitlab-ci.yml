@@ -22,7 +22,11 @@
 # und sie prüft die eigene Signatur nach, bevor sie den Job verlässt. Ein
 # zweiter Weg zum selben Schlüssel wäre ein zweiter Weg, ihn falsch zu benutzen.
 include:
-  - component: $CI_SERVER_FQDN/devops/ci-cd-components/build-provenance/sign-artifact@~latest
+  # Voller Tag und nicht ~latest oder @2: build-provenance ist kein
+  # Katalog-Projekt, und dort loest GitLab nur einen vollstaendigen Tag auf.
+  # Renovate haelt ihn nach.
+  # renovate: datasource=gitlab-tags depName=devops/ci-cd-components/build-provenance
+  - component: ${CI_SERVER_HOST}/devops/ci-cd-components/build-provenance/sign-artifact@2.0.46
     inputs:
       stage: release
       artifact-file: SHA256SUMS
