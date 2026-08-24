@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Kai Ole Hartwig <mail@ole-hartwig.eu>
+// SPDX-License-Identifier: Apache-2.0
+
 package core
 
 // Message is an index entry - what s3mail keeps per message so it does not

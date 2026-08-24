@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Kai Ole Hartwig <mail@ole-hartwig.eu>
+// SPDX-License-Identifier: Apache-2.0
+
 // Package wizard serves the /api/setup/* calls: set up AWS access, pick a
 // bucket, test the connection, set the trash lifecycle rule, save.
 package wizard

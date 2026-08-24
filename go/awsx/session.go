@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Kai Ole Hartwig <mail@ole-hartwig.eu>
+// SPDX-License-Identifier: Apache-2.0
+
 // Package awsx connects s3mail to the real AWS: the implementations of store.S3
 // and store.KMS, plus the translation of AWS errors into sentences somebody can
 // act on.

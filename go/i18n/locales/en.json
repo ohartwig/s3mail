@@ -75,6 +75,7 @@
   "cli.host": "default 127.0.0.1",
   "cli.mailboxLine": "Mailbox: %s",
   "cli.mcp": "Run as an MCP server over stdin/stdout (no window, no web server)",
+  "cli.mcpReadonly": "Run the MCP server read-only: no moving, tagging or drafting",
   "cli.noBrowser": "Do not open a browser automatically",
   "cli.noDelete": "Block permanent deletion",
   "cli.noSend": "Turn off SES sending (read-only mode)",

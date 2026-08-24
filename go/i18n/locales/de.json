@@ -75,6 +75,7 @@
   "cli.host": "Standard 127.0.0.1",
   "cli.mailboxLine": "Postfach: %s",
   "cli.mcp": "Als MCP-Server über stdin/stdout laufen (kein Fenster, kein Webserver)",
+  "cli.mcpReadonly": "Als MCP-Server nur lesend laufen: kein Verschieben, Verschlagworten oder Entwerfen",
   "cli.noBrowser": "Browser nicht automatisch öffnen",
   "cli.noDelete": "Endgültiges Löschen sperren",
   "cli.noSend": "SES-Versand abschalten (reiner Lesemodus)",

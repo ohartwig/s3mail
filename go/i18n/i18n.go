@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Kai Ole Hartwig <mail@ole-hartwig.eu>
+// SPDX-License-Identifier: Apache-2.0
+
 // Package i18n holds the interface texts in the languages s3mail ships with.
 //
 // The catalogues are plain JSON files, compiled into the binary. That is a

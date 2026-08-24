@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Kai Ole Hartwig <mail@ole-hartwig.eu>
+// SPDX-License-Identifier: Apache-2.0
+
 // Package mimeparse is s3mail's MIME layer - the part a port would founder on
 // if it foundered anywhere. It is measured against the output of the previous
 // Python parser (testdata/expected.json).

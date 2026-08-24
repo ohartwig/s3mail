@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Kai Ole Hartwig <mail@ole-hartwig.eu>
+// SPDX-License-Identifier: Apache-2.0
+
 // Package core carries s3mail's state: tags, read/unread, star and rules -
 // plus folder logic, the rule engine and search. Nothing here talks to S3 or to
 // HTTP; that keeps the layer testable and is the reason it can be checked one

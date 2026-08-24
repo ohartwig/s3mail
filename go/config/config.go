@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Kai Ole Hartwig <mail@ole-hartwig.eu>
+// SPDX-License-Identifier: Apache-2.0
+
 // Package config holds the configuration file and the writing of AWS
 // credentials. The paths follow each platform's own habits - on Windows
 // nothing ends up in a ~/.config nobody there would look in.

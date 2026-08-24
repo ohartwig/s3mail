@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Kai Ole Hartwig <mail@ole-hartwig.eu>
+// SPDX-License-Identifier: Apache-2.0
+
 // Package store holds everything that talks to S3: the index, moving, and the
 // persistence of the state as an op log. Access runs through a narrow interface,
 // so the layer stays checkable without AWS.

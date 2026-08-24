@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Kai Ole Hartwig <mail@ole-hartwig.eu>
+// SPDX-License-Identifier: Apache-2.0
+
 // Package mailer builds the outgoing message and hands it to SES. Building is
 // separated from delivery so the headers can be checked without AWS - they
 // decide whether a reply lands on the right thread in the recipient's mailbox

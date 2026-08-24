@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Kai Ole Hartwig <mail@ole-hartwig.eu>
+// SPDX-License-Identifier: Apache-2.0
+
 // s3mail - mail client for messages that Amazon SES writes into an S3 bucket
 // as raw MIME.
 //
@@ -50,6 +53,7 @@ func main() {
 		showVersion = flag.Bool("version", false, cat.T("cli.version"))
 		refreshSecs = flag.Int("refresh", 60, cat.T("cli.refresh"))
 		mcpMode     = flag.Bool("mcp", false, cat.T("cli.mcp"))
+		mcpReadOnly = flag.Bool("mcp-readonly", false, cat.T("cli.mcpReadonly"))
 	)
 	flag.Parse()
 
@@ -64,8 +68,8 @@ func main() {
 	// As an MCP server there is no window and no web server: the program is a
 	// tool in somebody else's hands, and stdin and stdout are the whole
 	// interface. Everything below - port, browser, token - is beside the point.
-	if *mcpMode {
-		if err := serveMCP(context.Background(), k); err != nil {
+	if *mcpMode || *mcpReadOnly {
+		if err := serveMCP(context.Background(), k, *mcpReadOnly); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}

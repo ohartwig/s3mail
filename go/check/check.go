@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Kai Ole Hartwig <mail@ole-hartwig.eu>
+// SPDX-License-Identifier: Apache-2.0
+
 // Package check is the connection test from step 3 of the wizard: it walks
 // through what s3mail needs, in order, and names the IAM action behind every
 // item that is missing. This is where somebody without prior AWS knowledge

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Kai Ole Hartwig <mail@ole-hartwig.eu>
+// SPDX-License-Identifier: Apache-2.0
+
 // Package s3fake mimics as much of S3 as s3mail uses: prefix listing, ETags,
 // metadata and server-side encryption. Meant for tests only - hence a package
 // of its own, so none of it can wander into the binary.

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Kai Ole Hartwig <mail@ole-hartwig.eu>
+// SPDX-License-Identifier: Apache-2.0
+
 // Package mcp lets a model work with the mailbox: search, read, file, and write
 // a draft. It speaks the Model Context Protocol over stdin and stdout.
 //

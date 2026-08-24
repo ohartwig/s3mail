@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Kai Ole Hartwig <mail@ole-hartwig.eu>
+// SPDX-License-Identifier: Apache-2.0
+
 // A small program that uses the MIME layer - only to see what a finished
 // binary weighs per platform and whether cross compilation goes through.
 package main
