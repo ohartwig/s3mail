@@ -217,9 +217,30 @@ sign:macos:
     AWS_WEB_IDENTITY_TOKEN_FILE: /tmp/gitlab_oidc_token
   script:
     - echo "$GITLAB_OIDC_TOKEN" > /tmp/gitlab_oidc_token
+    # Statische Schluessel wegraeumen, bevor die CLI sie sieht.
+    #
+    # Von irgendwoher - nicht aus diesem Projekt und nicht aus der Gruppe
+    # development - stehen AWS_ACCESS_KEY_ID und AWS_SECRET_ACCESS_KEY in der
+    # Job-Umgebung. In der Kette der AWS-CLI kommt die Umgebung vor der
+    # Rollenuebernahme ueber OIDC: mit gesetzten Schluesseln werden AWS_ROLE_ARN
+    # und das Token nie angesehen. Die Schluessel taugen nichts (sts
+    # get-caller-identity antwortet InvalidClientTokenId), und der Job scheiterte
+    # deshalb am ersten GetSecretValue mit UnrecognizedClientException - einer
+    # Meldung, die nach kaputtem Secret klingt und nichts damit zu tun hat.
+    #
+    # Hier weg damit. Dieser Job soll ausschliesslich mit der Rolle arbeiten, die
+    # ihm der Tag verschafft; alles andere waere ein zweiter Weg an dasselbe
+    # Signaturmaterial.
+    - unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
     # Auf einem Tag das echte Material, sonst ein Wegwerf-Zertifikat.
     - |
       if [ -n "$CI_COMMIT_TAG" ]; then
+        # Haelt im Protokoll fest, als wer der Job arbeitet. Nur hier drin, nicht
+        # davor: auf einem Zweig gibt es keine Rolle zu uebernehmen - die
+        # Vertrauensrichtlinie laesst nur Tags zu -, und AWS verweigert dann
+        # voellig zu Recht. Eine Kontrollzeile, die den Job umbringt, waere eine
+        # schlechte Kontrollzeile.
+        aws sts get-caller-identity
         aws secretsmanager get-secret-value --secret-id koh-code-signing/apple-developer-id-p12 \
           --query SecretString --output text | base64 -d > /tmp/id.p12
         aws secretsmanager get-secret-value --secret-id koh-code-signing/apple-developer-id-password \
