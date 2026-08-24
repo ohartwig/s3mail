@@ -111,7 +111,17 @@ test:
     # werden, und geheftet (`staple`) wird ohnehin das Bundle, nicht das Archiv.
     - |
       if [ "$ZIEL_OS" = "darwin" ]; then
-        tools/bundle/bauen.sh "dist/${DATEI}" dist "${VERSION}"
+        # CFBundleVersion vertraegt nur Zahlen und Punkte. Was hier als VERSION
+        # ankommt, ist aber ein Tag wie v0.9.0 oder v0.9.0-rc1, bei Zweiglaeufen
+        # sogar eine Commit-Kurz-ID. Also zurechtschneiden: fuehrendes v weg,
+        # Vorab-Anhang weg, und was dann immer noch keine Versionsnummer ist,
+        # wird 0.0.0. Der volle Tag bleibt davon unberuehrt - der steckt ueber
+        # -X main.version im Programm und ist das, was der Nutzer zu sehen kriegt.
+        PLIST_VERSION=$(printf '%s' "${VERSION}" | sed 's/^v//; s/[-+].*$//')
+        case "$PLIST_VERSION" in
+          ''|*[!0-9.]*) PLIST_VERSION=0.0.0 ;;
+        esac
+        tools/bundle/bauen.sh "dist/${DATEI}" dist "${PLIST_VERSION}"
         rm "dist/${DATEI}"
         mv dist/s3mail.app "dist/s3mail-${LABEL}.app"
         exit 0
