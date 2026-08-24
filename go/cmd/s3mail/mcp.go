@@ -19,7 +19,7 @@ import (
 // Deliberately without the sender: the MCP server has no way to send, and it
 // cannot grow one by accident here either. What it can do is write a draft,
 // which a human then sends from s3mail.
-func serveMCP(ctx context.Context, k config.Config) error {
+func serveMCP(ctx context.Context, k config.Config, readOnly bool) error {
 	if len(k.Accounts) == 0 {
 		return errors.New("s3mail is not set up yet - start it once without --mcp")
 	}
@@ -50,5 +50,7 @@ func serveMCP(ctx context.Context, k config.Config) error {
 	if len(accounts) == 0 {
 		return firstErr
 	}
-	return mcp.New(ctx, accounts).Serve(os.Stdin, os.Stdout)
+	srv := mcp.New(ctx, accounts)
+	srv.ReadOnly = readOnly
+	return srv.Serve(os.Stdin, os.Stdout)
 }
