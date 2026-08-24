@@ -561,6 +561,22 @@ spctl -a -vvv -t install s3mail.app     # accepted, source=Notarized Developer I
 Windows bleibt unsigniert – dort meldet sich SmartScreen beim ersten Start mit
 *Weitere Informationen → Trotzdem ausführen*.
 
+**Nachprüfen, dass ein Paket von hier stammt.** Zu jedem Release liegen
+`SHA256SUMS` mit den Prüfsummen aller vier Pakete und `SHA256SUMS.sig`, eine
+abgelöste cosign-Signatur darüber. Die einzelnen `.sha256`-Dateien beantworten
+nur, ob eine Datei heil angekommen ist — wer ein Paket austauscht, tauscht die
+Prüfsumme daneben mit aus. Erst die Signatur sagt etwas darüber, **wer** es
+gebaut hat:
+
+```bash
+cosign verify-blob --key <öffentlicher-Schlüssel> \
+  --signature SHA256SUMS.sig --insecure-ignore-tlog=true SHA256SUMS
+sha256sum -c SHA256SUMS
+```
+
+Für macOS ist das die zweite Absicherung neben der Notarisierung; für Windows
+und Linux, wo im Paket selbst keine Signatur steckt, ist es die einzige.
+
 ### Wenn der Zugang wegfällt
 
 Läuft die SSO-Sitzung ab, wird ein Schlüssel zurückgezogen oder eine Policy
@@ -803,7 +819,8 @@ sie melden dann einen Rechtefehler im Klartext.
   wäre der bessere Weg; er kostet plattformabhängigen Code (macOS Keychain,
   Windows DPAPI, Linux Secret Service) und ist deshalb nicht gebaut.
 - Die **Windows**-Pakete sind nicht signiert, dort meldet sich SmartScreen. Die
-  macOS-Pakete sind signiert und notarisiert, für Linux stellt sich die Frage nicht.
+  macOS-Pakete sind signiert und notarisiert. Für alle vier Plattformen gibt es
+  `SHA256SUMS` mit cosign-Signatur — siehe [Selbst bauen](#selbst-bauen).
 
 ## Sicherheit
 
