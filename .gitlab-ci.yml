@@ -22,20 +22,26 @@ stages:
   - release
 
 variables:
-  # Beide Images aus unserem Mirror, nicht von Docker Hub – siehe
+  # GO_IMAGE aus einem eigenen goldenen Bild (devops/images/golang), nicht
+  # mehr aus dem Minimus-Spiegel: Minimus stellt am 2026-10-22 den Betrieb
+  # ein, und Go ist ein eigenständig gepflegtes Wolfi-Paket – kein Umweg
+  # über einen dritten Spiegel nötig. Internal-sichtbare devops/images/*-
+  # Projekte sind estate-weit ohne Allowlist-Eintrag ziehbar; die Job-Token-
+  # Allowlist unten gilt nur noch für CURL_IMAGE aus devops/ci-mirrors.
+  #
+  # Bei 1.27 geblieben, nicht auf 1.25 zurückgefallen: das Bild-Repository
+  # baut bewusst auf go-1.27, weil dieses Projekt hier schon einmal
+  # (Commit 3f87e3d, 2026-08-23) von 1.25 auf 1.27 gewechselt ist – eine
+  # bereits getroffene Entscheidung, die dieser Umbau fortsetzt, nicht
+  # rückgängig macht. `:1.27` ist der mitlaufende Tag mit der echten
+  # Go-Version, nicht die Release-Zählung des Bild-Repositories selbst (die
+  # steht zusätzlich als unveränderlicher Tag daneben).
+  GO_IMAGE: "registry.ole-hartwig.eu/devops/images/golang:1.27"
+  # Aus unserem Mirror, nicht von Docker Hub – siehe
   # okf://core/engineering/ci-image-access.md und die Katalog-Konvention in
   # devops/ci-cd-components. `development/s3mail` steht auf der
   # Job-Token-Allowlist von devops/ci-mirrors; ohne die kämen bot-getriggerte
-  # Pipelines nicht an die Images, während von Hand angestoßene noch liefen.
-  # Minimus since 2026-08-23 (mirrored as ci-mirrors/golang, the destination
-  # name is ours). `-dev` is required, not preferred: this job compiles, and the
-  # default Minimus variant is distroless -- verified by starting each candidate
-  # as a real job image first.
-  #
-  # This is Go 1.25 -> 1.27. With GOTOOLCHAIN=local below, that is what actually
-  # compiles rather than something the toolchain quietly downloads, which is why
-  # this pipeline is the check for the swap rather than a formality.
-  GO_IMAGE: "registry.ole-hartwig.eu/devops/ci-mirrors/golang:v1.27.0-dev"
+  # Pipelines nicht an das Image, während von Hand angestoßene noch liefen.
   CURL_IMAGE: "registry.ole-hartwig.eu/devops/ci-mirrors/curl:8.19.0-dev"
   # Nicht heimlich eine andere Go-Version ziehen: was im Image ist, gilt.
   GOTOOLCHAIN: "local"
@@ -100,16 +106,18 @@ test:
     # macOS bekommt ein App-Bundle statt einer nackten Unix-Datei. Ein Bundle ist
     # nur eine Verzeichnisstruktur mit einer Info.plist – das entsteht auch auf
     # Linux, ohne Apple-Werkzeug und ohne den Mac, den die Portierung losgeworden ist.
+    # macOS hört hier auf: das Bundle geht als Artefakt an sign:macos, und erst
+    # nach der Signatur wird gezippt. Andersherum müsste das ZIP wieder geöffnet
+    # werden, und geheftet (`staple`) wird ohnehin das Bundle, nicht das Archiv.
     - |
       if [ "$ZIEL_OS" = "darwin" ]; then
         tools/bundle/bauen.sh "dist/${DATEI}" dist "${VERSION}"
         rm "dist/${DATEI}"
-        PAKETINHALT="dist/s3mail.app"
-      else
-        PAKETINHALT="dist/${DATEI}"
+        mv dist/s3mail.app "dist/s3mail-${LABEL}.app"
+        exit 0
       fi
-      go run tools/zip.go "dist/s3mail-${LABEL}.zip" "$PAKETINHALT"
-      rm -rf "$PAKETINHALT"
+      go run tools/zip.go "dist/s3mail-${LABEL}.zip" "dist/${DATEI}"
+      rm -rf "dist/${DATEI}"
     # Als ZIP, damit Ausführungs-Bit und Bundle-Struktur den Download überstehen –
     # eine roh heruntergeladene Datei kommt ohne +x an und startet nicht.
     # Gepackt wird mit Go, nicht mit /usr/bin/zip: das golang-Image bringt es
@@ -139,12 +147,142 @@ build:linux-amd64:
   variables: { ZIEL_OS: linux, ZIEL_ARCH: amd64, LABEL: linux-amd64, DATEI: s3mail }
 
 # --------------------------------------------------------------------------- #
-# Veröffentlichen – nur auf einem Tag
+# Signieren – nur macOS
+#
+# Ohne Signatur *blockiert* Gatekeeper das Programm beim ersten Start, und der
+# einzige Ausweg ist `xattr -dr com.apple.quarantine`. Das ist die Hürde, an der
+# jemand abspringt, der s3mail nicht selbst gebaut hat.
+#
+# Der Job läuft auf `az1a` und das ist keine Kosmetik: die allgemeine Flotte ist
+# IPv6-only, und Apples Notary- und Zeitstempeldienst sind von dort nicht
+# verlässlich erreichbar. Ohne den Tag scheitert die Notarisierung an etwas, das
+# wie ein Netzfehler aussieht und keiner ist.
+#
+# Auf einem Tag wird mit dem echten Developer-ID-Zertifikat signiert und bei
+# Apple notarisiert. Auf allen anderen Läufen mit einem Wegwerf-Zertifikat, ohne
+# Notarisierung – Gatekeeper lehnt das Ergebnis ab, aber die Mechanik ist
+# geprüft. Sonst fiele ein kaputter Signaturschritt erst auf, wenn ein Release
+# ansteht, und dann ist er teuer.
 # --------------------------------------------------------------------------- #
+sign:macos:
+  stage: build
+  # Das goldene Bild bringt rcodesign, die AWS-CLI, openssl und zip mit. Der
+  # eine Job im Bestand, der ein privates Signaturmaterial anfasst, installiert
+  # währenddessen nichts nach und lädt nichts aus dem Netz – vorher waren das
+  # ein `apk add` und ein Download von github.
+  # renovate: datasource=docker depName=registry.ole-hartwig.eu/devops/images/code-signing
+  image: registry.ole-hartwig.eu/devops/images/code-signing:1.0.0
+  tags: [az1a]
+  needs:
+    - build:macos-arm64
+    - build:macos-amd64
+  before_script: []
+  id_tokens:
+    GITLAB_OIDC_TOKEN:
+      aud: https://git.ole-hartwig.eu
+  # KEINE Variable in diesem Job darf mit RCODESIGN_ anfangen. rcodesign liest
+  # seine Konfiguration aus Umgebungsvariablen mit genau diesem Präfix; der Rest
+  # des Namens wird zum Konfigurationsschlüssel, und unbekannte Schlüssel weist
+  # es zurück. Ein RCODESIGN_VERSION - das hier einmal stand - lässt jeden
+  # Aufruf vor der Arbeit sterben:
+  #   configuration file error / problem key: version
+  #   problem: UnknownField("version", ["sign", "remote-sign"])
+  # `rcodesign --version` antwortet dabei weiterhin, was die Suche verschleppt.
+  variables:
+    AWS_DEFAULT_REGION: eu-north-1
+    AWS_ROLE_ARN: arn:aws:iam::714476370938:role/gitlab-ci-code-signing-role
+    AWS_WEB_IDENTITY_TOKEN_FILE: /tmp/gitlab_oidc_token
+  script:
+    - echo "$GITLAB_OIDC_TOKEN" > /tmp/gitlab_oidc_token
+    # Auf einem Tag das echte Material, sonst ein Wegwerf-Zertifikat.
+    - |
+      if [ -n "$CI_COMMIT_TAG" ]; then
+        aws secretsmanager get-secret-value --secret-id koh-code-signing/apple-developer-id-p12 \
+          --query SecretString --output text | base64 -d > /tmp/id.p12
+        aws secretsmanager get-secret-value --secret-id koh-code-signing/apple-developer-id-password \
+          --query SecretString --output text > /tmp/id.pw
+        aws secretsmanager get-secret-value --secret-id koh-code-signing/apple-notary-api-key \
+          --query SecretString --output text > /tmp/notary.json
+        ECHT=ja
+      else
+        # Mit openssl statt `rcodesign generate-self-signed-certificate`, und
+        # zwar absichtlich: dieselbe openssl-Zeile muss auch den echten
+        # Developer-ID-Behälter erzeugen, also wird hier der Weg geprüft, auf den
+        # es ankommt. Für --for-notarization taugt ein selbst erzeugtes
+        # Zertifikat ohnehin nicht - das verlangt ein echtes Developer ID.
+        openssl req -x509 -newkey rsa:2048 -sha256 -days 1 -nodes \
+          -keyout /tmp/wegwerf.key -out /tmp/wegwerf.crt \
+          -subj "/CN=s3mail CI Wegwerf/C=DE" 2>/dev/null
+        # Die drei Schalter sind nicht Zierde: rcodesign liest PKCS#12 über die
+        # Kiste `p12`, die den alten Behälter mit SHA1/3DES kennt und nicht das,
+        # was OpenSSL 3 von sich aus schreibt (PBES2 mit AES-256-CBC). `-legacy`
+        # täte dasselbe, verlangt aber den Legacy-Provider im Bild; 3DES steckt
+        # im Standard-Provider und braucht ihn nicht.
+        openssl pkcs12 -export -inkey /tmp/wegwerf.key -in /tmp/wegwerf.crt \
+          -keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES -macalg sha1 \
+          -out /tmp/id.p12 -passout pass:wegwerf
+        printf 'wegwerf' > /tmp/id.pw
+        ECHT=nein
+      fi
+    # Absoluter Pfad, nicht `cd go/dist`: GitLab fuehrt alle script-Zeilen in
+    # derselben Shell aus, ein zweites relatives cd landet also in go/dist/go/dist.
+    - |
+      cd "$CI_PROJECT_DIR/go/dist"
+      for LABEL in macos-arm64 macos-amd64; do
+        APP="s3mail-${LABEL}.app"
+        if [ "$ECHT" = "ja" ]; then
+          # --for-notarization macht drei Dinge auf einmal: verlangt ein echtes
+          # Developer-ID-Zertifikat, erzwingt den Zeitstempel und setzt den
+          # Hardened Runtime - ohne den lehnt Apple die Notarisierung ab.
+          rcodesign sign --p12-file /tmp/id.p12 --p12-password-file /tmp/id.pw \
+            --for-notarization "$APP"
+          rcodesign notary-submit --api-key-file /tmp/notary.json --staple "$APP"
+        else
+          # Ein selbst erzeugtes Zertifikat ist kein Developer ID, also geht
+          # --for-notarization nicht. Der Hardened Runtime wird trotzdem gesetzt,
+          # damit dieselbe Struktur entsteht wie im Ernstfall.
+          rcodesign sign --p12-file /tmp/id.p12 --p12-password-file /tmp/id.pw \
+            --code-signature-flags runtime "$APP"
+        fi
+        # Gezippt wird hier mit `zip` und nicht mit tools/zip.go: das Signaturbild
+        # führt kein Go, und eine Toolchain dafür nachzuinstallieren wäre genau
+        # das, wogegen das Bild gebaut wurde. Damit gibt es zwei Zipper im
+        # Projekt - deshalb prüft der Schritt darunter die Eigenschaft, um die es
+        # überhaupt geht, statt sich auf das Werkzeug zu verlassen.
+        mv "$APP" s3mail.app
+        zip -q -r -y "s3mail-${LABEL}.zip" s3mail.app
+        rm -rf s3mail.app
+        sha256sum "s3mail-${LABEL}.zip" > "s3mail-${LABEL}.zip.sha256"
+      done
+    # Ein Paket, dessen Ausführungsbit den Weg nicht übersteht, startet auf dem
+    # Zielrechner nicht - und das merkt man erst dort. Also hier nachsehen.
+    - |
+      cd "$CI_PROJECT_DIR/go/dist"
+      for LABEL in macos-arm64 macos-amd64; do
+        rm -rf pruef && mkdir pruef && unzip -q "s3mail-${LABEL}.zip" -d pruef
+        BIN=pruef/s3mail.app/Contents/MacOS/s3mail
+        test -x "$BIN" || { echo "FEHLER: $LABEL - Ausfuehrungsbit verloren"; exit 1; }
+        test -f pruef/s3mail.app/Contents/Info.plist || { echo "FEHLER: $LABEL - Info.plist fehlt"; exit 1; }
+        test -d pruef/s3mail.app/Contents/_CodeSignature || { echo "FEHLER: $LABEL - keine Signatur im Bundle"; exit 1; }
+        echo "$LABEL: Bundle vollstaendig, ausfuehrbar, signiert"
+        rm -rf pruef
+      done
+    - rm -f /tmp/id.p12 /tmp/id.pw /tmp/notary.json /tmp/wegwerf.key /tmp/wegwerf.crt
+  artifacts:
+    paths:
+      - go/dist/
+    expire_in: 1 month
+
 upload:
   stage: release
   image: ${CURL_IMAGE}
   before_script: []
+  # Ausdrücklich benannt, damit die macOS-Pakete aus sign:macos kommen und nicht
+  # aus den Build-Jobs: die liefern seit der Signatur nur noch das nackte Bundle.
+  needs:
+    - build:linux-amd64
+    - build:windows-amd64
+    - sign:macos
   rules:
     - if: $CI_COMMIT_TAG
   script:
