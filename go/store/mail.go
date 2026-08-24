@@ -52,10 +52,16 @@ type Mailbox struct {
 
 	State   *State
 	content *bodyCache
+	// cacheKey encrypts the index and the message bodies on disk. Empty when
+	// plain text was asked for deliberately.
+	cacheKey []byte
 }
 
+// cacheKey encrypts everything this mailbox writes to disk. Empty means plain
+// text, and that is a decision the caller has to make out loud - see
+// cachecrypt.go for why it matters and cmd/s3mail for who decides.
 func NewMailbox(ctx context.Context, s3 S3, kms KMS, bucket, root, cacheDir string,
-	allowDelete bool) *Mailbox {
+	cacheKey []byte, allowDelete bool) *Mailbox {
 	st := core.NewStore(root)
 	slug := regexp.MustCompile(`[^A-Za-z0-9_.-]`).ReplaceAllString(bucket+"__"+st.Root, "_")
 	if slug == "" {
@@ -64,13 +70,14 @@ func NewMailbox(ctx context.Context, s3 S3, kms KMS, bucket, root, cacheDir stri
 	m := &Mailbox{
 		s3: s3, kms: kms, bucket: bucket, Store: st,
 		AllowDelete: allowDelete, Workers: 8,
-		index: map[string]core.Message{},
+		index:    map[string]core.Message{},
+		cacheKey: cacheKey,
 	}
 	if cacheDir != "" {
 		_ = os.MkdirAll(cacheDir, 0o700)
 		m.CacheFile = filepath.Join(cacheDir, slug+".json")
 		m.readCache()
-		m.content = newBodyCache(filepath.Join(cacheDir, slug+".bodies"))
+		m.content = newBodyCache(filepath.Join(cacheDir, slug+".bodies"), cacheKey)
 	}
 	local := ""
 	if cacheDir != "" {
@@ -573,8 +580,14 @@ func (m *Mailbox) ApplyRules(ctx context.Context, pool []core.Message, force boo
 const indexVersion = 4
 
 func (m *Mailbox) readCache() {
-	blob, err := os.ReadFile(m.CacheFile)
+	raw, err := os.ReadFile(m.CacheFile)
 	if err != nil {
+		return
+	}
+	blob, err := open(m.cacheKey, raw)
+	if err != nil {
+		// A key that no longer fits means a new key, or a file from another
+		// machine. The cache is a cache: it gets rebuilt.
 		return
 	}
 	var d struct {
@@ -596,6 +609,10 @@ func (m *Mailbox) writeCache() {
 		Messages map[string]core.Message `json:"messages"`
 	}{indexVersion, m.index})
 	m.mu.RUnlock()
+	if err != nil {
+		return
+	}
+	blob, err = seal(m.cacheKey, blob)
 	if err != nil {
 		return
 	}

@@ -29,7 +29,7 @@ func TestWithoutACacheNothingReachesTheDisk(t *testing.T) {
 		"Content-Type: text/plain; charset=utf-8\r\n\r\nVertraulich.\r\n"))
 
 	// Empty cache directory: the mailbox is told to keep nothing.
-	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", "", true)
+	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", "", testCacheKey, true)
 	if _, err := mb.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +57,7 @@ func TestWithACacheTheFilesAppear(t *testing.T) {
 	f := s3fake.New()
 	f.Store("mail/m1", []byte("From: a@b.de\r\nSubject: x\r\n\r\ny\r\n"))
 
-	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", dir, true)
+	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", dir, testCacheKey, true)
 	if _, err := mb.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}

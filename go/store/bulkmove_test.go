@@ -29,7 +29,7 @@ func filledMailbox(t *testing.T, n int) (*s3fake.Fake, *store.Mailbox, []string)
 				"Date: Mon, 03 Aug 2026 09:00:00 +0000\r\n\r\nText.\r\n", i)))
 		keys = append(keys, key)
 	}
-	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), true)
+	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, true)
 	if _, err := mb.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -102,3 +102,8 @@ func TestWhatMovedBeforeTheFailureStaysMoved(t *testing.T) {
 		}
 	}
 }
+
+// testCacheKey encrypts what the tests write to disk, like the real thing.
+// Fixed rather than random: a test that wants to look at a cache file has to be
+// able to open it.
+var testCacheKey = []byte("0123456789abcdef0123456789abcdef")

@@ -19,7 +19,7 @@ import (
 func serverForEvents(t *testing.T) (*httptest.Server, *Server) {
 	t.Helper()
 	f := s3fake.New()
-	mb := store.NewMailbox(context.Background(), f, nil, "test-bucket", "mail/", t.TempDir(), true)
+	mb := store.NewMailbox(context.Background(), f, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, true)
 	srv := NewServer(one(mb), testToken, "127.0.0.1", 0, nil)
 	ts := httptest.NewServer(srv)
 	t.Cleanup(ts.Close)

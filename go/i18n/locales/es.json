@@ -304,6 +304,7 @@
   "sending.wentOut": "Sí salió",
   "sending.didNot": "No salió",
   "cli.noCache": "No guardar nada en disco: sin índice, sin cuerpos de mensaje, sin estado local",
+  "cli.cachePlaintext": "Escribir la caché sin cifrar cuando no hay llavero",
   "cli.debug": "Registrar las llamadas a S3 y SES (claves, tamaños, duración; sin contenido de mensajes)",
   "auth.gone": "Ya no hay acceso a AWS",
   "auth.retry": "Reintentar",
@@ -326,5 +327,6 @@
   "side.newFilter": "Guardar la búsqueda actual como filtro",
   "side.filterName": "Nombre del filtro",
   "side.deleteFilter": "Quitar filtro",
-  "side.filterNeedsQuery": "Escribe algo en la búsqueda primero: el filtro recuerda lo que hay ahí"
+  "side.filterNeedsQuery": "Escribe algo en la búsqueda primero: el filtro recuerda lo que hay ahí",
+  "cli.noKeyring": "Esta máquina no tiene un llavero donde s3mail pueda guardar la clave de la caché.\n\nLa caché contiene mensajes completos, incluidos los que llegaron cifrados al bucket. Escribirlos en claro anularía justo lo que promete el cifrado del bucket.\n\nDos salidas:\n  --no-cache          no guardar nada en disco, indexar en cada arranque\n  --cache-plaintext   como antes, en claro, elegido a propósito\n\nEn Linux suele ayudar instalar secret-tool (paquete libsecret-tools)."
 }

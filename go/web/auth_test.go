@@ -22,7 +22,7 @@ import (
 
 func authServer(t *testing.T, f *s3fake.Fake) *httptest.Server {
 	t.Helper()
-	mb := store.NewMailbox(context.Background(), f, nil, "test-bucket", "mail/", t.TempDir(), true)
+	mb := store.NewMailbox(context.Background(), f, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, true)
 	accounts := one(mb)
 	accounts[0].Profile = "arbeit"
 	srv := NewServer(accounts, testToken, "127.0.0.1", 0, nil)

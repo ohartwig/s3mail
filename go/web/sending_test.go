@@ -21,7 +21,7 @@ import (
 func serverWith(t *testing.T, f *s3fake.Fake) (*httptest.Server, *Server, *store.Mailbox) {
 	t.Helper()
 	ctx := context.Background()
-	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), true)
+	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, true)
 	accounts := one(mb)
 	accounts[0].Sender = &fakeSender{}
 	srv := NewServer(accounts, testToken, "127.0.0.1", 0, nil)

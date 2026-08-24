@@ -409,7 +409,7 @@ func TestWholeMailboxThroughTheAdapter(t *testing.T) {
 		"Content-Type: text/plain; charset=utf-8\r\n\r\nAnbei.\r\n")
 	a, _ := adapter(t, srv)
 
-	mb := store.NewMailbox(ctx, a, nil, "test-bucket", "mail/", t.TempDir(), true)
+	mb := store.NewMailbox(ctx, a, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, true)
 	if _, err := mb.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -423,7 +423,7 @@ func TestWholeMailboxThroughTheAdapter(t *testing.T) {
 		t.Errorf("not moved: %v", key(srv))
 	}
 	// the state lands in the bucket and is read by a second mailbox
-	other := store.NewMailbox(ctx, a, nil, "test-bucket", "mail/", t.TempDir(), true)
+	other := store.NewMailbox(ctx, a, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, true)
 	if _, err := other.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}

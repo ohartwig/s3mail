@@ -29,17 +29,21 @@ const CacheMax = 256 << 20 // 256 MB
 // out by itself.
 type bodyCache struct {
 	dir string
+	// key encrypts every body on the way to disk. These files are whole
+	// messages - including the ones that arrived client-side encrypted, which
+	// s3mail has to decrypt in order to show them.
+	key []byte
 	mu  sync.Mutex
 }
 
-func newBodyCache(dir string) *bodyCache {
+func newBodyCache(dir string, key []byte) *bodyCache {
 	if dir == "" {
 		return nil
 	}
 	if os.MkdirAll(dir, 0o700) != nil {
 		return nil
 	}
-	return &bodyCache{dir: dir}
+	return &bodyCache{dir: dir, key: key}
 }
 
 func (c *bodyCache) path(etag string) string {
@@ -54,8 +58,14 @@ func (c *bodyCache) read(etag string) ([]byte, bool) {
 		return nil, false
 	}
 	p := c.path(etag)
-	b, err := os.ReadFile(p)
+	raw, err := os.ReadFile(p)
 	if err != nil {
+		return nil, false
+	}
+	b, err := open(c.key, raw)
+	if err != nil {
+		// Written with another key. Treat it as a miss and fetch again; the file
+		// is replaced on the way out.
 		return nil, false
 	}
 	// Touch the access time, so eviction hits the rarely used entries and not the
@@ -72,8 +82,12 @@ func (c *bodyCache) put(etag string, body []byte) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	blob, err := seal(c.key, body)
+	if err != nil {
+		return
+	}
 	tmp := c.path(etag) + ".tmp"
-	if os.WriteFile(tmp, body, 0o600) != nil {
+	if os.WriteFile(tmp, blob, 0o600) != nil {
 		return
 	}
 	if os.Rename(tmp, c.path(etag)) != nil {

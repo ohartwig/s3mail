@@ -37,7 +37,7 @@ func buildServer(t *testing.T) (*httptest.Server, *store.Mailbox) {
 	f.Store("mail/archiv/alt1", rawMail("Alt <alt@firma.de>", "Altes", "Alter Text.",
 		"Wed, 01 Jul 2026 08:00:00 +0000"))
 
-	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), true)
+	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, true)
 	if _, err := mb.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +183,7 @@ func TestReadMailAndAttachment(t *testing.T) {
 		"--B\r\nContent-Type: application/pdf\r\n"+
 		"Content-Disposition: attachment; filename=\"Rechnung.pdf\"\r\n\r\n"+
 		"%PDF-fake\r\n--B--\r\n"))
-	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), true)
+	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, true)
 	if _, err := mb.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -348,7 +348,7 @@ func TestAutoRefreshIsShipped(t *testing.T) {
 	ctx := context.Background()
 	f := s3fake.New()
 	f.Store("mail/m1", rawMail("a@b.de", "x", "y", "Mon, 03 Aug 2026 09:00:00 +0000"))
-	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), true)
+	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, true)
 	if _, err := mb.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}

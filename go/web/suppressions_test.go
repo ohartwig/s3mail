@@ -21,7 +21,7 @@ func serverWithSuppressions(t *testing.T, l SuppressionList) (*httptest.Server, 
 	t.Helper()
 	ctx := context.Background()
 	f := s3fake.New()
-	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), true)
+	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, true)
 	accounts := one(mb)
 	accounts[0].Blocked = l
 	srv := NewServer(accounts, testToken, "127.0.0.1", 0, nil)

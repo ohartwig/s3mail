@@ -304,6 +304,7 @@
   "sending.wentOut": "War raus",
   "sending.didNot": "Ging nicht raus",
   "cli.noCache": "Nichts auf Platte zwischenspeichern: kein Index, keine Mailtexte, kein lokaler Zustand",
+  "cli.cachePlaintext": "Cache unverschluesselt schreiben, wenn kein Schluesselbund da ist",
   "cli.debug": "Aufrufe an S3 und SES protokollieren (Schluessel, Groessen, Dauer – keine Mailinhalte)",
   "auth.gone": "Kein Zugriff auf AWS mehr",
   "auth.retry": "Erneut versuchen",
@@ -326,5 +327,6 @@
   "side.newFilter": "Aktuelle Suche als Filter merken",
   "side.filterName": "Name des Filters",
   "side.deleteFilter": "Filter entfernen",
-  "side.filterNeedsQuery": "Erst etwas in die Suche tippen – der Filter merkt sich, was dort steht"
+  "side.filterNeedsQuery": "Erst etwas in die Suche tippen – der Filter merkt sich, was dort steht",
+  "cli.noKeyring": "Auf diesem Rechner gibt es keinen Schluesselbund, in dem s3mail den Schluessel fuer den lokalen Cache ablegen koennte.\n\nIm Cache liegen ganze Mailtexte - auch die, die verschluesselt im Bucket ankamen. Unverschluesselt auf der Platte waere das genau die Zusage, die der Bucket gibt, wieder aufgehoben.\n\nZwei Wege:\n  --no-cache          nichts auf Platte, dafuer bei jedem Start neu indexieren\n  --cache-plaintext   wie bisher, im Klartext - bewusst gewaehlt\n\nUnter Linux hilft oft: secret-tool installieren (Paket libsecret-tools)."
 }

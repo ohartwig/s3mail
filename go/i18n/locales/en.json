@@ -304,6 +304,7 @@
   "sending.wentOut": "It went out",
   "sending.didNot": "It did not",
   "cli.noCache": "Keep nothing on disk: no index, no message bodies, no local state",
+  "cli.cachePlaintext": "Write the cache unencrypted when there is no keyring",
   "cli.debug": "Log the calls to S3 and SES (keys, sizes, durations - no message content)",
   "auth.gone": "No access to AWS any more",
   "auth.retry": "Try again",
@@ -326,5 +327,6 @@
   "side.newFilter": "Save the current search as a filter",
   "side.filterName": "Filter name",
   "side.deleteFilter": "Remove filter",
-  "side.filterNeedsQuery": "Type something into the search first - the filter remembers what is there"
+  "side.filterNeedsQuery": "Type something into the search first - the filter remembers what is there",
+  "cli.noKeyring": "This machine has no keyring for s3mail to keep the cache key in.\n\nThe cache holds whole messages - including the ones that arrived encrypted in the bucket. Writing them in plain text would undo exactly what the bucket's encryption promises.\n\nTwo ways out:\n  --no-cache          keep nothing on disk, index again on every start\n  --cache-plaintext   as before, in plain text - chosen on purpose\n\nOn Linux, installing secret-tool (package libsecret-tools) often helps."
 }
