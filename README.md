@@ -705,6 +705,18 @@ sie melden dann einen Rechtefehler im Klartext.
 - Die **Windows**-Pakete sind nicht signiert, dort meldet sich SmartScreen. Die
   macOS-Pakete sind signiert und notarisiert, für Linux stellt sich die Frage nicht.
 
+## Lizenz
+
+Apache-2.0. Der volle Text steht in [`LICENSE`](LICENSE), die Namensnennung in
+[`NOTICE`](NOTICE); jede Quelldatei trägt den SPDX-Bezeichner im Kopf.
+
+Kurz, ohne Anspruch auf Rechtsberatung: benutzen, ändern, weitergeben und
+verkaufen ist erlaubt, auch geschlossen. Beizulegen sind Lizenz und NOTICE, und
+geänderte Dateien müssen als geändert gekennzeichnet sein. Die Patentklausel in
+Abschnitt 3 ist der Grund für Apache-2.0 statt MIT: sie gibt jedem Nutzer
+ausdrücklich die Patentrechte an dem, was hier drinsteckt, und nimmt sie dem
+wieder weg, der deswegen klagt.
+
 ## Tests
 
 ```bash

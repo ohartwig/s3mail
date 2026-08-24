@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Kai Ole Hartwig <mail@ole-hartwig.eu>
+// SPDX-License-Identifier: Apache-2.0
+
 // s3mail - mail client for messages that Amazon SES writes into an S3 bucket
 // as raw MIME.
 //

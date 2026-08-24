@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Kai Ole Hartwig <mail@ole-hartwig.eu>
+// SPDX-License-Identifier: Apache-2.0
+
 // Package web is the local server: routes, access control and the interface. The
 // pages lie next to it as real files and are compiled in - no generator, no
 // gluing of strings.

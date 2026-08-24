@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Kai Ole Hartwig <mail@ole-hartwig.eu>
+// SPDX-License-Identifier: Apache-2.0
+
 // Package lint holds the checks that watch over the conventions rather than the
 // behaviour. They live in their own package because they belong to nothing that
 // ships - they walk the source tree instead of calling into it.
