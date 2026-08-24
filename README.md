@@ -185,6 +185,7 @@ ein Schalter kann nicht sagen, welches von mehreren er meint:
 | `--port` / `--host` | Standard `127.0.0.1:8765` |
 | `--no-browser` | Browser nicht automatisch öffnen |
 | `--no-cache` | Nichts auf Platte zwischenspeichern (siehe [Grenzen](#grenzen)) |
+| `--debug` | Aufrufe an S3 und SES protokollieren – Schlüssel, Größen, Dauer, **keine Mailinhalte** |
 | `--refresh` | Sekunden zwischen automatischen Abgleichen, `0` schaltet ab (Standard 60) |
 | `--version` | Version ausgeben und beenden |
 | `--mcp` | Als MCP-Server über stdin/stdout laufen (siehe [unten](#für-ein-modell-erreichbar---mcp)) |

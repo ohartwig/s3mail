@@ -304,6 +304,7 @@
   "sending.wentOut": "War raus",
   "sending.didNot": "Ging nicht raus",
   "cli.noCache": "Nichts auf Platte zwischenspeichern: kein Index, keine Mailtexte, kein lokaler Zustand",
+  "cli.debug": "Aufrufe an S3 und SES protokollieren (Schluessel, Groessen, Dauer – keine Mailinhalte)",
   "auth.gone": "Kein Zugriff auf AWS mehr",
   "auth.retry": "Erneut versuchen",
   "view.authFailShort": "Absender ungeprüft",

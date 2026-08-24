@@ -304,6 +304,7 @@
   "sending.wentOut": "Sí salió",
   "sending.didNot": "No salió",
   "cli.noCache": "No guardar nada en disco: sin índice, sin cuerpos de mensaje, sin estado local",
+  "cli.debug": "Registrar las llamadas a S3 y SES (claves, tamaños, duración; sin contenido de mensajes)",
   "auth.gone": "Ya no hay acceso a AWS",
   "auth.retry": "Reintentar",
   "view.authFailShort": "Remitente no verificado",

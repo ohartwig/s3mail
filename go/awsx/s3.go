@@ -31,6 +31,13 @@ func NewS3(cfg aws.Config, endpoint string) *S3 {
 	})}
 }
 
+// NewS3Client returns what store works with, with the debug log wrapped around
+// it when one is on. The wrapper is deliberately a decorator over this narrow
+// interface rather than the SDK's own request logging - see debug.go for why.
+func NewS3Client(cfg aws.Config, endpoint string) store.S3 {
+	return WrapForDebug(NewS3(cfg, endpoint))
+}
+
 // List pages through the prefix completely - a mailbox easily holds more than
 // the 1000 objects one page carries.
 func (a *S3) List(ctx context.Context, bucket, prefix string) ([]store.ObjectInfo, error) {

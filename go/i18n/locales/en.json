@@ -304,6 +304,7 @@
   "sending.wentOut": "It went out",
   "sending.didNot": "It did not",
   "cli.noCache": "Keep nothing on disk: no index, no message bodies, no local state",
+  "cli.debug": "Log the calls to S3 and SES (keys, sizes, durations - no message content)",
   "auth.gone": "No access to AWS any more",
   "auth.retry": "Try again",
   "view.authFailShort": "Sender unverified",
