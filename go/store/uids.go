@@ -27,15 +27,42 @@ import (
 // This runs on every refresh even when nothing is new. That is cheap: AssignUIDs
 // skips what is already numbered, and an op with no messages is never written.
 
-// assignUIDs numbers everything in the index that has no number yet.
+// EnsureUIDs numbers everything in a folder that has no number yet.
 //
-// It is called at the end of Refresh, deliberately after the index is complete:
-// a message that arrived in this pass should get its number in this pass, or an
-// IMAP client would see it appear without a UID and have to come back.
-func (m *Mailbox) assignUIDs(ctx context.Context) error {
+// Called when somebody asks for the numbering of a folder - which today is
+// nobody, and tomorrow is an IMAP server selecting it. Deliberately not on
+// every refresh:
+//
+// Numbers cost. They live in the state document, which every machine downloads
+// on every start, and they cost about fifteen bytes per message - measured, not
+// guessed: five thousand messages produce seventy-four kilobytes of pure
+// numbering. A mailbox whose owner never touches IMAP would carry that forever
+// for nothing.
+//
+// Numbering on demand is also correct rather than merely cheap. A UID has to be
+// stable from the moment a client first sees it, and no client has seen
+// anything before it selects the folder. Handing out numbers into an empty room
+// buys nothing and pays for it every time.
+//
+// The empty string is the inbox, as everywhere else here.
+func (m *Mailbox) EnsureUIDs(ctx context.Context, folder string) error {
+	return m.assignUIDs(ctx, &folder)
+}
+
+// EnsureAllUIDs numbers every folder. For the moment an IMAP server starts and
+// wants to answer LIST with sensible counts.
+func (m *Mailbox) EnsureAllUIDs(ctx context.Context) error {
+	return m.assignUIDs(ctx, nil)
+}
+
+// assignUIDs does the work for one folder, or for all of them when only is nil.
+func (m *Mailbox) assignUIDs(ctx context.Context, only *string) error {
 	byFolder := map[string][]core.Message{}
 	m.mu.RLock()
 	for _, msg := range m.index {
+		if only != nil && msg.Folder != *only {
+			continue
+		}
 		byFolder[msg.Folder] = append(byFolder[msg.Folder], msg)
 	}
 	m.mu.RUnlock()
@@ -87,9 +114,8 @@ func (m *Mailbox) retireUIDs(ctx context.Context, folder string, mids []string) 
 	return m.State.Mutate(ctx, core.Op{T: "uidretire", Folder: folder, Mids: mids})
 }
 
-// UID is what an IMAP server will ask for. Here already, so that the numbering
-// has a reader before the server exists - a number nobody can look up is a
-// number nobody can check.
+// UID is what an IMAP server will ask for. It does not number on its own: a
+// getter that writes to the bucket would be a surprise. Call EnsureUIDs first.
 func (m *Mailbox) UID(folder, mid string) (uint32, bool) {
 	return m.State.Data().UID(folder, mid)
 }

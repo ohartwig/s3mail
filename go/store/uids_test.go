@@ -49,6 +49,9 @@ func TestRefreshNumbersWhatArrived(t *testing.T) {
 	if _, err := mb.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
+	if err := mb.EnsureAllUIDs(ctx); err != nil {
+		t.Fatal(err)
+	}
 
 	// Ascending by arrival, not by key: "zweite" sorts before "erste"
 	// alphabetically, and a client that trusts UIDs would get the order wrong.
@@ -74,10 +77,16 @@ func TestASecondRefreshChangesNothing(t *testing.T) {
 	if _, err := mb.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
+	if err := mb.EnsureAllUIDs(ctx); err != nil {
+		t.Fatal(err)
+	}
 	before := numbered(t, mb, "", "a", "b")
 
 	storeAt(f, "mail/c", base.Add(2*time.Hour))
 	if _, err := mb.Refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := mb.EnsureAllUIDs(ctx); err != nil {
 		t.Fatal(err)
 	}
 	after := numbered(t, mb, "", "a", "b")
@@ -105,6 +114,9 @@ func TestMovingRetiresTheOldNumber(t *testing.T) {
 	if _, err := mb.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
+	if err := mb.EnsureAllUIDs(ctx); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := mb.Move(ctx, []string{"mail/a"}, "archiv"); err != nil {
 		t.Fatal(err)
 	}
@@ -115,12 +127,18 @@ func TestMovingRetiresTheOldNumber(t *testing.T) {
 	if _, err := mb.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
+	if err := mb.EnsureAllUIDs(ctx); err != nil {
+		t.Fatal(err)
+	}
 	if n := numbered(t, mb, "archiv", "a")[0]; n != 1 {
 		t.Errorf("in the target folder it got %d, expected 1", n)
 	}
 	// The inbox does not reuse number 1 for the next arrival.
 	storeAt(f, "mail/c", base.Add(2*time.Hour))
 	if _, err := mb.Refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := mb.EnsureAllUIDs(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if n := numbered(t, mb, "", "c")[0]; n == 1 {
@@ -143,8 +161,14 @@ func TestTwoMachinesNumberAlike(t *testing.T) {
 	if _, err := first.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
+	if err := first.EnsureAllUIDs(ctx); err != nil {
+		t.Fatal(err)
+	}
 	second := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, true)
 	if _, err := second.Refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := second.EnsureAllUIDs(ctx); err != nil {
 		t.Fatal(err)
 	}
 
@@ -174,7 +198,65 @@ func TestFoldersCountSeparately(t *testing.T) {
 	if _, err := mb.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
+	if err := mb.EnsureAllUIDs(ctx); err != nil {
+		t.Fatal(err)
+	}
 	if numbered(t, mb, "", "a")[0] != 1 || numbered(t, mb, "archiv", "b")[0] != 1 {
 		t.Error("the folders do not number independently")
+	}
+}
+
+// The property that makes pausing IMAP free: a refresh alone writes no numbers.
+//
+// Numbers cost about fifteen bytes per message in the state document that every
+// machine downloads on every start - five thousand messages produce seventy-four
+// kilobytes of pure numbering. A mailbox whose owner never touches IMAP must not
+// pay that.
+func TestARefreshAloneNumbersNothing(t *testing.T) {
+	ctx := context.Background()
+	f := s3fake.New()
+	storeAt(f, "mail/a", time.Date(2026, 8, 1, 9, 0, 0, 0, time.UTC))
+
+	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, true)
+	if _, err := mb.Refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := mb.UID("", "a"); ok {
+		t.Error("a plain refresh handed out a number")
+	}
+	if folders := mb.State.Data().UIDFolders(); len(folders) != 0 {
+		t.Errorf("the state carries numbering for %v without anybody asking", folders)
+	}
+
+	// And on request it is there.
+	if err := mb.EnsureUIDs(ctx, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := mb.UID("", "a"); !ok {
+		t.Error("no number even after EnsureUIDs")
+	}
+}
+
+// Asking for one folder must not number the others - that would give away the
+// saving again.
+func TestEnsureTouchesOnlyTheFolderAsked(t *testing.T) {
+	ctx := context.Background()
+	f := s3fake.New()
+	base := time.Date(2026, 8, 1, 9, 0, 0, 0, time.UTC)
+	storeAt(f, "mail/a", base)
+	storeAt(f, "mail/archiv/b", base)
+
+	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, true)
+	if _, err := mb.Refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := mb.EnsureUIDs(ctx, "archiv"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := mb.UID("archiv", "b"); !ok {
+		t.Error("the folder that was asked for has no numbering")
+	}
+	if _, ok := mb.UID("", "a"); ok {
+		t.Error("the inbox was numbered although only the archive was asked for")
 	}
 }

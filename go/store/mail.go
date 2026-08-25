@@ -233,12 +233,9 @@ func (m *Mailbox) Refresh(ctx context.Context) (RefreshResult, error) {
 	m.mu.Unlock()
 	m.writeCache()
 
-	// Numbers for IMAP, after the index is complete - a message that arrived in
-	// this pass gets its number in this pass. A failure here does not fail the
-	// refresh: the mail is listed and readable either way, and the numbering
-	// catches up next time. See uids.go.
-	_ = m.assignUIDs(ctx)
-
+	// No UID numbering here on purpose - see EnsureUIDs in uids.go. Numbers cost
+	// about fifteen bytes per message in the state document that every machine
+	// downloads, and a mailbox whose owner never touches IMAP should not pay it.
 	return RefreshResult{Checked: len(listed), New: len(todo), Removed: removed}, nil
 }
 
