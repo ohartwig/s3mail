@@ -233,6 +233,12 @@ func (m *Mailbox) Refresh(ctx context.Context) (RefreshResult, error) {
 	m.mu.Unlock()
 	m.writeCache()
 
+	// Numbers for IMAP, after the index is complete - a message that arrived in
+	// this pass gets its number in this pass. A failure here does not fail the
+	// refresh: the mail is listed and readable either way, and the numbering
+	// catches up next time. See uids.go.
+	_ = m.assignUIDs(ctx)
+
 	return RefreshResult{Checked: len(listed), New: len(todo), Removed: removed}, nil
 }
 
@@ -306,6 +312,9 @@ func (m *Mailbox) Move(ctx context.Context, keys []string, folder string) ([]Mov
 	}
 	var out []MoveResult
 	failedInARow := 0
+	// Which numbers to give up in which folder. A moved message keeps no UID
+	// where it no longer is - see uids.go.
+	retire := map[string][]string{}
 	err = m.State.Batch(ctx, func() error {
 		for _, key := range keys {
 			if err := m.Own(key); err != nil {
@@ -355,6 +364,9 @@ func (m *Mailbox) Move(ctx context.Context, keys []string, folder string) ([]Mov
 				continue
 			}
 			failedInARow = 0
+			// The number in the source folder goes before the index does - the
+			// folder has to be read off the old key. See uids.go.
+			retire[m.FolderOf(key)] = append(retire[m.FolderOf(key)], mid)
 			m.mu.Lock()
 			delete(m.index, key)
 			entry.Key, entry.Mid, entry.Folder = newKey, newMid, target
@@ -371,6 +383,9 @@ func (m *Mailbox) Move(ctx context.Context, keys []string, folder string) ([]Mov
 		return nil
 	})
 	m.writeCache()
+	for folder, mids := range retire {
+		_ = m.retireUIDs(ctx, folder, mids)
+	}
 	return out, err
 }
 

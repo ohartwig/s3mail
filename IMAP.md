@@ -186,9 +186,15 @@ nicht als Abnahme am Ende.
    bekommt beim nächsten Durchgang eine frische Nummer, `UIDVALIDITY` steigt),
    eine zurückgegebene Nummer wird nie erneut vergeben, Ordner nummerieren
    unabhängig, und der Zustand übersteht Snapshot und Verdichtung.
-   **Noch nicht verdrahtet:** beim Indexieren wird keine Nummer vergeben, und
-   `Move` gibt die Nummer im Quellordner noch nicht zurück.
-2. `BODYSTRUCTURE` in `mimeparse`, mit dem vorhandenen Testkorpus.
+   **Verdrahtet am 2026-08-25** (`store/uids.go`): `Refresh` nummeriert am Ende
+   jedes Durchgangs, was noch keine Nummer hat — sortiert nach `LastModified`,
+   bei Gleichstand nach Key, damit zwei Rechner dieselbe Op erzeugen. `Move`
+   gibt die Nummer im Quellordner zurück, ohne den Höchststand zu senken.
+   Geprüft ist auch das, worauf es ankommt: ein zweiter Durchgang nummeriert
+   nichts um, und zwei Rechner am selben Bucket kommen zum selben Ergebnis.
+2. **Als Nächstes:** `BODYSTRUCTURE` in `mimeparse`, mit dem vorhandenen
+   Testkorpus — der um die hässlichen Fälle gewachsen ist und damit genau der
+   ist, den ein MIME-Baum braucht.
 3. Minimaler Server: `SELECT`, `FETCH`, `STORE`, `SEARCH` gegen **Apple Mail**.
 4. `APPEND`, `MOVE`, `EXPUNGE`.
 5. `IDLE` auf die SQS-Benachrichtigung.

@@ -31,6 +31,10 @@ type Fake struct {
 	// the case a bulk move has to survive: one message that will not move while
 	// the rest do.
 	CopyErrFor map[string]error
+	// Modified gives single objects an arrival time of their own. Without it
+	// every object carries the same one, and anything that sorts by arrival -
+	// the UID assignment does - cannot be tested at all.
+	Modified map[string]time.Time
 }
 
 func New() *Fake {
@@ -62,11 +66,30 @@ func (f *Fake) List(_ context.Context, _, prefix string) ([]store.ObjectInfo, er
 	for k, v := range f.Objs {
 		if strings.HasPrefix(k, prefix) {
 			out = append(out, store.ObjectInfo{Key: k, ETag: f.etag(k), Size: int64(len(v)),
-				LastModified: time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC)})
+				LastModified: f.modified(k)})
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
 	return out, nil
+}
+
+// SetModified gives one object an arrival time. Call it after Store.
+func (f *Fake) SetModified(key string, when time.Time) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.Modified == nil {
+		f.Modified = map[string]time.Time{}
+	}
+	f.Modified[key] = when
+}
+
+// modified is the arrival time of an object, or the fixed default that every
+// test relied on before SetModified existed.
+func (f *Fake) modified(key string) time.Time {
+	if when, ok := f.Modified[key]; ok {
+		return when
+	}
+	return time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC)
 }
 
 func (f *Fake) Get(_ context.Context, _, key, byteRange string) (store.Object, error) {
