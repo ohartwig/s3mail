@@ -13,7 +13,7 @@ s3mail ist ein einzelnes Programm, bringt seinen eigenen Server mit und bindet
 ihn an 127.0.0.1.
 
 Das passende Paket aus den
-[Releases](https://git.ole-hartwig.eu/development/s3mail/-/releases) laden –
+[Releases](https://git.ole-hartwig.eu/development/s3mail/s3mail/-/releases) laden –
 macOS (Apple Silicon und Intel), Linux und Windows, jeweils amd64/arm64:
 
 ```bash
@@ -530,7 +530,7 @@ sondern macht sich für eines erreichbar.
 ## Selbst bauen
 
 Fertige Pakete für macOS (Apple Silicon und Intel), Linux und Windows liegen
-unter [Releases](https://git.ole-hartwig.eu/development/s3mail/-/releases). Wer
+unter [Releases](https://git.ole-hartwig.eu/development/s3mail/s3mail/-/releases). Wer
 selbst bauen will, braucht nur Go – s3mail kommt ohne C-Bibliotheken aus, also
 baut ein Rechner für alle:
 

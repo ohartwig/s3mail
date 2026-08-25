@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"s3mail/core"
-	"s3mail/s3fake"
-	"s3mail/store"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/core"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/s3fake"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/store"
 )
 
 // every test instance gets an identifier of its own - like two real machines.

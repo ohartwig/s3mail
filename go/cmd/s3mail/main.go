@@ -21,13 +21,13 @@ import (
 	"syscall"
 	"time"
 
-	"s3mail/awsx"
-	"s3mail/config"
-	"s3mail/i18n"
-	"s3mail/keyring"
-	"s3mail/store"
-	"s3mail/web"
-	"s3mail/wizard"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/awsx"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/config"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/i18n"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/keyring"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/store"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/web"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/wizard"
 )
 
 // version is set at build time: -ldflags "-X main.version=v0.2.0".

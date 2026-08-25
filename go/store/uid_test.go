@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"s3mail/core"
-	"s3mail/s3fake"
-	"s3mail/store"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/core"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/s3fake"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/store"
 )
 
 // The UID design of IMAP.md, run through the real op log rather than over a

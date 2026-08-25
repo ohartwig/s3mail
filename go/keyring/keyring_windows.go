@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"unsafe"
 
-	"s3mail/config"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/config"
 )
 
 // Windows: DPAPI, and no dependency to get at it.

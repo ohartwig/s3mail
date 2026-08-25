@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"strings"
 
-	"s3mail/store"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/store"
 )
 
 // Account is one mailbox the model may work with.

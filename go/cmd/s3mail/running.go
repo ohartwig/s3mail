@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"s3mail/config"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/config"
 )
 
 // runningInstance checks whether an s3mail already answers at the remembered

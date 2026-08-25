@@ -6,7 +6,7 @@ package core_test
 import (
 	"testing"
 
-	"s3mail/core"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/core"
 )
 
 func mails() []core.Message {

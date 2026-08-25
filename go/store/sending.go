@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"s3mail/core"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/core"
 )
 
 // Sending: the one place where a crash can cost a second mail.

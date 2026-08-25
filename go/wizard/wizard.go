@@ -10,10 +10,10 @@ import (
 	"fmt"
 	"strings"
 
-	"s3mail/awsx"
-	"s3mail/check"
-	"s3mail/config"
-	"s3mail/i18n"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/awsx"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/check"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/config"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/i18n"
 )
 
 // Regions in which SES accepts incoming mail. Offering others would be a trap -

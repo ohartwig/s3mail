@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"s3mail/s3fake"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/s3fake"
 )
 
 // Which attachments may be rendered inside s3mail's own origin. Every entry is

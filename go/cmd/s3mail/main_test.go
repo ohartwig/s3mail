@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"s3mail/config"
-	"s3mail/web"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/config"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/web"
 )
 
 // TestTheConfiguredLanguageReachesThePage pins down what the smoke test found:

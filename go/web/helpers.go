@@ -8,7 +8,7 @@ import (
 	"errors"
 	"net/http"
 
-	"s3mail/wizard"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/wizard"
 )
 
 func readJSON(r *http.Request, target any) error {

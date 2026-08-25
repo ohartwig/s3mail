@@ -13,11 +13,11 @@ import (
 	"strings"
 	"testing"
 
-	"s3mail/i18n"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/i18n"
 
-	"s3mail/check"
-	"s3mail/s3fake"
-	"s3mail/store"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/check"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/s3fake"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/store"
 )
 
 // label is the name a checklist item carries in German. The test indexes by the

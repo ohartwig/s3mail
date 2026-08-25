@@ -20,8 +20,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 
-	"s3mail/awsx"
-	"s3mail/store"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/awsx"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/store"
 )
 
 // s3Server speaks as much of the S3 protocol as s3mail uses. That way the real
