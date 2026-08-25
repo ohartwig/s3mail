@@ -102,6 +102,35 @@ der Signierung) und eine SNS-Platform-Application.
 Damit bekommt das Telefon neue Mail gemeldet, ohne dass irgendwo ein Dienst
 läuft. Das ist die Eigenschaft, an der IMAP-Variante 3 scheitert.
 
+**Die Benachrichtigung trägt keinen Inhalt.** Kein Absender, kein Betreff, nur
+„sieh nach" — ein stiller Push mit `content-available`. Die App holt danach
+selbst und zeigt Absender und Betreff aus dem, was sie gelesen hat.
+
+Das ist die eine Entscheidung, die hier vorab festgehalten werden muss, weil der
+bequeme Weg der falsche ist. SNS kann den Betreff mitschicken, und es wäre eine
+Zeile weniger Code. Nur läuft dann jeder Betreff über Apples Server — bei einem
+Programm, dessen ganzer Zweck es ist, dass die Mail im eigenen Bucket bleibt und
+kein Anbieter dazwischen sitzt. Ein Postfach, das Betreffzeilen an Apple
+weitergibt, damit die Meldung hübscher aussieht, hat sein Versprechen gebrochen,
+und niemand würde es merken.
+
+Der Preis ist ehrlich zu nennen: eine stille Benachrichtigung darf iOS
+verzögern, zusammenfassen oder ganz auslassen, wenn das Gerät sparsam sein will.
+Wer die Mail sofort will, zieht herunter. Das ist der richtige Tausch.
+
+### Was dafür noch fehlt
+
+Nichts davon liegt im Code, und deshalb ist Schritt 5 offen:
+
+1. **Ein APNs-Schlüssel** aus dem Apple-Developer-Konto (`.p8`, Key ID, Team ID).
+2. **Eine SNS-Platform-Application** damit, plus je Gerät ein Endpoint.
+3. **Eine Benachrichtigung, wenn eine Mail ankommt.** Der Push auf dem Rechner
+   hängt an SES; ob der Bucket dafür ein S3-Event braucht oder das vorhandene
+   SNS-Topic reicht, ist beim Einrichten zu prüfen.
+4. **Zwei Rechte in der Geräte-Policy**: `sns:CreatePlatformEndpoint` und
+   `sns:Subscribe`. Das Telefon meldet sich selbst an — sonst müsste jemand für
+   jedes neue Gerät in die Konsole.
+
 ## Was die App nicht können soll
 
 Derselbe Gedanke wie beim MCP-Server: der Zuschnitt ist die Entscheidung.
