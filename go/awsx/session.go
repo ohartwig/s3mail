@@ -15,6 +15,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/smithy-go"
 )
 
@@ -47,6 +48,39 @@ func Session(ctx context.Context, profile, region string) (aws.Config, error) {
 		return cfg, err
 	}
 	return cfg, nil
+}
+
+// Static builds a configuration from credentials handed in, without touching a
+// file.
+//
+// Session looks for a profile in ~/.aws - right on a machine where the wizard
+// put one there, and impossible on a phone: there is no home directory to keep
+// it in, and an app holds its key in the system keychain instead.
+//
+// So the credentials come as arguments, and nothing here reaches for the
+// environment or the disk. A caller that passes nothing gets an error rather
+// than somebody else's long-forgotten default profile - on a desktop that would
+// be a surprise, and on a phone it would be a lie.
+func Static(_ context.Context, accessKey, secret, region string) (aws.Config, error) {
+	if accessKey == "" || secret == "" {
+		return aws.Config{}, errors.New("no credentials given")
+	}
+	if region == "" {
+		return aws.Config{}, errors.New("no region given")
+	}
+	// Built by hand rather than through LoadDefaultConfig, and the test says
+	// why: even with the shared files taken away, LoadDefaultConfig still reads
+	// AWS_PROFILE from the environment and fails on a profile that does not
+	// exist. A configuration that is supposed to depend on nothing must not be
+	// assembled by the machinery whose whole job is to look around.
+	//
+	// The service clients fill in their own defaults for what is left empty -
+	// retries, timeouts, the HTTP client - so nothing is lost with them.
+	return aws.Config{
+		Region: region,
+		Credentials: credentials.NewStaticCredentialsProvider(
+			accessKey, secret, ""),
+	}, nil
 }
 
 // CheckAccess fetches the credentials once. config.LoadDefaultConfig reports no
