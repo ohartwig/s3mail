@@ -1,7 +1,12 @@
-# Native App für iPhone und iPad — Entwurf, nicht begonnen
+# Native App für iPhone und iPad
 
-Stand 2026-08-25. Aufgeschrieben, damit die Überlegung nicht zweimal gemacht
-werden muss. **Nichts davon ist gebaut.**
+Aufgeschrieben, damit die Überlegung nicht zweimal gemacht werden muss.
+
+**Stand 2026-08-25: Schritte 1 bis 4 sind gebaut**, im eigenen Repo
+[`development/s3mail/ios`](https://git.ole-hartwig.eu/development/s3mail/ios).
+Offen sind Push (5) und Verteilung (6) — beide hängen am Mac-Runner und an
+Apple, nicht am Code. Was unten steht, gilt weiter; die Begründungen sind der
+Grund, warum es so gebaut wurde.
 
 Gegenstück zu [`IMAP.md`](IMAP.md). Die beiden schließen sich nicht aus, und
 welcher Weg wofür taugt, steht unten.
@@ -97,6 +102,35 @@ der Signierung) und eine SNS-Platform-Application.
 Damit bekommt das Telefon neue Mail gemeldet, ohne dass irgendwo ein Dienst
 läuft. Das ist die Eigenschaft, an der IMAP-Variante 3 scheitert.
 
+**Die Benachrichtigung trägt keinen Inhalt.** Kein Absender, kein Betreff, nur
+„sieh nach" — ein stiller Push mit `content-available`. Die App holt danach
+selbst und zeigt Absender und Betreff aus dem, was sie gelesen hat.
+
+Das ist die eine Entscheidung, die hier vorab festgehalten werden muss, weil der
+bequeme Weg der falsche ist. SNS kann den Betreff mitschicken, und es wäre eine
+Zeile weniger Code. Nur läuft dann jeder Betreff über Apples Server — bei einem
+Programm, dessen ganzer Zweck es ist, dass die Mail im eigenen Bucket bleibt und
+kein Anbieter dazwischen sitzt. Ein Postfach, das Betreffzeilen an Apple
+weitergibt, damit die Meldung hübscher aussieht, hat sein Versprechen gebrochen,
+und niemand würde es merken.
+
+Der Preis ist ehrlich zu nennen: eine stille Benachrichtigung darf iOS
+verzögern, zusammenfassen oder ganz auslassen, wenn das Gerät sparsam sein will.
+Wer die Mail sofort will, zieht herunter. Das ist der richtige Tausch.
+
+### Was dafür noch fehlt
+
+Nichts davon liegt im Code, und deshalb ist Schritt 5 offen:
+
+1. **Ein APNs-Schlüssel** aus dem Apple-Developer-Konto (`.p8`, Key ID, Team ID).
+2. **Eine SNS-Platform-Application** damit, plus je Gerät ein Endpoint.
+3. **Eine Benachrichtigung, wenn eine Mail ankommt.** Der Push auf dem Rechner
+   hängt an SES; ob der Bucket dafür ein S3-Event braucht oder das vorhandene
+   SNS-Topic reicht, ist beim Einrichten zu prüfen.
+4. **Zwei Rechte in der Geräte-Policy**: `sns:CreatePlatformEndpoint` und
+   `sns:Subscribe`. Das Telefon meldet sich selbst an — sonst müsste jemand für
+   jedes neue Gerät in die Konsole.
+
 ## Was die App nicht können soll
 
 Derselbe Gedanke wie beim MCP-Server: der Zuschnitt ist die Entscheidung.
@@ -148,15 +182,32 @@ ist abgemeldet). Er wird für das Bauen der App wieder aktiviert — exklusiv da
 
 ## Reihenfolge, wenn es losgeht
 
-1. **`gomobile`-Spike.** Ein XCFramework aus `core` + `mimeparse` + `store`, und
-   eine leere App, die daraus eine Mail aus dem echten Bucket liest. Ohne das
-   ist der Rest verlorene Zeit — genau wie beim UID-Entwurf für IMAP.
-2. **Zugangsmodell**: IAM-Benutzer je Gerät, QR aus dem Assistenten,
-   Schlüsselbund auf dem Telefon.
-3. **Liste und Lesen** in SwiftUI, gegen die Go-Fassade.
-4. **Schreiben und Senden**, inklusive Entwürfe im Bucket — die gibt es schon.
-5. **Push** über SNS an APNs.
-6. **Verteilung**: TestFlight für den Anfang, Ad Hoc für Kunden.
+1. ~~**`gomobile`-Spike.**~~ **Gebaut.** Beide Risiken sind ausgeräumt: das
+   XCFramework baut, und ein echter S3-Aufruf geht vom Simulator durch. Das war
+   die Frage, an der alles hing.
+2. ~~**Zugangsmodell**~~ **Gebaut.** `awsx.DevicePolicy` erzeugt die Policy je
+   Gerät, der Assistent den QR — **ohne Schlüssel darin** —, das Telefon legt
+   ihn in den Schlüsselbund.
+3. ~~**Liste und Lesen**~~ **Gebaut.** Gegen das echte Postfach geprüft.
+4. ~~**Schreiben und Senden**~~ **Gebaut.** Entwürfe liegen als richtige
+   Nachrichten in `drafts/`, das Senden geht durch denselben Marker aus
+   `store/sending.go` wie am Schreibtisch — auf dem Telefon wiegt der schwerer,
+   weil iOS Apps im Hintergrund ohne Vorwarnung beendet.
+5. **Push** über SNS an APNs. **Offen.**
+6. **Verteilung**: TestFlight für den Anfang, Ad Hoc für Kunden. **Offen** —
+   braucht den Mac-Runner.
+
+### Was dabei nicht im Plan stand
+
+- **Die Texte.** `core.Folder.Label` ist ein Katalogschlüssel, kein Wort: der
+  Ordnername ist ein S3-Prefix und darf nie übersetzt werden. Am Schreibtisch
+  löst `web/` das auf, auf dem Telefon zunächst niemand — die Seitenleiste zeigte
+  `folder.sent`. Die App hat jetzt einen eigenen Katalog in `de`/`en`/`es` und
+  einen Test dafür wie `i18n_test.go`. Die Brücke gibt **Codes** zurück, keine
+  Sätze; ein Go-Kern in einer App hat keine Sprache zu haben.
+- **Nachsichtiges Dekodieren.** `core.Message` trägt `omitempty`. Ein strenger
+  Decoder ließ das Postfach leer und nannte dabei ein Feld, das niemand anzeigt.
+  Pflicht ist nur der Key.
 
 ## Was ausdrücklich nicht geplant ist
 
