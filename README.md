@@ -796,6 +796,11 @@ sie melden dann einen Rechtefehler im Klartext.
 
 ## Grenzen
 
+- **Kein Postfach auf dem Telefon.** Zwei Entwürfe liegen dafür vor:
+  [`IMAP.md`](IMAP.md) — erreicht jedes Mailprogramm, verlangt aber einen
+  laufenden Rechner — und [`IOS.md`](IOS.md), eine native App für iPhone und
+  iPad, die direkt mit S3 und SES spricht und deshalb keinen braucht. Gebaut ist
+  von beidem bisher nur die UID-Vergabe aus Schritt 1 von IMAP.
 - Kein IMAP: ein normales Mailprogramm kann das Postfach nicht öffnen. Senden
   ginge dort über den SMTP-Endpunkt von SES, lesen nicht – SES kennt keinen
   Postfachdienst.

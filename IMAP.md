@@ -11,12 +11,22 @@ App, ohne App-Store-Prüfung, ohne Provision. Dasselbe gilt für Thunderbird,
 Outlook und alles andere. Kein anderes Vorhaben erreicht so viele Geräte mit so
 wenig neuem Produkt.
 
-Der Vergleich mit den Alternativen:
+Der Vergleich mit den Alternativen — mit einer Korrektur vom 2026-08-25: hier
+stand für die native App „App-Store-Prüfung, 15–30 %". Das war falsch und hat
+die Entscheidung schiefer aussehen lassen, als sie ist. Die 15–30 % sind Apples
+Anteil an *bezahlten* Apps und In-App-Käufen; eine kostenlose zahlt nichts, und
+für den Eigenbedarf gibt es TestFlight und Ad Hoc ganz ohne öffentliche
+Prüfung. Siehe [`IOS.md`](IOS.md).
+
+Wichtiger noch ist die Spalte, die hier fehlte: **ob ein Rechner laufen muss.**
+IMAP erreicht mehr Geräte, verlangt aber einen Server — bei Variante 3 den
+eigenen Rechner, und der ist unterwegs zugeklappt. Eine App, die direkt mit S3
+und SES spricht, verlangt das nicht.
 
 | Weg | erreicht | Aufwand | Preis |
 |---|---|---|---|
 | **IMAP** | jedes Mailprogramm auf jedem Gerät | Wochen | muss irgendwo laufen (siehe unten) |
-| Native iOS-App | iPhone/iPad | Wochen, plus zweite Oberfläche | App-Store-Prüfung, 15–30 % |
+| [Native iOS-App](IOS.md) | iPhone/iPad — **ohne laufenden Rechner** | Wochen, plus zweite Oberfläche | 99 USD/Jahr, sonst nichts |
 | MCP (gebaut) | Modelle | Tage | — |
 | Signatur (in Arbeit) | senkt die Einstiegshürde | Tage | 99 USD/Jahr |
 
