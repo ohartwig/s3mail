@@ -288,6 +288,8 @@ func (a *Wizard) Route(path string) (func(context.Context, Data) (map[string]any
 		return a.Test, true
 	case "lifecycle":
 		return a.Lifecycle, true
+	case "device":
+		return a.Device, true
 	case "save":
 		return a.Save, true
 	}
