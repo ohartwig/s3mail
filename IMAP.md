@@ -175,6 +175,20 @@ nicht als Abnahme am Ende.
   anderes Produkt mit einem anderen Bedrohungsmodell und gehört, wenn
   überhaupt, gesondert entschieden.
 
+## Angehalten nach Schritt 1 (2026-08-25)
+
+Der Ausbau ist **bewusst pausiert**, nicht steckengeblieben. Der Grund steht in
+[`IOS.md`](IOS.md): das Ziel war „Postfach auf dem Telefon", und dafür ist die
+native App der kürzere Weg — sie braucht keinen laufenden Rechner, IMAP schon.
+
+Was IMAP darüber hinaus kann, bleibt richtig: jedes Mailprogramm auf jedem
+Gerät, auch Thunderbird und Outlook am Schreibtisch. Das ist ein eigener Wunsch
+und ein schwächerer, solange s3mail selbst der Schreibtisch-Client ist.
+
+Was liegen bleibt, kostet nichts: die Nummerierung läuft nur auf Abruf, es gibt
+keinen Server und keine Abhängigkeit. Wer hier weitermacht, fängt bei Schritt 2
+an.
+
 ## Reihenfolge, wenn es losgeht
 
 1. ~~UID-Entwurf festklopfen und **zuerst testen** — die Op-Art, die Konvergenz
@@ -186,12 +200,20 @@ nicht als Abnahme am Ende.
    bekommt beim nächsten Durchgang eine frische Nummer, `UIDVALIDITY` steigt),
    eine zurückgegebene Nummer wird nie erneut vergeben, Ordner nummerieren
    unabhängig, und der Zustand übersteht Snapshot und Verdichtung.
-   **Verdrahtet am 2026-08-25** (`store/uids.go`): `Refresh` nummeriert am Ende
-   jedes Durchgangs, was noch keine Nummer hat — sortiert nach `LastModified`,
-   bei Gleichstand nach Key, damit zwei Rechner dieselbe Op erzeugen. `Move`
-   gibt die Nummer im Quellordner zurück, ohne den Höchststand zu senken.
-   Geprüft ist auch das, worauf es ankommt: ein zweiter Durchgang nummeriert
-   nichts um, und zwei Rechner am selben Bucket kommen zum selben Ergebnis.
+   **Verdrahtet am 2026-08-25** (`store/uids.go`), aber **auf Abruf**:
+   `EnsureUIDs(folder)` nummeriert, was noch keine Nummer hat — sortiert nach
+   `LastModified`, bei Gleichstand nach Key, damit zwei Rechner dieselbe Op
+   erzeugen. `Move` gibt die Nummer im Quellordner zurück, ohne den Höchststand
+   zu senken. Geprüft ist auch das, worauf es ankommt: ein zweiter Durchgang
+   nummeriert nichts um, und zwei Rechner am selben Bucket kommen zum selben
+   Ergebnis.
+
+   **Warum auf Abruf und nicht bei jedem Indexieren:** Nummern kosten rund
+   15 Byte je Mail im Zustandsdokument, das jeder Rechner bei jedem Start
+   herunterlädt — gemessen, nicht geschätzt: 5000 Mails ergeben 74 KB reine
+   Nummerierung. Ein Postfach, dessen Besitzer nie IMAP anfasst, soll das nicht
+   bezahlen. Ein IMAP-Server ruft `EnsureUIDs` beim `SELECT` auf, und damit ist
+   es genau dann da, wenn es jemanden gibt, der es liest.
 2. **Als Nächstes:** `BODYSTRUCTURE` in `mimeparse`, mit dem vorhandenen
    Testkorpus — der um die hässlichen Fälle gewachsen ist und damit genau der
    ist, den ein MIME-Baum braucht.
