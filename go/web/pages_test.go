@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"s3mail/core"
-	"s3mail/i18n"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/core"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/i18n"
 )
 
 // The token page is the one a stranger sees, so it is the one that has to be

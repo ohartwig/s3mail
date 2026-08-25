@@ -9,8 +9,8 @@ package awsx
 import (
 	"context"
 	"errors"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/i18n"
 	"path/filepath"
-	"s3mail/i18n"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"

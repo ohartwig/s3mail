@@ -11,7 +11,7 @@ import (
 	"strings"
 	"sync"
 
-	"s3mail/i18n"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/i18n"
 )
 
 // Pages are templates now, one rendering per language, built on first use and

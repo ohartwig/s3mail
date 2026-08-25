@@ -8,10 +8,10 @@ import (
 	"errors"
 	"os"
 
-	"s3mail/awsx"
-	"s3mail/config"
-	"s3mail/mcp"
-	"s3mail/store"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/awsx"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/config"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/mcp"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/store"
 )
 
 // serveMCP hands the mailboxes to a model over stdin and stdout.

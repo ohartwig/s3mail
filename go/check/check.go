@@ -9,10 +9,10 @@ package check
 
 import (
 	"context"
-	"s3mail/i18n"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/i18n"
 	"strings"
 
-	"s3mail/store"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/store"
 )
 
 // Item is one entry of the checklist.

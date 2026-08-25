@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"s3mail/s3fake"
-	"s3mail/store"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/s3fake"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/store"
 )
 
 // serverWithSuppressions builds a server with a mailbox - without one every

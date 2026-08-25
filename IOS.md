@@ -126,6 +126,26 @@ als sie ist:
 Für den Eigenbedarf und eine Handvoll Kunden kostet die App also **nichts außer
 Arbeit**. Was bleibt, ist der Aufwand — und der ist echt.
 
+## Wo das liegt
+
+Seit dem 2026-08-25 sammelt die Untergruppe **`development/s3mail`** alles, was
+dazugehört:
+
+    development/s3mail/
+      s3mail    Go-Programm, MCP-Server und der Kern
+      ios       diese App
+
+Zwei Repositories und nicht eines, weil die Werkzeugketten nichts teilen: hier
+Xcode und Swift, dort Linux, Docker und Kreuzbauen. Und weil der Go-Kern für die
+App eine **Bibliothek** ist — das ist die ehrliche Beziehung, und sie hat einen
+Namen: `git.ole-hartwig.eu/development/s3mail/s3mail`. Vorher hieß das Modul
+schlicht `s3mail` und war von außen gar nicht einbindbar; ohne diesen Umzug
+bliebe nur der Weg über ein gebautes XCFramework als Artefakt, und das ist genau
+der Auslieferungssprung, der still fehlschlägt.
+
+Ein Mac-Runner ist für die Pipeline nötig und heute nicht da (`mac-runner-01`
+ist abgemeldet). Er wird für das Bauen der App wieder aktiviert — exklusiv dafür.
+
 ## Reihenfolge, wenn es losgeht
 
 1. **`gomobile`-Spike.** Ein XCFramework aus `core` + `mimeparse` + `store`, und

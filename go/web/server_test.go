@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"s3mail/s3fake"
-	"s3mail/store"
-	"s3mail/wizard"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/s3fake"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/store"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/wizard"
 )
 
 const testToken = "test-token-123"

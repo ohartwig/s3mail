@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"s3mail/s3fake"
-	"s3mail/store"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/s3fake"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/store"
 )
 
 func serverForEvents(t *testing.T) (*httptest.Server, *Server) {

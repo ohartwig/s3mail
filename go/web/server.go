@@ -15,14 +15,14 @@ import (
 	"strings"
 	"time"
 
-	"s3mail/awsx"
-	"s3mail/config"
-	"s3mail/core"
-	"s3mail/i18n"
-	"s3mail/mailer"
-	"s3mail/mimeparse"
-	"s3mail/store"
-	"s3mail/wizard"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/awsx"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/config"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/core"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/i18n"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/mailer"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/mimeparse"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/store"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/wizard"
 )
 
 // Server is the local web server. It binds to 127.0.0.1 and knows no users - the

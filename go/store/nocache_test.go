@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"s3mail/s3fake"
-	"s3mail/store"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/s3fake"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/store"
 )
 
 // --no-cache hands an empty directory down. Nothing may then reach the disk:

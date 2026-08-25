@@ -6,8 +6,8 @@ package main
 import (
 	"context"
 
-	"s3mail/awsx"
-	"s3mail/web"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/awsx"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/web"
 )
 
 // suppressions attaches awsx to the server's interface. Keeping the two types

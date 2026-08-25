@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"s3mail/s3fake"
-	"s3mail/store"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/s3fake"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/store"
 )
 
 // An expired access used to arrive in the browser as the raw SDK sentence, with
