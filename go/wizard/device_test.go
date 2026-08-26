@@ -96,15 +96,21 @@ func TestTheCodeCarriesThePushTargets(t *testing.T) {
 	const topic = "arn:aws:sns:eu-north-1:123456789012:s3mail-neue-mail"
 
 	out := device(t, wizard.Data{Bucket: "post", Prefix: "mail/ole/",
-		Region: "eu-north-1", PushApps: []string{prod, sandbox}, PushTopic: topic})
+		Region: "eu-north-1", PushTopic: topic,
+		PushApps: map[string]string{"production": prod, "development": sandbox}})
 
 	var payload map[string]any
 	if err := json.Unmarshal([]byte(out["payload"].(string)), &payload); err != nil {
 		t.Fatal(err)
 	}
-	apps, ok := payload["pushApps"].([]any)
+	apps, ok := payload["pushApps"].(map[string]any)
 	if !ok || len(apps) != 2 {
 		t.Fatalf("both platform applications should be in the code: %v", payload["pushApps"])
+	}
+	// Named, not just present: two ARNs look alike, and a device that picks
+	// the wrong one gets an endpoint that looks fine and receives nothing.
+	if apps["development"] != sandbox || apps["production"] != prod {
+		t.Errorf("the environments are mixed up: %v", apps)
 	}
 	if payload["pushTopic"] != topic {
 		t.Errorf("topic missing from the code: %v", payload["pushTopic"])
@@ -127,8 +133,8 @@ func TestWithoutPushTheListIsEmptyNotAbsent(t *testing.T) {
 	if !present {
 		t.Fatal("pushApps is missing entirely")
 	}
-	if list, ok := apps.([]any); !ok || len(list) != 0 {
-		t.Errorf("expected an empty list, got %v", apps)
+	if m, ok := apps.(map[string]any); !ok || len(m) != 0 {
+		t.Errorf("expected an empty object, got %v", apps)
 	}
 	if strings.Contains(out["policy"].(string), "sns:") {
 		t.Error("SNS permissions without push being asked for")

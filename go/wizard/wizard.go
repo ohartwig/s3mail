@@ -52,13 +52,14 @@ type Data struct {
 
 	// PushApps and PushTopic describe where a device registers for push.
 	//
-	// Two applications, not one: Apple keeps its environments apart, and a
-	// TestFlight build talks to APNS while one installed straight from Xcode
-	// talks to APNS_SANDBOX. Which of them a build is cannot be decided here -
-	// the device reads that from its own provisioning profile - so both travel
-	// and the device picks.
-	PushApps  []string `json:"push_apps"`
-	PushTopic string   `json:"push_topic"`
+	// Keyed by Apple's own environment names - "production" and "development" -
+	// and not a plain list. A list would travel just as well and the device
+	// could not use it: both ARNs look alike, and picking the wrong one gives
+	// an endpoint that looks fine and never receives anything. Which one a
+	// build needs cannot be decided here; the device reads that from its own
+	// provisioning profile.
+	PushApps  map[string]string `json:"push_apps"`
+	PushTopic string            `json:"push_topic"`
 
 	// Account is the mailbox being edited, by its ID. Empty means the first one,
 	// "new" means: add one. Without it a second mailbox would overwrite the

@@ -6,6 +6,7 @@ package wizard
 import (
 	"context"
 	"encoding/json"
+	"sort"
 	"strings"
 
 	"git.ole-hartwig.eu/development/s3mail/s3mail/awsx"
@@ -46,7 +47,9 @@ func (a *Wizard) Device(_ context.Context, d Data) (map[string]any, error) {
 		// Push only when both halves are there. One without the other is a
 		// permission that cannot be used, and an unused permission is one
 		// nobody notices being abused.
-		PushApps:  d.PushApps,
+		// The policy only needs the ARNs; which environment each belongs to is
+		// the device's problem, not IAM's.
+		PushApps:  pushARNs(d.PushApps),
 		PushTopic: strings.TrimSpace(d.PushTopic),
 	})
 	if err != nil {
@@ -63,7 +66,7 @@ func (a *Wizard) Device(_ context.Context, d Data) (map[string]any, error) {
 		"bucket": d.Bucket, "prefix": prefix, "region": d.Region,
 		"from": strings.TrimSpace(d.From), "label": strings.TrimSpace(d.Label),
 		"accessKey": "", "secret": "",
-		"pushApps": notNil(d.PushApps), "pushTopic": strings.TrimSpace(d.PushTopic),
+		"pushApps": notNilMap(d.PushApps), "pushTopic": strings.TrimSpace(d.PushTopic),
 	})
 	if err != nil {
 		return nil, err
@@ -90,4 +93,27 @@ func suggestedUserName(bucket, prefix string) string {
 		parts = append(parts, p)
 	}
 	return strings.Join(append(parts, "geraet"), "-")
+}
+
+// pushARNs is the policy's view of the applications: the ARNs, in a stable
+// order so two runs produce the same document.
+func pushARNs(apps map[string]string) []string {
+	out := make([]string, 0, len(apps))
+	for _, arn := range apps {
+		if arn = strings.TrimSpace(arn); arn != "" {
+			out = append(out, arn)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// notNilMap keeps an absent map out of the code as {} rather than null. A phone
+// that finds no field cannot tell "no push here" from "this code is too old to
+// know about it".
+func notNilMap(m map[string]string) map[string]string {
+	if m == nil {
+		return map[string]string{}
+	}
+	return m
 }
