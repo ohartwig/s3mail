@@ -50,6 +50,16 @@ type Data struct {
 	Label       string `json:"label"`
 	Queue       string `json:"queue"`
 
+	// PushApps and PushTopic describe where a device registers for push.
+	//
+	// Two applications, not one: Apple keeps its environments apart, and a
+	// TestFlight build talks to APNS while one installed straight from Xcode
+	// talks to APNS_SANDBOX. Which of them a build is cannot be decided here -
+	// the device reads that from its own provisioning profile - so both travel
+	// and the device picks.
+	PushApps  []string `json:"push_apps"`
+	PushTopic string   `json:"push_topic"`
+
 	// Account is the mailbox being edited, by its ID. Empty means the first one,
 	// "new" means: add one. Without it a second mailbox would overwrite the
 	// first, because the wizard only ever knew one.

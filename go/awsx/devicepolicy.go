@@ -39,6 +39,18 @@ type DevicePolicyOpts struct {
 	// cannot be talked into sending, and most second devices are read-only in
 	// practice long before anybody decides they should be.
 	AllowSend bool
+	// PushApps are the ARNs of the SNS platform applications the device may
+	// register itself with. Empty leaves push out entirely.
+	//
+	// A list rather than one, because Apple has two environments and they are
+	// separate applications: a TestFlight build talks to APNS, one installed
+	// straight from Xcode to APNS_SANDBOX. A device cannot be told which it is
+	// - it reads that from its own provisioning profile - so the policy has to
+	// allow both and let the device pick the one that matches.
+	PushApps []string
+	// PushTopic is the SNS topic that carries "new mail". The device subscribes
+	// its own endpoint to it.
+	PushTopic string
 }
 
 // DevicePolicy renders the policy document for a device user.
@@ -49,6 +61,13 @@ type DevicePolicyOpts struct {
 //     device polls. Handing it queue permissions would be a permission nobody
 //     uses, and an unused permission is one nobody notices being abused.
 //   - **No sending unless asked.** See AllowSend.
+//
+// Push, when it is asked for, is two actions and no more. The device registers
+// itself - CreatePlatformEndpoint - and subscribes that endpoint to the topic.
+// It gets neither Publish nor Delete: a phone that could publish to the topic
+// could send a notification to every other device on the mailbox, and one that
+// could delete endpoints could silence them. Both are things a stolen phone
+// should not be able to do, and neither is needed to receive a notification.
 //
 // Everything else mirrors the mailbox exactly, including the prefix condition
 // on ListBucket - without it the device could list the whole bucket, which is
@@ -87,6 +106,26 @@ func DevicePolicy(o DevicePolicyOpts) (string, error) {
 	}
 	if o.AllowSend {
 		out = append(out, stmt{Effect: "Allow", Action: "ses:SendRawEmail", Resource: "*"})
+	}
+	if len(o.PushApps) > 0 {
+		// Subscribe is on the topic, CreatePlatformEndpoint on the platform
+		// applications - two different resources, so two statements. Written
+		// out rather than merged with a wildcard: "sns:*" on "*" would be one
+		// line shorter and would also let a lost phone publish to the topic.
+		apps := make([]string, 0, len(o.PushApps))
+		for _, arn := range o.PushApps {
+			if arn = strings.TrimSpace(arn); arn != "" {
+				apps = append(apps, arn)
+			}
+		}
+		if len(apps) > 0 {
+			out = append(out, stmt{Effect: "Allow",
+				Action: "sns:CreatePlatformEndpoint", Resource: apps})
+		}
+		if o.PushTopic != "" {
+			out = append(out, stmt{Effect: "Allow",
+				Action: "sns:Subscribe", Resource: o.PushTopic})
+		}
 	}
 	if o.KMSKey != "" {
 		out = append(out, stmt{Effect: "Allow",

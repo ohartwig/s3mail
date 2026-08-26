@@ -133,3 +133,83 @@ func TestABucketIsRequired(t *testing.T) {
 		t.Error("a policy without a bucket was accepted")
 	}
 }
+
+// Push is two actions and no more.
+//
+// The interesting assertions here are the negative ones. A phone that could
+// Publish to the topic could send a notification to every other device on the
+// mailbox; one that could DeleteEndpoint could silence them. Neither is needed
+// to receive a notification, and both are things a stolen phone must not do.
+func TestPushIsTwoActionsAndNoMore(t *testing.T) {
+	const app = "arn:aws:sns:eu-north-1:123456789012:app/APNS/s3mail-ios"
+	const topic = "arn:aws:sns:eu-north-1:123456789012:s3mail-neue-mail"
+	got := actions(t, policy(t, awsx.DevicePolicyOpts{
+		Bucket: "post", Prefix: "mail/ole/",
+		PushApps: []string{app}, PushTopic: topic}))
+
+	joined := strings.Join(got, " ")
+	for _, want := range []string{"sns:CreatePlatformEndpoint", "sns:Subscribe"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("%s missing, the device cannot register itself: %v", want, got)
+		}
+	}
+	for _, forbidden := range []string{"sns:Publish", "sns:DeleteEndpoint",
+		"sns:Unsubscribe", "sns:*"} {
+		if strings.Contains(joined, forbidden) {
+			t.Errorf("%s granted - a lost phone could use it: %v", forbidden, got)
+		}
+	}
+}
+
+// Both Apple environments, because a device cannot be told which one it is.
+func TestBothPlatformApplicationsCanBeAllowed(t *testing.T) {
+	const prod = "arn:aws:sns:eu-north-1:123456789012:app/APNS/s3mail-ios"
+	const sandbox = "arn:aws:sns:eu-north-1:123456789012:app/APNS_SANDBOX/s3mail-ios"
+	d := policy(t, awsx.DevicePolicyOpts{Bucket: "post",
+		PushApps: []string{prod, sandbox}, PushTopic: "arn:aws:sns:x:1:t"})
+
+	var found []string
+	for _, s := range d["Statement"].([]any) {
+		m := s.(map[string]any)
+		if m["Action"] == "sns:CreatePlatformEndpoint" {
+			for _, r := range m["Resource"].([]any) {
+				found = append(found, r.(string))
+			}
+		}
+	}
+	if len(found) != 2 {
+		t.Fatalf("expected both platform applications, got %v", found)
+	}
+	// Named individually, not as a wildcard: "every platform application in
+	// the account" would include ones that have nothing to do with this
+	// mailbox.
+	for _, arn := range found {
+		if strings.HasSuffix(arn, "*") {
+			t.Errorf("wildcard resource %q - that is every app in the account", arn)
+		}
+	}
+}
+
+// No push asked for, no push permissions. An unused permission is one nobody
+// notices being abused.
+func TestWithoutPushThereAreNoSNSPermissions(t *testing.T) {
+	got := strings.Join(actions(t, policy(t, awsx.DevicePolicyOpts{Bucket: "post"})), " ")
+	if strings.Contains(got, "sns:") {
+		t.Errorf("SNS permissions without push being asked for: %s", got)
+	}
+}
+
+// A topic without applications, or the other way round, must not produce half
+// a permission set that looks like it works.
+func TestPushNeedsBothTheAppsAndTheTopic(t *testing.T) {
+	onlyApps := strings.Join(actions(t, policy(t, awsx.DevicePolicyOpts{
+		Bucket: "post", PushApps: []string{"arn:aws:sns:x:1:app/APNS/a"}})), " ")
+	if strings.Contains(onlyApps, "sns:Subscribe") {
+		t.Error("Subscribe without a topic to subscribe to")
+	}
+	onlyTopic := strings.Join(actions(t, policy(t, awsx.DevicePolicyOpts{
+		Bucket: "post", PushTopic: "arn:aws:sns:x:1:t"})), " ")
+	if strings.Contains(onlyTopic, "sns:") {
+		t.Error("a topic alone is not push - the device cannot register")
+	}
+}

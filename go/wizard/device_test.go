@@ -29,7 +29,9 @@ func TestTheCodeCarriesNoKey(t *testing.T) {
 	out := device(t, wizard.Data{Bucket: "post", Prefix: "mail/ole/",
 		Region: "eu-north-1", From: "post@firma.de", Label: "Post"})
 
-	var payload map[string]string
+	// map[string]any and not map[string]string: the payload carries the push
+	// ARNs as a list.
+	var payload map[string]any
 	if err := json.Unmarshal([]byte(out["payload"].(string)), &payload); err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +40,7 @@ func TestTheCodeCarriesNoKey(t *testing.T) {
 	}
 	// But everything the phone cannot work out for itself has to be in there.
 	for _, field := range []string{"bucket", "prefix", "region", "from"} {
-		if payload[field] == "" {
+		if payload[field] == "" || payload[field] == nil {
 			t.Errorf("%s is missing from the code", field)
 		}
 	}
@@ -79,5 +81,56 @@ func TestABucketIsRequired(t *testing.T) {
 	a := &wizard.Wizard{}
 	if _, err := a.Device(context.Background(), wizard.Data{Prefix: "mail/"}); err == nil {
 		t.Error("a device without a bucket was accepted")
+	}
+}
+
+// The ARNs travel with the code, because the device cannot work them out.
+//
+// They are not secret: an ARN names a resource, it does not open it, and the
+// policy decides what the device may do with it. What would be a mistake is
+// leaving them out - then the phone knows it should register somewhere and not
+// where.
+func TestTheCodeCarriesThePushTargets(t *testing.T) {
+	const prod = "arn:aws:sns:eu-north-1:123456789012:app/APNS/s3mail-ios"
+	const sandbox = "arn:aws:sns:eu-north-1:123456789012:app/APNS_SANDBOX/s3mail-ios"
+	const topic = "arn:aws:sns:eu-north-1:123456789012:s3mail-neue-mail"
+
+	out := device(t, wizard.Data{Bucket: "post", Prefix: "mail/ole/",
+		Region: "eu-north-1", PushApps: []string{prod, sandbox}, PushTopic: topic})
+
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(out["payload"].(string)), &payload); err != nil {
+		t.Fatal(err)
+	}
+	apps, ok := payload["pushApps"].([]any)
+	if !ok || len(apps) != 2 {
+		t.Fatalf("both platform applications should be in the code: %v", payload["pushApps"])
+	}
+	if payload["pushTopic"] != topic {
+		t.Errorf("topic missing from the code: %v", payload["pushTopic"])
+	}
+	// And the policy has to match what the code promises.
+	if !strings.Contains(out["policy"].(string), "sns:CreatePlatformEndpoint") {
+		t.Error("the code names a place to register, the policy does not allow it")
+	}
+}
+
+// No push asked for: an empty list, not a missing field. A phone that finds no
+// key at all cannot tell "no push here" from "this code is too old to know".
+func TestWithoutPushTheListIsEmptyNotAbsent(t *testing.T) {
+	out := device(t, wizard.Data{Bucket: "post", Region: "eu-north-1"})
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(out["payload"].(string)), &payload); err != nil {
+		t.Fatal(err)
+	}
+	apps, present := payload["pushApps"]
+	if !present {
+		t.Fatal("pushApps is missing entirely")
+	}
+	if list, ok := apps.([]any); !ok || len(list) != 0 {
+		t.Errorf("expected an empty list, got %v", apps)
+	}
+	if strings.Contains(out["policy"].(string), "sns:") {
+		t.Error("SNS permissions without push being asked for")
 	}
 }
