@@ -228,3 +228,36 @@ func TestTheRulesDialogAsksForSuggestions(t *testing.T) {
 		}
 	}
 }
+
+// The device dialog has to be reachable from the wizard.
+//
+// The endpoint /api/setup/device existed for a while with nothing calling it -
+// built, tested and unreachable, which is the same as absent for whoever is
+// trying to set up a phone. A test that only checked the handler would not have
+// noticed, so this one checks the way there.
+func TestTheWizardCanPrepareADevice(t *testing.T) {
+	out := page("setup", PageWizard, "de", nil)
+
+	for _, anchor := range []string{`id="device"`, `id="deviceBox"`,
+		`id="devUser"`, `id="devPolicy"`, `id="devPayload"`} {
+		if !strings.Contains(out, anchor) {
+			t.Errorf("%s missing - the dialog has no place to put its answer", anchor)
+		}
+	}
+	if !strings.Contains(out, "/api/setup/device") {
+		t.Error("nothing calls /api/setup/device - the endpoint stays unreachable")
+	}
+}
+
+// Three copy buttons and three fields, because all three are pasted somewhere
+// else: the user name and the policy into the IAM console, the code into the
+// phone. A field somebody has to retype by hand is a field somebody retypes
+// wrongly.
+func TestEverythingTheDeviceNeedsCanBeCopied(t *testing.T) {
+	out := page("setup", PageWizard, "de", nil)
+	for _, id := range []string{"devUserCopy", "devPolicyCopy", "devPayloadCopy"} {
+		if !strings.Contains(out, `id="`+id+`"`) {
+			t.Errorf("%s missing", id)
+		}
+	}
+}

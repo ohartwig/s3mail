@@ -135,6 +135,33 @@
       </div>
       <div class="hint">{{t "setup.lifecycleHint"}}</div>
       <div id="lifeMsg" class="msg"></div>
+
+      <!-- Ein zweites Geraet. Steht hier und nicht weiter oben, weil erst nach
+           der Pruefung feststeht, welches Postfach gemeint ist - und die Policy
+           genau daraus abgeleitet wird. -->
+      <label style="margin-top:18px">{{t "setup.device"}}</label>
+      <div class="hint">{{t "setup.deviceHint"}}</div>
+      <button id="device" style="margin-top:8px">{{t "setup.deviceMake"}}</button>
+      <div id="deviceBox" style="display:none;margin-top:12px">
+        <label>{{t "setup.deviceUser"}}</label>
+        <div class="row">
+          <input id="devUser" readonly>
+          <button id="devUserCopy" style="flex:none">{{t "setup.copy"}}</button>
+        </div>
+
+        <label style="margin-top:12px">{{t "setup.devicePolicy"}}</label>
+        <div class="hint">{{t "setup.devicePolicyHint"}}</div>
+        <textarea id="devPolicy" readonly rows="12"
+                  style="width:100%;font-family:ui-monospace,monospace;font-size:12px"></textarea>
+        <button id="devPolicyCopy">{{t "setup.copy"}}</button>
+
+        <label style="margin-top:12px">{{t "setup.deviceCode"}}</label>
+        <div class="hint">{{t "setup.deviceCodeHint"}}</div>
+        <textarea id="devPayload" readonly rows="4"
+                  style="width:100%;font-family:ui-monospace,monospace;font-size:11px"></textarea>
+        <button id="devPayloadCopy">{{t "setup.copy"}}</button>
+        <div id="devMsg" class="msg"></div>
+      </div>
     </div>
   </div>
 
@@ -311,6 +338,33 @@ $("#setLife").onclick = async () => {
     say("#lifeMsg", d.message);
   } catch (e) { say("#lifeMsg", e.message, true); }
 };
+
+// --- Ein zweites Geraet ------------------------------------------------- //
+//
+// Der Code traegt KEINEN Schluessel. Das ist der Punkt: ein Foto vom
+// Bildschirm, ein Screenshot in einem Chat, eine Schulter im Cafe - keines
+// davon gibt jemandem Zugang. Der Schluessel wird auf dem Telefon einmal
+// eingetippt, nachdem der IAM-Benutzer existiert.
+$("#device").onclick = async () => {
+  const b = $("#device"); b.disabled = true;
+  try {
+    const d = await api("/api/setup/device", collect());
+    $("#devUser").value = d.user;
+    $("#devPolicy").value = d.policy;
+    $("#devPayload").value = d.payload;
+    $("#deviceBox").style.display = "";
+  } catch (e) { say("#devMsg", e.message, true); }
+  finally { b.disabled = false; }
+};
+
+for (const [btn, field] of [["#devUserCopy", "#devUser"],
+                            ["#devPolicyCopy", "#devPolicy"],
+                            ["#devPayloadCopy", "#devPayload"]]) {
+  $(btn).onclick = async () => {
+    try { await navigator.clipboard.writeText($(field).value); say("#devMsg", T["setup.copied"]); }
+    catch { $(field).select(); }
+  };
+}
 
 $("#save").onclick = async () => {
   const b = $("#save"); b.disabled = true; b.textContent = T["setup.saving"];
