@@ -345,6 +345,55 @@ func TestTheIconsAreDrawnNotTyped(t *testing.T) {
 	}
 }
 
+// An SVG without a viewBox does not scale - it crops.
+//
+// The sprite is drawn in a 24x24 grid and .ic sizes the element at about an em.
+// Without a viewBox those 24 user units map 1:1 onto ~18 pixels, so the browser
+// shows the top left corner of every glyph and nothing warns anybody: the page
+// is valid, the icons are simply cut off. That is a whole class of bug that
+// costs one attribute to close, so the attribute is worth a test.
+func TestTheIconsScaleRatherThanCrop(t *testing.T) {
+	out := page("inbox", PageMailbox, "de", map[string]any{"bucket": "b"})
+
+	idx := strings.Index(out, "const ic = ")
+	if idx < 0 {
+		t.Fatal("no ic helper to check")
+	}
+	// A window rather than the line: the template sits on the next one, and a
+	// reformat should not be able to move the attribute out of sight.
+	window := out[idx:min(idx+400, len(out))]
+	if !strings.Contains(window, `viewBox="0 0 24 24"`) {
+		t.Error("ic() builds an svg without a viewBox - every glyph renders cropped")
+	}
+}
+
+// Every folder icon goes through ic(), including the one in the move menu.
+//
+// That menu was the last place still interpolating the raw value, which was
+// invisible while the value was an emoji and became the literal word
+// "folder.inbox" the day it turned into a name.
+func TestTheMoveMenuDrawsItsIconsToo(t *testing.T) {
+	out := page("inbox", PageMailbox, "de", map[string]any{"bucket": "b"})
+
+	if !strings.Contains(out, `${ic(f.icon || "folder")}`) {
+		t.Error("the move menu does not send its icons through ic()")
+	}
+	if strings.Contains(out, `">${f.icon} `) {
+		t.Error("the move menu still prints the icon name as text")
+	}
+}
+
+// A placeholder that arrives as "${T[...]}" is a quoting mistake, not a
+// translation: single quotes make a JS string, and only backticks interpolate.
+// The catalogue is wired up correctly and the field still showed the source.
+func TestTheNewFolderFieldAsksInTheReadersLanguage(t *testing.T) {
+	out := page("inbox", PageMailbox, "de", map[string]any{"bucket": "b"})
+
+	if strings.Contains(out, `'<div class="opt" style="gap:4px">`) {
+		t.Error("the new-folder row is a single-quoted string - its placeholder cannot interpolate")
+	}
+}
+
 // The icon travels as a name so that one word can be an SVG here and an SF
 // Symbol on the phone. A glyph in the core would have decided for both.
 func TestTheCoreNamesIconsRatherThanDrawingThem(t *testing.T) {
