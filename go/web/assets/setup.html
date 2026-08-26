@@ -141,26 +141,20 @@
            derived from exactly that. -->
       <label style="margin-top:18px">{{t "setup.device"}}</label>
       <div class="hint">{{t "setup.deviceHint"}}</div>
-      <button id="device" style="margin-top:8px">{{t "setup.deviceMake"}}</button>
+      <div class="row" style="margin-top:8px">
+        <input id="devName" placeholder="{{t "setup.deviceName.placeholder"}}">
+        <button id="device" style="flex:none">{{t "setup.deviceMake"}}</button>
+      </div>
       <div id="deviceBox" style="display:none;margin-top:12px">
-        <label>{{t "setup.deviceUser"}}</label>
-        <div class="row">
-          <input id="devUser" readonly>
-          <button id="devUserCopy" style="flex:none">{{t "setup.copy"}}</button>
-        </div>
-
-        <label style="margin-top:12px">{{t "setup.devicePolicy"}}</label>
-        <div class="hint">{{t "setup.devicePolicyHint"}}</div>
-        <textarea id="devPolicy" readonly rows="12"
-                  style="width:100%;font-family:ui-monospace,monospace;font-size:12px"></textarea>
-        <button id="devPolicyCopy">{{t "setup.copy"}}</button>
-
-        <label style="margin-top:12px">{{t "setup.deviceCode"}}</label>
-        <div class="hint">{{t "setup.deviceCodeHint"}}</div>
+        <div class="hint">{{t "setup.deviceReady"}}</div>
         <div id="devQR" style="margin:10px 0;max-width:320px"></div>
-        <textarea id="devPayload" readonly rows="4"
-                  style="width:100%;font-family:ui-monospace,monospace;font-size:11px"></textarea>
-        <button id="devPayloadCopy">{{t "setup.copy"}}</button>
+
+        <label>{{t "setup.devicePin"}}</label>
+        <div id="devPin" style="font-family:ui-monospace,monospace;font-size:28px;letter-spacing:6px"></div>
+        <div class="hint">{{t "setup.devicePinHint"}}</div>
+
+        <div id="devPush" class="hint" style="display:none">{{t "setup.devicePushOff"}}</div>
+        <button id="devDone" style="margin-top:12px">{{t "setup.deviceDone"}}</button>
         <div id="devMsg" class="msg"></div>
       </div>
     </div>
@@ -342,33 +336,48 @@ $("#setLife").onclick = async () => {
 
 // --- A second device ------------------------------------------------------ //
 //
-// The code carries NO key. That is the point: a photograph of the screen, a
-// screenshot in a chat, a shoulder in a cafe - none of them give anybody
-// access. The key is typed on the phone once, after the IAM user exists.
+// One field and one button. What used to be here - an IAM user to create by
+// hand, a policy to paste into the console, forty characters to type on a
+// phone - was homework for whoever runs the infrastructure, and s3mail is for
+// whoever reads the mail.
+//
+// The code carries the key, sealed. The PIN stands beside it and never inside
+// it: that separation is why a photograph of this screen is not the device's
+// access.
+let pairing = null;
+
 $("#device").onclick = async () => {
   const b = $("#device"); b.disabled = true;
   try {
-    const d = await api("/api/setup/device", collect());
-    $("#devUser").value = d.user;
-    $("#devPolicy").value = d.policy;
-    $("#devPayload").value = d.payload;
-    // Der Server liefert fertiges SVG. Kein innerHTML mit fremdem Inhalt: das
-    // hier ist selbst erzeugtes Markup aus dem eigenen Encoder, kein Text aus
-    // einer Mail.
-    $("#devQR").innerHTML = d.qr || "";
+    const d = await api("/api/setup/device", {...collect(), device_name: $("#devName").value});
+    pairing = d.user;
+    $("#devPin").textContent = d.pin.replace(/(\d{3})(\d{3})/, "$1 $2");
+    drawQR($("#devQR"), d.qr);
+    $("#devPush").style.display = d.push ? "none" : "";
     $("#deviceBox").style.display = "";
+    say("#devMsg", "");
   } catch (e) { say("#devMsg", e.message, true); }
   finally { b.disabled = false; }
 };
 
-for (const [btn, field] of [["#devUserCopy", "#devUser"],
-                            ["#devPolicyCopy", "#devPolicy"],
-                            ["#devPayloadCopy", "#devPayload"]]) {
-  $(btn).onclick = async () => {
-    try { await navigator.clipboard.writeText($(field).value); say("#devMsg", T["setup.copied"]); }
-    catch { $(field).select(); }
-  };
-}
+// Closing the dialog takes the key back if the phone never used it. This bounds
+// the exposure of a code far better than the PIN does: an abandoned code
+// becomes a ciphertext for a key that no longer exists.
+$("#devDone").onclick = async () => {
+  const user = pairing;
+  pairing = null;
+  $("#deviceBox").style.display = "none";
+  $("#devQR").innerHTML = ""; $("#devPin").textContent = "";
+  if (!user) return;
+  try {
+    const d = await api("/api/setup/device/abandon", {...collect(), device_user: user});
+    if (d.removed) say("#devMsg", T["setup.deviceAbandoned"]);
+  } catch { /* the wizard has nothing useful to say here; the key stays */ }
+};
+
+// The server sends finished SVG. Not innerHTML with somebody else's content:
+// this is markup from our own encoder, not text out of a mail.
+function drawQR(into, svg) { into.innerHTML = svg || ""; }
 
 $("#save").onclick = async () => {
   const b = $("#save"); b.disabled = true; b.textContent = T["setup.saving"];

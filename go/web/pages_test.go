@@ -239,7 +239,7 @@ func TestTheWizardCanPrepareADevice(t *testing.T) {
 	out := page("setup", PageWizard, "de", nil)
 
 	for _, anchor := range []string{`id="device"`, `id="deviceBox"`,
-		`id="devUser"`, `id="devPolicy"`, `id="devPayload"`} {
+		`id="devName"`, `id="devQR"`, `id="devPin"`, `id="devDone"`} {
 		if !strings.Contains(out, anchor) {
 			t.Errorf("%s missing - the dialog has no place to put its answer", anchor)
 		}
@@ -249,16 +249,29 @@ func TestTheWizardCanPrepareADevice(t *testing.T) {
 	}
 }
 
-// Three copy buttons and three fields, because all three are pasted somewhere
-// else: the user name and the policy into the IAM console, the code into the
-// phone. A field somebody has to retype by hand is a field somebody retypes
-// wrongly.
-func TestEverythingTheDeviceNeedsCanBeCopied(t *testing.T) {
+// One field, one button. Everything that used to be copied out of here - the
+// user name, the policy, the payload - is now done by the program, and a field
+// for it would be homework nobody asked for.
+func TestPairingAsksForOneThingOnly(t *testing.T) {
 	out := page("setup", PageWizard, "de", nil)
-	for _, id := range []string{"devUserCopy", "devPolicyCopy", "devPayloadCopy"} {
-		if !strings.Contains(out, `id="`+id+`"`) {
-			t.Errorf("%s missing", id)
+	for _, gone := range []string{`id="devPolicy"`, `id="devUser"`,
+		`id="devPayload"`, `id="devPolicyCopy"`} {
+		if strings.Contains(out, gone) {
+			t.Errorf("%s is still there - the console work was not actually removed", gone)
 		}
+	}
+}
+
+// A code that is abandoned has to take its key with it. Without this the wizard
+// would leave a working key behind every time somebody looked at the dialog and
+// changed their mind.
+func TestAbandoningTheDialogRevokesTheKey(t *testing.T) {
+	out := page("setup", PageWizard, "de", nil)
+	if !strings.Contains(out, "/api/setup/device/abandon") {
+		t.Error("nothing revokes the key when the dialog closes")
+	}
+	if !strings.Contains(out, "device_user:") {
+		t.Error("the abandon call does not say which pairing it means")
 	}
 }
 

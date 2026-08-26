@@ -34,6 +34,27 @@ func fromPolicies(documents []string) Finding {
 				if a := senderFrom(s.Condition); a != "" {
 					f.From = a
 				}
+			case hasPrefix(actions, "sns:"):
+				// Two different things live under sns:, and they are told
+				// apart by the action rather than by the ARN - an ARN can be
+				// mistyped, an action cannot.
+				for _, a := range actions {
+					switch a {
+					case "sns:Subscribe":
+						for _, arn := range list(s.Resource) {
+							if i := strings.LastIndex(arn, ":"); i > 0 {
+								f.PushTopic = arn
+							}
+						}
+					}
+				}
+			case hasPrefix(actions, "iam:"):
+				// The boundary a device user must carry, out of the condition
+				// that makes creating one safe. Its presence is also the
+				// answer to "may this access create devices at all".
+				if b := condition(s.Condition, "iam:PermissionsBoundary"); len(b) > 0 {
+					f.DeviceBoundary = b[0]
+				}
 			case hasPrefix(actions, "sqs:"):
 				// The queue the mailbox is allowed to receive from is the one it
 				// should hang on. Whoever may read it was meant to be told.
@@ -45,7 +66,22 @@ func fromPolicies(documents []string) Finding {
 			}
 		}
 	}
+	// The local part is the last segment of the prefix: "mail/ole/" -> "ole".
+	// Derived and not asked for, like everything else here.
+	f.Mailbox = mailboxOf(f.Prefix)
 	return f
+}
+
+// mailboxOf takes the local part out of a prefix.
+func mailboxOf(prefix string) string {
+	p := strings.Trim(prefix, "/")
+	if p == "" {
+		return ""
+	}
+	if i := strings.LastIndex(p, "/"); i >= 0 {
+		return p[i+1:]
+	}
+	return p
 }
 
 type statement struct {
