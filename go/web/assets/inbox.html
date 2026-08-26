@@ -15,11 +15,34 @@
             --text:#16202b; --muted:#5d6b7a; }
   }
   * { box-sizing:border-box; }
+
+  /* Symbole erben Farbe und Schriftgroesse von ihrer Umgebung: ein Symbol in
+     einem Knopf ist so gross wie dessen Text und nimmt dessen Farbe an, auch
+     wenn der Knopf gefaerbt ist. Das konnte ein Emoji nie. */
+  .ic { width:1.15em; height:1.15em; flex:none; vertical-align:-.2em;
+        fill:none; stroke:currentColor; stroke-width:1.75;
+        stroke-linecap:round; stroke-linejoin:round; }
+  .ic.sm { width:1em; height:1em; stroke-width:2; }
+  /* Der Stern ist gefuellt, wenn er gesetzt ist - der einzige Zustand im
+     Symbolsatz, den Form allein nicht traegt. */
+  .star.on .ic { fill:currentColor; }
   body { margin:0; height:100vh; display:flex; flex-direction:column; overflow:hidden;
-         font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+         /* system-ui zuerst: auf einem Mac ist das SF Pro, auf Windows Segoe,
+            auf Linux was die Oberflaeche nimmt. Die Seite sieht damit ueberall
+            aus wie das System, in dem sie laeuft, statt ueberall gleich fremd. */
+         font:14px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+         /* Ziffern in Spalten untereinander - Zaehler in der Seitenleiste,
+            Groessen bei Anhaengen, Uhrzeiten in der Liste. */
+         font-variant-numeric:tabular-nums;
+         -webkit-font-smoothing:antialiased;
          background:var(--bg); color:var(--text); }
   header { display:flex; gap:10px; align-items:center; padding:9px 14px;
-           border-bottom:1px solid var(--line); background:var(--panel); }
+           border-bottom:1px solid var(--line); background:var(--panel);
+           /* Durchscheinend wie eine Titelleiste in macOS: was darunter
+              wegscrollt, deutet sich an statt hart abzuschneiden. Der
+              Rueckfall ist die volle Farbe, wo es das nicht gibt. */
+           background:color-mix(in srgb, var(--panel) 80%, transparent);
+           backdrop-filter:saturate(180%) blur(20px); }
   header b { font-size:15px; }
   .box { font-size:12px; color:var(--muted); }
   input, textarea, button, select { font:inherit; color:var(--text); }
@@ -27,8 +50,19 @@
        border:1px solid var(--line); background:var(--panel2); min-width:120px; }
   #q:focus { outline:2px solid var(--accent); outline-offset:-1px; }
   button { background:var(--panel2); border:1px solid var(--line); color:var(--text);
-           border-radius:var(--radius); padding:6px 11px; cursor:pointer; }
-  button:hover:not(:disabled) { border-color:var(--accent); }
+           border-radius:var(--radius); padding:6px 11px; cursor:pointer;
+           display:inline-flex; align-items:center; gap:6px;
+           /* Der Druck soll spuerbar sein und nicht nur sichtbar: 120ms sind
+              schnell genug, um nicht zu bremsen, und lang genug, um nicht wie
+              ein Sprung zu wirken. */
+           transition:background .12s, border-color .12s, transform .06s; }
+  button:hover:not(:disabled) { border-color:var(--accent);
+           background:color-mix(in srgb, var(--accent) 8%, var(--panel2)); }
+  button:active:not(:disabled) { transform:scale(.97); }
+  /* Ein sichtbarer Fokusring, und nur fuer die Tastatur: mit der Maus stoert
+     er, ohne Tastatur ist die Seite unbenutzbar. */
+  button:focus-visible, a.btn:focus-visible, .nav:focus-visible {
+           outline:2px solid var(--accent); outline-offset:2px; }
   /* A link that has to sit in a row of buttons - the unsubscribe page of a
      sender is a link on purpose, so that opening it is a visible navigation. */
   a.btn { background:var(--panel2); border:1px solid var(--line); color:var(--text);
@@ -51,10 +85,15 @@
   .sec { font-size:11px; letter-spacing:.08em; text-transform:uppercase;
          color:var(--muted); padding:12px 14px 4px; display:flex;
          justify-content:space-between; align-items:center; }
-  .nav { display:flex; align-items:center; gap:8px; padding:6px 14px; cursor:pointer;
-         border-left:3px solid transparent; }
+  .nav { display:flex; align-items:center; gap:9px; padding:6px 10px; cursor:pointer;
+         margin:1px 8px; border-radius:7px; border-left:3px solid transparent;
+         transition:background .12s; }
   .nav:hover { background:var(--panel2); }
-  .nav.sel { background:var(--panel2); border-left-color:var(--accent); }
+  /* Die ausgewaehlte Zeile ist eine gefaerbte Pille, kein Balken am Rand -
+     so machen es die Seitenleisten, neben denen dieses Fenster steht. */
+  .nav.sel { background:color-mix(in srgb, var(--accent) 14%, transparent);
+             color:var(--accent); border-left-color:transparent; }
+  .nav.sel .cnt { color:var(--accent); }
   .nav .name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .nav .cnt { font-size:11.5px; color:var(--muted); }
   .nav.unread .name { font-weight:700; }
@@ -152,6 +191,35 @@
 </style>
 </head>
 <body>
+<!-- The icon set, drawn here rather than pulled in.
+     24x24 grid, 1.75 stroke, round caps and joins - the geometry every current
+     icon set shares, so it sits beside SF Symbols on a Mac without looking
+     foreign.
+     Drawn rather than vendored on purpose: a free set would mean a licence
+     notice, a NOTICE entry and a directory of files for fifteen shapes. Same
+     reasoning as tools/zip.go and qr/. What it also avoids is the emoji this
+     replaced, which rendered differently on every machine and could not take a
+     colour. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <g id="i-inbox"><path d="M4 13h4l1.5 3h5L16 13h4"/><path d="M5.5 5.5h13l1.5 7.5v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-4z"/></g>
+    <g id="i-drafts"><path d="M4 20h16"/><path d="M14.5 4.5l3 3L8 17l-4 1 1-4z"/></g>
+    <g id="i-sent"><path d="M20.5 3.5L11 13"/><path d="M20.5 3.5l-6 17-3.5-7.5L3.5 9.5z"/></g>
+    <g id="i-archive"><path d="M3.5 6.5h17v3h-17z"/><path d="M5 9.5v9a1.5 1.5 0 0 0 1.5 1.5h11a1.5 1.5 0 0 0 1.5-1.5v-9"/><path d="M10 13h4"/></g>
+    <g id="i-spam"><path d="M12 4.5l8.5 15h-17z"/><path d="M12 10v4"/><path d="M12 17h.01"/></g>
+    <g id="i-trash"><path d="M4 7h16"/><path d="M9.5 7V5h5v2"/><path d="M6 7l1 12.5a1.5 1.5 0 0 0 1.5 1.5h7a1.5 1.5 0 0 0 1.5-1.5L18 7"/></g>
+    <g id="i-folder"><path d="M3.5 7A1.5 1.5 0 0 1 5 5.5h4l2 2h8A1.5 1.5 0 0 1 20.5 9v9a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 18z"/></g>
+    <g id="i-tag"><path d="M11 3.5H4.5V10L14 19.5l6.5-6.5z"/><path d="M8 8h.01"/></g>
+    <g id="i-star"><path d="M12 4l2.4 5.1 5.6.7-4.1 3.9 1.1 5.5L12 16.5 6.9 19.2 8 13.7 4 9.8l5.6-.7z"/></g>
+    <g id="i-clip"><path d="M20 11.5l-8 8a5 5 0 0 1-7-7l8.5-8.5a3.4 3.4 0 0 1 4.8 4.8l-8.5 8.5a1.8 1.8 0 0 1-2.5-2.5l7.8-7.8"/></g>
+    <g id="i-download"><path d="M12 4v10"/><path d="M8 10.5l4 4 4-4"/><path d="M4.5 18.5h15"/></g>
+    <g id="i-search"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l4.5 4.5"/></g>
+    <g id="i-reply"><path d="M9 7L4 12l5 5"/><path d="M4 12h9a6 6 0 0 1 6 6v1"/></g>
+    <g id="i-settings"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/></g>
+    <g id="i-plus"><path d="M12 5v14M5 12h14"/></g>
+  </defs>
+</svg>
+
 <header>
   <b>s3mail</b><select id="account" title="{{t "nav.account"}}" aria-label="{{t "nav.account"}}"></select>
   <button class="primary" id="new" title="{{t "nav.new.title"}}">{{t "nav.new"}}</button>
@@ -186,7 +254,7 @@
   <div><label>{{t "compose.body"}}</label><textarea id="c_body"></textarea></div>
   <div><label>{{t "compose.attachments"}}</label><div>
     <select id="c_snippet" style="display:none"></select>
-    <button id="c_attach" type="button">📎 {{t "compose.attach"}}</button>
+    <button id="c_attach" type="button">{{t "compose.attach"}}</button>
     <input id="c_files" type="file" multiple hidden>
     <div id="c_atts" class="atts"></div>
   </div></div>
@@ -248,6 +316,13 @@ let checked = new Set(), lastIdx = null, mode = "reply", showImages = false, msg
 // What used to sit in CFG at load time now rides with every answer: it belongs
 // to the mailbox, and the reader can switch mailbox without reloading the page.
 const canSend = () => over.can_send === true;
+
+// A glyph from the sprite. The name comes from core.SystemFolders for a
+// folder, or is chosen here for everything else - either way it is a name and
+// not a character, so the same word can be an SVG in the browser and an SF
+// Symbol on the phone.
+const ic = (name, cls) =>
+  `<svg class="ic${cls ? " " + cls : ""}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
 
 const esc = s => (s ?? "").toString().replace(/[&<>"']/g, c =>
   ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -458,7 +533,7 @@ function renderSide() {
     <div id="folders">${over.folders.map(f => `
       <div class="nav${folder === f.name && !tagFilter ? " sel" : ""}${f.unread ? " unread" : ""}"
            data-f="${esc(f.name)}">
-        <span>${f.icon}</span><span class="name">${esc(f.label)}</span>
+        ${ic(f.icon || "folder")}<span class="name">${esc(f.label)}</span>
         <span class="cnt">${f.unread ? f.unread + "/" : ""}${f.count}</span>
       </div>`).join("")}</div>
     <div class="side-in" id="newFolderBox" style="display:none">
@@ -467,7 +542,7 @@ function renderSide() {
     </div>
     <div class="sec">${T["side.filter"]} <button class="ghost" id="addFilter" title="${T["side.newFilter"]}">+</button></div>
     <div class="nav${onlyUnread ? " sel" : ""}" id="fUnread"><span>●</span><span class="name">${T["filter.unread"]}</span></div>
-    <div class="nav${onlyStar ? " sel" : ""}" id="fStar"><span>★</span><span class="name">${T["filter.starred"]}</span></div>
+    <div class="nav${onlyStar ? " sel" : ""}" id="fStar">${ic("star")}<span class="name">${T["filter.starred"]}</span></div>
     <div class="nav${waiting ? " sel" : ""}" id="fWaiting"><span>⏳</span><span class="name">${T["filter.waiting"]}</span></div>
     ${(over.filters || []).map(f => `
       <div class="nav${$("#q").value.trim() === f.query ? " sel" : ""}" data-fq="${esc(f.query)}" title="${esc(f.query)}">
@@ -594,10 +669,10 @@ function renderTools() {
       <button id="mMove">${T["tools.move"]} ▾</button>
       <button id="mTag">${T["tools.tag"]} ▾</button>
       <button id="mRead" title="${T["tools.readUnread"]}">●</button>
-      <button id="mStar" title="${T["tools.star"]}">★</button>
+      <button id="mStar" title="${T["tools.star"]}">${ic("star")}</button>
       ${inTrash
         ? (over.allow_delete ? `<button class="danger" id="mPurge">${T["action.deleteForever"]}</button>` : "")
-        : `<button id="mTrash" title="${T["tools.toTrash"]}">🗑</button>`}
+        : `<button id="mTrash" title="${T["tools.toTrash"]}">${ic("trash")}</button>`}
     `;
   const all = $("#all");
   if (all) {
@@ -722,12 +797,12 @@ function renderList() {
   list.innerHTML = messages.map((m, i) => `
     <div class="item${current === m.key ? " sel" : ""}${checked.has(m.key) ? " checked" : ""}${m.read ? "" : " unread"}" data-i="${i}">
       <input type="checkbox" ${checked.has(m.key) ? "checked" : ""} data-chk="${i}">
-      <span class="star${m.star ? " on" : ""}" data-star="${i}">${m.star ? "★" : "☆"}</span>
+      <span class="star${m.star ? " on" : ""}" data-star="${i}">${ic("star")}</span>
       <div class="col">
         <div class="row"><span class="from">${esc(m.from || m.from_addr || "?")}</span>
           <span class="date">${fmtDate(m.date)}</span></div>
         <div class="subj">${esc(m.subject)}
-          ${m.has_attachment ? '<span class="flag">📎</span>' : ""}
+          ${m.has_attachment ? `<span class="flag">${ic("clip","sm")}</span>` : ""}
           ${m.spam ? '<span class="flag bad">Spam</span>' : ""}
           ${m.virus ? '<span class="flag bad">Virus</span>' : ""}
           ${m.auth_failed ? `<span class="flag bad" title="${T["view.authFailTitle"]}">${T["view.authFailShort"]}</span>` : ""}
@@ -816,7 +891,7 @@ const open = guard(async key => {
     return `<span class="att">
       ${canView ? `<button class="eye" data-view="${url}&view=1" data-name="${esc(a.filename)}"
         title="${T["view.preview"]}">👁</button>` : ""}
-      <a href="${url}">📎 ${esc(a.filename)}</a>
+      <a href="${url}">${ic("clip","sm")} ${esc(a.filename)}</a>
       <span class="date">${fmtSize(a.size)}</span></span>`;
   }).join("");
 
@@ -865,19 +940,19 @@ const open = guard(async key => {
           : `<button class="primary" id="reply">${T["compose.reply"]}</button>` +
             `<button id="replyall">${T["compose.replyAll"]}</button>` +
             `<button id="forward">${T["compose.forward"]}</button>`}
-      <button id="vStar">${m.star ? "★ " + T["view.starred"] : "☆ " + T["view.star"]}</button>
+      <button id="vStar">${ic("star")} ${m.star ? T["view.starred"] : T["view.star"]}</button>
       <button id="vTag">${T["tools.tag"]} ▾</button>
       <button id="vMove">${T["tools.move"]} ▾</button>
       ${m.folder === "spam" ? `<button id="vHam">${T["view.notSpam"]}</button>`
                             : `<button id="vSpam">${T["folder.spam"]}</button>`}
       ${m.folder === "trash"
         ? (over.allow_delete ? `<button class="danger" id="vPurge">${T["action.deleteForever"]}</button>` : "")
-        : `<button id="vTrash">🗑 ${T["folder.trash"]}</button>`}
+        : `<button id="vTrash">${ic("trash")} ${T["folder.trash"]}</button>`}
       <button id="vHistory" title="${T["view.history.title"]}">${T["view.history"]}</button>
       ${over.can_block ? `<button id="vBlock" title="${T["blocked.buttonTitle"]}">${T["blocked.button"]}</button>` : ""}
       ${m.unsubscribe && m.unsubscribe.mail ? `<button id="vUnsub" title="${T["unsub.title"]}">${T["unsub.button"]}</button>` : ""}
       ${m.unsubscribe && !m.unsubscribe.mail && m.unsubscribe.link ? `<a class="btn" target="_blank" rel="noopener noreferrer" href="${esc(m.unsubscribe.link)}" title="${T["unsub.linkTitle"]}">${T["unsub.button"]}</a>` : ""}
-      <a class="att" href="/api/raw?key=${encodeURIComponent(key)}">⬇︎ .eml</a>
+      <a class="att" href="/api/raw?key=${encodeURIComponent(key)}">${ic("download","sm")} .eml</a>
       ${m.html ? `<button id="imgs">${showImages ? T["view.blockImages"] : T["view.loadImages"]}</button>` : ""}
     </div>
     ${atts ? `<div class="atts">${atts}</div>` : ""}
@@ -978,7 +1053,7 @@ const MAX_MAIL = 10 * 1024 * 1024;
 
 function renderAtts() {
   $("#c_atts").innerHTML = attachments.map((a, i) => `
-    <span class="att">📎 ${esc(a.filename)} <span class="date">${fmtSize(a.size)}</span>
+    <span class="att">${ic("clip","sm")} ${esc(a.filename)} <span class="date">${fmtSize(a.size)}</span>
       <button type="button" data-i="${i}" title="${T["compose.remove"]}">✕</button></span>`).join("");
   for (const b of $("#c_atts").querySelectorAll("button")) {
     b.onclick = () => { attachments.splice(+b.dataset.i, 1); renderAtts(); };

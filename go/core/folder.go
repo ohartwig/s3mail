@@ -27,10 +27,17 @@ const (
 	Drafts  = "drafts"
 )
 
-// SystemFolder carries a translation key, not a label. The Name is an S3
-// prefix and must never be translated: rename it and a client in another
-// language stops finding the mail a colleague filed. What the reader sees is
-// the label, and that is looked up per request.
+// SystemFolder carries a translation key, not a label, and an icon *name*, not
+// a glyph. The Name is an S3 prefix and must never be translated: rename it and
+// a client in another language stops finding the mail a colleague filed. What
+// the reader sees is the label, and that is looked up per request.
+//
+// The icon went the same way for the same reason. It used to be an emoji, which
+// meant this file - logic without side effects - decided what a mailbox looks
+// like, and both interfaces were stuck with whatever the font on that machine
+// made of it. Now it is a name: the browser turns "inbox" into an SVG from its
+// own sprite, the phone into an SF Symbol. One source, two renderings, and
+// neither of them lives here.
 //
 // Archive is spelled "archiv" for the same reason - it is a prefix that exists
 // in live mailboxes, not a word on a screen.
@@ -39,12 +46,12 @@ type SystemFolder struct {
 }
 
 var SystemFolders = []SystemFolder{
-	{Inbox, "folder.inbox", "\U0001F4E5"},
-	{Drafts, "folder.drafts", "\U0001F4DD"},
-	{Sent, "folder.sent", "\U0001F4E4"},
-	{Archive, "folder.archive", "\U0001F4E6"},
-	{Spam, "folder.spam", "⚠️"},
-	{Trash, "folder.trash", "\U0001F5D1️"},
+	{Inbox, "folder.inbox", "inbox"},
+	{Drafts, "folder.drafts", "drafts"},
+	{Sent, "folder.sent", "sent"},
+	{Archive, "folder.archive", "archive"},
+	{Spam, "folder.spam", "spam"},
+	{Trash, "folder.trash", "trash"},
 }
 
 var folderRe = regexp.MustCompile(`^[\p{L}][\p{L}\p{N}_ .-]{0,39}$`)
