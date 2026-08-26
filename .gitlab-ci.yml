@@ -26,7 +26,7 @@ include:
   # Katalog-Projekt, und dort loest GitLab nur einen vollstaendigen Tag auf.
   # Renovate haelt ihn nach.
   # renovate: datasource=gitlab-tags depName=devops/ci-cd-components/build-provenance
-  - component: ${CI_SERVER_HOST}/devops/ci-cd-components/build-provenance/sign-artifact@2.0.48
+  - component: ${CI_SERVER_HOST}/devops/ci-cd-components/build-provenance/sign-artifact@2.0.49
     inputs:
       stage: release
       artifact-file: SHA256SUMS
