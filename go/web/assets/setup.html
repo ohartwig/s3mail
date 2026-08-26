@@ -136,9 +136,9 @@
       <div class="hint">{{t "setup.lifecycleHint"}}</div>
       <div id="lifeMsg" class="msg"></div>
 
-      <!-- Ein zweites Geraet. Steht hier und nicht weiter oben, weil erst nach
-           der Pruefung feststeht, welches Postfach gemeint ist - und die Policy
-           genau daraus abgeleitet wird. -->
+      <!-- A second device. Here and not further up, because only after the
+           check is it settled which mailbox is meant - and the policy is
+           derived from exactly that. -->
       <label style="margin-top:18px">{{t "setup.device"}}</label>
       <div class="hint">{{t "setup.deviceHint"}}</div>
       <button id="device" style="margin-top:8px">{{t "setup.deviceMake"}}</button>
@@ -340,12 +340,11 @@ $("#setLife").onclick = async () => {
   } catch (e) { say("#lifeMsg", e.message, true); }
 };
 
-// --- Ein zweites Geraet ------------------------------------------------- //
+// --- A second device ------------------------------------------------------ //
 //
-// Der Code traegt KEINEN Schluessel. Das ist der Punkt: ein Foto vom
-// Bildschirm, ein Screenshot in einem Chat, eine Schulter im Cafe - keines
-// davon gibt jemandem Zugang. Der Schluessel wird auf dem Telefon einmal
-// eingetippt, nachdem der IAM-Benutzer existiert.
+// The code carries NO key. That is the point: a photograph of the screen, a
+// screenshot in a chat, a shoulder in a cafe - none of them give anybody
+// access. The key is typed on the phone once, after the IAM user exists.
 $("#device").onclick = async () => {
   const b = $("#device"); b.disabled = true;
   try {

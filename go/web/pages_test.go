@@ -261,3 +261,49 @@ func TestEverythingTheDeviceNeedsCanBeCopied(t *testing.T) {
 		}
 	}
 }
+
+// Links in a mail have to open - and the mail has to stay powerless while they
+// do.
+//
+// The empty sandbox forbade both: scripts (wanted) and navigation (not
+// wanted). Beside it stood a <base target="_blank"> attempting exactly that and
+// getting nowhere. Found in use, not by a test.
+func TestMailLinksCanBeOpened(t *testing.T) {
+	out := page("inbox", PageMailbox, "de", map[string]any{"bucket": "b"})
+
+	if !strings.Contains(out, "allow-popups") {
+		t.Error("the iframe forbids navigation - links do nothing")
+	}
+	if !strings.Contains(out, "allow-popups-to-escape-sandbox") {
+		t.Error("an opened page would inherit the sandbox and look broken")
+	}
+	// And the absences that carry the whole arrangement. An allow-scripts here
+	// would undo the decision that makes showing a stranger's HTML defensible
+	// at all.
+	for _, forbidden := range []string{"allow-scripts", "allow-same-origin",
+		"allow-forms", "allow-top-navigation"} {
+		if strings.Contains(out, forbidden) {
+			t.Errorf("%s is granted - the mail could act", forbidden)
+		}
+	}
+}
+
+// Otherwise a URL in a text mail is something to retype by hand.
+func TestPlainTextURLsBecomeLinks(t *testing.T) {
+	out := page("inbox", PageMailbox, "de", map[string]any{"bucket": "b"})
+
+	if !strings.Contains(out, "const linkify") {
+		t.Fatal("no linkify - URLs in a text mail stay text")
+	}
+	if !strings.Contains(out, "linkify(esc(") {
+		t.Error("escaping has to come first: linkify(esc(...)), never the other way round")
+	}
+	if !strings.Contains(out, `rel="noopener noreferrer"`) {
+		t.Error("an opened page would get a handle on this window and the referrer")
+	}
+	// Only the two schemes. A javascript: out of somebody else's mail does not
+	// become a link.
+	if !strings.Contains(out, `https?:\/\/|mailto:`) {
+		t.Error("the scheme list is not what it should be")
+	}
+}

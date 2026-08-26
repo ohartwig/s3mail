@@ -251,6 +251,30 @@ const canSend = () => over.can_send === true;
 
 const esc = s => (s ?? "").toString().replace(/[&<>"']/g, c =>
   ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+// A URL in a text mail is text. Making it clickable is the difference between
+// retyping and clicking.
+//
+// Escape first, then linkify - never the other way round. The argument IS
+// already escaped, so what the expression finds can no longer be markup, and
+// what comes out is only markup built here. Turning that order around builds a
+// hole that anybody can reach with a mail.
+//
+// Only http, https and mailto. A javascript: or data: out of somebody else's
+// mail has no business becoming a link.
+//
+// noopener noreferrer: the opened page gets neither a handle on this window nor
+// the address it was clicked from. For mail that lives in one's own bucket, the
+// second one is not nothing.
+const linkify = escaped => escaped.replace(
+  /(https?:\/\/|mailto:)[^\s<>"']+/g, url => {
+    // Punctuation at the end belongs to the sentence, not the address: "see
+    // https://example.com." does not end in a full stop.
+    let tail = "";
+    const m = url.match(/(&(?:amp|quot|#39|lt|gt);|[.,;:!?)\]]+)$/);
+    if (m) { tail = m[0]; url = url.slice(0, -tail.length); }
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>${tail}`;
+  });
 const fmtDate = iso => {
   const d = new Date(iso), n = new Date();
   return d.toDateString() === n.toDateString()
@@ -802,9 +826,25 @@ const open = guard(async key => {
       + (showImages ? "* data:" : "data:");
     const doc = `<meta http-equiv="Content-Security-Policy" content="${csp}"><base target="_blank">`
       + `<style>body{font-family:sans-serif;margin:12px;color:#111}</style>` + m.html;
-    bodyHtml = `<iframe class="body" sandbox="" srcdoc="${esc(doc)}"></iframe>`;
+    // allow-popups, so that clicking a link does anything at all. Without it
+    // the empty sandbox forbids navigation too, and the <base target="_blank">
+    // beside it gets nowhere - the fault that showed up in use: links would
+    // not open.
+    //
+    // What does NOT come with it is the part that matters: no allow-scripts,
+    // no allow-same-origin, no allow-forms. Without scripts the mail cannot
+    // open a window by itself - a popup only comes from a person clicking. And
+    // a `javascript:` href executes nothing, because the document that would
+    // run it is this script-less frame.
+    //
+    // allow-popups-to-escape-sandbox, so the opened page is an ordinary tab.
+    // Without it the page inherits the sandbox and is, with no scripts and no
+    // origin, effectively broken - a bank page that will not load looks like a
+    // fault in s3mail.
+    bodyHtml = `<iframe class="body" sandbox="allow-popups allow-popups-to-escape-sandbox" `
+      + `srcdoc="${esc(doc)}"></iframe>`;
   } else {
-    bodyHtml = `<pre class="body">${esc(m.text || T["view.noText"])}</pre>`;
+    bodyHtml = `<pre class="body">${linkify(esc(m.text || T["view.noText"]))}</pre>`;
   }
 
   $("#view").innerHTML = `
