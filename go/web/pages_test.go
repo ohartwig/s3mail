@@ -320,3 +320,43 @@ func TestPlainTextURLsBecomeLinks(t *testing.T) {
 		t.Error("the scheme list is not what it should be")
 	}
 }
+
+// Icons come from the sprite, not from the font.
+//
+// Emoji were the previous answer and a poor one: they render differently on
+// every machine, cannot take a colour, and put a decision about what a mailbox
+// looks like into core/folder.go - a package that is meant to hold logic
+// without side effects.
+func TestTheIconsAreDrawnNotTyped(t *testing.T) {
+	out := page("inbox", PageMailbox, "de", map[string]any{"bucket": "b"})
+
+	if !strings.Contains(out, `id="i-inbox"`) {
+		t.Error("no sprite - the icons have nowhere to come from")
+	}
+	if !strings.Contains(out, "const ic = ") {
+		t.Error("no helper - nothing turns a name into a glyph")
+	}
+	// The emoji this replaced. A test on absence, because the way they come
+	// back is somebody adding one line in a hurry.
+	for _, glyph := range []string{"📥", "📝", "📤", "📦", "🗑", "📎", "★", "☆", "⬇︎"} {
+		if strings.Contains(out, glyph) {
+			t.Errorf("%s is back in the page", glyph)
+		}
+	}
+}
+
+// The icon travels as a name so that one word can be an SVG here and an SF
+// Symbol on the phone. A glyph in the core would have decided for both.
+func TestTheCoreNamesIconsRatherThanDrawingThem(t *testing.T) {
+	for _, f := range core.SystemFolders {
+		if f.Icon == "" {
+			t.Errorf("%s has no icon name", f.Name)
+		}
+		for _, r := range f.Icon {
+			if r > 127 {
+				t.Errorf("%s carries a glyph (%q) rather than a name", f.Name, f.Icon)
+				break
+			}
+		}
+	}
+}
