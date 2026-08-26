@@ -43,6 +43,11 @@ func (a *Wizard) Device(_ context.Context, d Data) (map[string]any, error) {
 		// without one there is nothing to send as, and a permission that
 		// cannot be used is one nobody watches.
 		AllowSend: strings.TrimSpace(d.From) != "",
+		// Push only when both halves are there. One without the other is a
+		// permission that cannot be used, and an unused permission is one
+		// nobody notices being abused.
+		PushApps:  d.PushApps,
+		PushTopic: strings.TrimSpace(d.PushTopic),
 	})
 	if err != nil {
 		return nil, err
@@ -51,10 +56,14 @@ func (a *Wizard) Device(_ context.Context, d Data) (map[string]any, error) {
 	// The payload the phone reads. Without the key: that one belongs to the
 	// device and is pasted in after the IAM user exists. A code that already
 	// carried a key would be a key travelling through a screenshot.
-	payload, err := json.Marshal(map[string]string{
+	// The ARNs travel with the code because the device cannot work them out.
+	// They are not secret - an ARN names a resource, it does not open it, and
+	// the policy above decides what the device may do with it.
+	payload, err := json.Marshal(map[string]any{
 		"bucket": d.Bucket, "prefix": prefix, "region": d.Region,
 		"from": strings.TrimSpace(d.From), "label": strings.TrimSpace(d.Label),
 		"accessKey": "", "secret": "",
+		"pushApps": notNil(d.PushApps), "pushTopic": strings.TrimSpace(d.PushTopic),
 	})
 	if err != nil {
 		return nil, err
