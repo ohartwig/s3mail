@@ -262,12 +262,12 @@ func TestEverythingTheDeviceNeedsCanBeCopied(t *testing.T) {
 	}
 }
 
-// Links in einer Mail muessen sich oeffnen lassen - und die Mail muss dabei
-// machtlos bleiben.
+// Links in a mail have to open - and the mail has to stay powerless while they
+// do.
 //
-// Der leere Sandkasten verbot beides: Skripte (gewollt) und das Navigieren
-// (nicht gewollt). Daneben stand ein <base target="_blank">, das genau das
-// versuchte und ins Leere lief. Aufgefallen im Betrieb.
+// The empty sandbox forbade both: scripts (wanted) and navigation (not
+// wanted). Beside it stood a <base target="_blank"> attempting exactly that and
+// getting nowhere. Found in use, not by a test.
 func TestMailLinksCanBeOpened(t *testing.T) {
 	out := page("inbox", PageMailbox, "de", map[string]any{"bucket": "b"})
 
@@ -277,9 +277,9 @@ func TestMailLinksCanBeOpened(t *testing.T) {
 	if !strings.Contains(out, "allow-popups-to-escape-sandbox") {
 		t.Error("an opened page would inherit the sandbox and look broken")
 	}
-	// Und die Abwesenheiten, die das Ganze tragen. Ein allow-scripts hier
-	// waere die Ruecknahme der Entscheidung, fremdes HTML ueberhaupt
-	// anzuzeigen.
+	// And the absences that carry the whole arrangement. An allow-scripts here
+	// would undo the decision that makes showing a stranger's HTML defensible
+	// at all.
 	for _, forbidden := range []string{"allow-scripts", "allow-same-origin",
 		"allow-forms", "allow-top-navigation"} {
 		if strings.Contains(out, forbidden) {
@@ -288,7 +288,7 @@ func TestMailLinksCanBeOpened(t *testing.T) {
 	}
 }
 
-// URLs in einer Textmail sind sonst Text zum Abtippen.
+// Otherwise a URL in a text mail is something to retype by hand.
 func TestPlainTextURLsBecomeLinks(t *testing.T) {
 	out := page("inbox", PageMailbox, "de", map[string]any{"bucket": "b"})
 
@@ -301,7 +301,8 @@ func TestPlainTextURLsBecomeLinks(t *testing.T) {
 	if !strings.Contains(out, `rel="noopener noreferrer"`) {
 		t.Error("an opened page would get a handle on this window and the referrer")
 	}
-	// Nur die drei Schemata. javascript: aus einer fremden Mail wird kein Link.
+	// Only the two schemes. A javascript: out of somebody else's mail does not
+	// become a link.
 	if !strings.Contains(out, `https?:\/\/|mailto:`) {
 		t.Error("the scheme list is not what it should be")
 	}
