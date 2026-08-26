@@ -6,11 +6,13 @@ package wizard
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sort"
 	"strings"
 
 	"git.ole-hartwig.eu/development/s3mail/s3mail/awsx"
 	"git.ole-hartwig.eu/development/s3mail/s3mail/config"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/core"
 	"git.ole-hartwig.eu/development/s3mail/s3mail/i18n"
 	"git.ole-hartwig.eu/development/s3mail/s3mail/qr"
 )
@@ -31,13 +33,57 @@ import (
 // everywhere, and nobody does that at half past eleven at night. With one user
 // per device it is a single click, and the desktop keeps working.
 
-// Device answers /api/setup/device.
-func (a *Wizard) Device(_ context.Context, d Data) (map[string]any, error) {
+// Device answers /api/setup/device: it lets a phone in.
+//
+// What it used to do was hand out homework - create this IAM user, paste this
+// policy, mint a key, type forty characters on a phone. That is a reasonable
+// thing to ask of whoever runs the infrastructure and an unreasonable thing to
+// ask of whoever reads the mail, and s3mail is for the second person.
+//
+// Now it does the work: creates the device user under the mailbox's device
+// path with the permissions boundary attached, mints one key, finds the push
+// targets by looking rather than asking, and seals the key with a PIN it shows
+// beside the code instead of inside it.
+//
+// The boundary is what makes this safe rather than trusting - see
+// mail/devices.tf in koh-infra. Whatever policy is written here, a device can
+// never exceed it, so this call cannot grant more than the access it runs
+// under already has.
+func (a *Wizard) Device(ctx context.Context, d Data) (map[string]any, error) {
 	cat := i18n.Get(d.Language)
 	if strings.TrimSpace(d.Bucket) == "" {
 		return nil, inputError("%s", cat.T("setup.error.noBucket"))
 	}
+	if strings.TrimSpace(d.DeviceName) == "" {
+		return nil, inputError("%s", cat.T("setup.error.noDeviceName"))
+	}
 	prefix := config.NormalizePrefix(d.Prefix)
+
+	cfg, err := awsx.Session(ctx, d.Profile, d.Region)
+	if err != nil {
+		return nil, fmt.Errorf("%s", awsx.PlainText(err, d.Profile, cat))
+	}
+	found, err := awsx.Discover(ctx, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("%s", awsx.PlainText(err, d.Profile, cat))
+	}
+	if found.Mailbox == "" || found.DeviceBoundary == "" {
+		// The mailbox has no device path or no boundary, which means the
+		// infrastructure predates this. Saying so beats a 403 from IAM three
+		// calls later that names neither.
+		return nil, inputError("%s", cat.T("setup.error.noDeviceSupport"))
+	}
+
+	devices := awsx.NewDevices(cfg, "")
+
+	// Look for the platform applications rather than asking. Failing to find
+	// them is not a reason to stop: a mailbox without push is still a mailbox,
+	// and the device simply will not register.
+	apps, _ := devices.PushTargets(ctx, appleBundleID)
+	topic := strings.TrimSpace(d.PushTopic)
+	if topic == "" && found.PushTopic != "" {
+		topic = found.PushTopic
+	}
 
 	policy, err := awsx.DevicePolicy(awsx.DevicePolicyOpts{
 		Bucket: d.Bucket, Prefix: prefix,
@@ -45,70 +91,98 @@ func (a *Wizard) Device(_ context.Context, d Data) (map[string]any, error) {
 		// without one there is nothing to send as, and a permission that
 		// cannot be used is one nobody watches.
 		AllowSend: strings.TrimSpace(d.From) != "",
-		// Push only when both halves are there. One without the other is a
-		// permission that cannot be used, and an unused permission is one
-		// nobody notices being abused.
-		// The policy only needs the ARNs; which environment each belongs to is
-		// the device's problem, not IAM's.
-		PushApps:  pushARNs(d.PushApps),
-		PushTopic: strings.TrimSpace(d.PushTopic),
+		PushApps:  pushARNs(apps),
+		PushTopic: topic,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	// The payload the phone reads. Without the key: that one belongs to the
-	// device and is pasted in after the IAM user exists. A code that already
-	// carried a key would be a key travelling through a screenshot.
-	// The ARNs travel with the code because the device cannot work them out.
-	// They are not secret - an ARN names a resource, it does not open it, and
-	// the policy above decides what the device may do with it.
+	device, err := devices.Create(ctx, awsx.DeviceOpts{
+		Mailbox:   found.Mailbox,
+		Name:      d.DeviceName,
+		Boundary:  found.DeviceBoundary,
+		Policy:    policy,
+		AllowSend: strings.TrimSpace(d.From) != "",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("%s", awsx.PlainText(err, d.Profile, cat))
+	}
+
+	pin, err := core.NewPIN()
+	if err != nil {
+		return nil, err
+	}
+	sealed, salt, err := core.SealSecret(device.Secret, pin)
+	if err != nil {
+		return nil, err
+	}
+
+	// The code carries the sealed box and never the PIN. That separation is
+	// the whole reason a photograph of the screen is not the device's access.
 	payload, err := json.Marshal(map[string]any{
 		"bucket": d.Bucket, "prefix": prefix, "region": d.Region,
 		"from": strings.TrimSpace(d.From), "label": strings.TrimSpace(d.Label),
-		"accessKey": "", "secret": "",
-		"pushApps": notNilMap(d.PushApps), "pushTopic": strings.TrimSpace(d.PushTopic),
+		"accessKey": device.AccessKey,
+		"secret":    "",
+		"sealed":    sealed,
+		"salt":      salt,
+		"pushApps":  notNilMap(apps), "pushTopic": topic,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	// The code as an image, so nobody types four hundred characters into a
-	// phone. Rendered here and not in the browser: the encoder is Go, it is
-	// tested, and one place that produces the code is one place to get it
-	// wrong.
-	//
-	// A payload too large for a symbol is not an error worth stopping for - the
-	// text below it can still be copied, and refusing the whole dialog over a
-	// missing picture would be the wrong trade.
 	image := ""
 	if code, err := qr.Encode(string(payload)); err == nil {
 		image = code.SVG(4)
 	}
 
 	return map[string]any{
-		"policy":  policy,
+		"user":    device.User,
+		"pin":     pin,
 		"payload": string(payload),
 		"qr":      image,
-		"user":    suggestedUserName(d.Bucket, prefix),
+		"push":    len(apps) > 0 && topic != "",
 	}, nil
 }
 
-// suggestedUserName proposes a name that says which mailbox and which device -
-// "s3mail-post-mail-ole-geraet". Whoever later reads a list of IAM users should
-// be able to tell what a name is for without opening it.
-func suggestedUserName(bucket, prefix string) string {
-	clean := func(s string) string {
-		s = strings.ToLower(s)
-		s = strings.NewReplacer("/", "-", ".", "-", "_", "-", " ", "-").Replace(s)
-		return strings.Trim(s, "-")
+// DeviceAbandon answers /api/setup/device/abandon: the dialog closed without
+// the phone ever using its key.
+//
+// This is what actually bounds the exposure of a setup code, and it does more
+// than the PIN does. A photograph of an abandoned code becomes a ciphertext for
+// a key that no longer exists.
+//
+// It asks first whether the key was used, and treats "cannot tell" as used: a
+// network hiccup here must not take a working phone's key away. Leaving one key
+// too many is visible and fixable; a mailbox that went silent is neither.
+func (a *Wizard) DeviceAbandon(ctx context.Context, d Data) (map[string]any, error) {
+	cat := i18n.Get(d.Language)
+	user := strings.TrimSpace(d.DeviceUser)
+	if user == "" {
+		return map[string]any{"removed": false}, nil
 	}
-	parts := []string{"s3mail", clean(bucket)}
-	if p := clean(prefix); p != "" {
-		parts = append(parts, p)
+	cfg, err := awsx.Session(ctx, d.Profile, d.Region)
+	if err != nil {
+		return nil, fmt.Errorf("%s", awsx.PlainText(err, d.Profile, cat))
 	}
-	return strings.Join(append(parts, "geraet"), "-")
+	devices := awsx.NewDevices(cfg, "")
+
+	used, err := devices.Used(ctx, user)
+	if err != nil || used {
+		return map[string]any{"removed": false}, nil
+	}
+	if err := devices.Remove(ctx, user); err != nil {
+		return nil, fmt.Errorf("%s", awsx.PlainText(err, d.Profile, cat))
+	}
+	return map[string]any{"removed": true}, nil
 }
+
+// appleBundleID is the identifier of the iOS app, used to tell this app's
+// platform applications from any other in the account. Picking the wrong one
+// produces an endpoint that looks fine and receives nothing.
+const appleBundleID = "eu.ole-hartwig.s3mail"
 
 // pushARNs is the policy's view of the applications: the ARNs, in a stable
 // order so two runs produce the same document.

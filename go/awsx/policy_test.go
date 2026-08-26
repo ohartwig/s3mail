@@ -157,3 +157,53 @@ func TestGarbageArnsYieldNothing(t *testing.T) {
 		}
 	}
 }
+
+// Everything a device pairing needs is already in the access's own policy.
+// Asking for it would mean asking somebody to read out an ARN they have never
+// seen - which is how the wizard used to work and why it felt developer-made.
+func TestThePolicyNamesEverythingADevicePairingNeeds(t *testing.T) {
+	doc := `{"Version":"2012-10-17","Statement":[
+	  {"Effect":"Allow","Action":"s3:ListBucket","Resource":"arn:aws:s3:::post",
+	   "Condition":{"StringLike":{"s3:prefix":["mail/ole/*"]}}},
+	  {"Effect":"Allow","Action":["s3:GetObject","s3:PutObject"],
+	   "Resource":"arn:aws:s3:::post/mail/ole/*"},
+	  {"Effect":"Allow","Action":"sns:Subscribe",
+	   "Resource":"arn:aws:sns:eu-north-1:1:koh-mail-ole-push"},
+	  {"Effect":"Allow","Action":["iam:CreateUser","iam:PutUserPolicy"],
+	   "Resource":"arn:aws:iam::1:user/s3mail-devices/ole/*",
+	   "Condition":{"StringEquals":{"iam:PermissionsBoundary":
+	     "arn:aws:iam::1:policy/mail/koh-mail-ole-device-boundary"}}}
+	]}`
+	f := fromPolicies([]string{doc})
+
+	if f.PushTopic != "arn:aws:sns:eu-north-1:1:koh-mail-ole-push" {
+		t.Errorf("push topic: %q", f.PushTopic)
+	}
+	if f.DeviceBoundary != "arn:aws:iam::1:policy/mail/koh-mail-ole-device-boundary" {
+		t.Errorf("boundary: %q", f.DeviceBoundary)
+	}
+	if f.Mailbox != "ole" {
+		t.Errorf("mailbox: %q", f.Mailbox)
+	}
+}
+
+// An access without the boundary condition may not create devices, and the
+// wizard has to be able to tell - otherwise it finds out from a 403 three IAM
+// calls later that names neither the boundary nor the reason.
+func TestWithoutTheBoundaryTheresNoDevicePairing(t *testing.T) {
+	doc := `{"Statement":[{"Effect":"Allow","Action":"s3:GetObject",
+	   "Resource":"arn:aws:s3:::post/mail/ole/*"}]}`
+	if f := fromPolicies([]string{doc}); f.DeviceBoundary != "" {
+		t.Errorf("a boundary appeared out of nowhere: %q", f.DeviceBoundary)
+	}
+}
+
+func TestTheMailboxNameComesOutOfThePrefix(t *testing.T) {
+	for prefix, want := range map[string]string{
+		"mail/ole/": "ole", "ole/": "ole", "a/b/c/": "c", "": "", "/": "",
+	} {
+		if got := mailboxOf(prefix); got != want {
+			t.Errorf("%q -> %q, want %q", prefix, got, want)
+		}
+	}
+}

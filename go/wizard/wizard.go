@@ -61,6 +61,14 @@ type Data struct {
 	PushApps  map[string]string `json:"push_apps"`
 	PushTopic string            `json:"push_topic"`
 
+	// DeviceName is what a person calls the phone - "Oles iPhone". It ends up
+	// in the IAM user name, so whoever later has to lock a device out can tell
+	// which line to delete without opening anything.
+	DeviceName string `json:"device_name"`
+	// DeviceUser identifies a pairing that is being finished or abandoned. The
+	// wizard sends back what Device() gave it.
+	DeviceUser string `json:"device_user"`
+
 	// Account is the mailbox being edited, by its ID. Empty means the first one,
 	// "new" means: add one. Without it a second mailbox would overwrite the
 	// first, because the wizard only ever knew one.
@@ -301,6 +309,8 @@ func (a *Wizard) Route(path string) (func(context.Context, Data) (map[string]any
 		return a.Lifecycle, true
 	case "device":
 		return a.Device, true
+	case "device/abandon":
+		return a.DeviceAbandon, true
 	case "save":
 		return a.Save, true
 	}

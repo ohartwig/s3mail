@@ -26,6 +26,21 @@ type Finding struct {
 	// Queue is the SQS queue new mail is announced through. Empty means: no
 	// push, the timer does it - which is what every mailbox did until now.
 	Queue string `json:"queue"`
+
+	// PushTopic is the SNS topic a phone subscribes to. Read out of the
+	// sns:Subscribe statement: whoever may subscribe to it was meant to.
+	PushTopic string `json:"push_topic"`
+
+	// Mailbox is the local part - "ole" - which is also the path segment device
+	// users live under. Derived from the prefix rather than asked for.
+	Mailbox string `json:"mailbox"`
+
+	// DeviceBoundary is the permissions boundary every device user must carry.
+	// It stands in the access's own policy, in the condition that makes
+	// creating a device user safe at all - so if it is absent, this access may
+	// not create devices, and the wizard can say so instead of finding out
+	// three IAM calls later.
+	DeviceBoundary string `json:"device_boundary"`
 }
 
 // Complete says whether the wizard can go on without asking.

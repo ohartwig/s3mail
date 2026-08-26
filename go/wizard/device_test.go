@@ -1,171 +1,55 @@
 // SPDX-FileCopyrightText: 2026 Kai Ole Hartwig <mail@ole-hartwig.eu>
 // SPDX-License-Identifier: Apache-2.0
 
-package wizard_test
+package wizard
 
 import (
-	"context"
-	"encoding/json"
-	"strings"
 	"testing"
-
-	"git.ole-hartwig.eu/development/s3mail/s3mail/wizard"
 )
 
-func device(t *testing.T, d wizard.Data) map[string]any {
-	t.Helper()
-	a := &wizard.Wizard{}
-	out, err := a.Device(context.Background(), d)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return out
-}
-
-// The code the phone reads carries everything except the key. That is the
-// point: a key in a QR code is a key travelling through a screenshot, through
-// a photo library, and through whatever backs that up.
-func TestTheCodeCarriesNoKey(t *testing.T) {
-	out := device(t, wizard.Data{Bucket: "post", Prefix: "mail/ole/",
-		Region: "eu-north-1", From: "post@firma.de", Label: "Post"})
-
-	// map[string]any and not map[string]string: the payload carries the push
-	// ARNs as a list.
-	var payload map[string]any
-	if err := json.Unmarshal([]byte(out["payload"].(string)), &payload); err != nil {
-		t.Fatal(err)
-	}
-	if payload["accessKey"] != "" || payload["secret"] != "" {
-		t.Errorf("the code carries a key: %v", payload)
-	}
-	// But everything the phone cannot work out for itself has to be in there.
-	for _, field := range []string{"bucket", "prefix", "region", "from"} {
-		if payload[field] == "" || payload[field] == nil {
-			t.Errorf("%s is missing from the code", field)
-		}
-	}
-	if payload["prefix"] != "mail/ole/" {
-		t.Errorf("prefix is %q", payload["prefix"])
-	}
-}
-
-// Without a verified sender there is nothing to send as, so the device policy
-// does not ask for the permission. An unused permission is one nobody watches.
-func TestSendingIsOnlyOfferedWithASender(t *testing.T) {
-	with := device(t, wizard.Data{Bucket: "post", Prefix: "mail/", From: "post@firma.de"})
-	if !strings.Contains(with["policy"].(string), "ses:SendRawEmail") {
-		t.Error("a mailbox with a sender got no sending permission")
-	}
-	without := device(t, wizard.Data{Bucket: "post", Prefix: "mail/"})
-	if strings.Contains(without["policy"].(string), "ses:SendRawEmail") {
-		t.Error("a mailbox without a sender got sending permission anyway")
-	}
-}
-
-// The suggested user name has to say which mailbox it belongs to. Whoever
-// reads a list of IAM users in a year should not have to open each one.
-func TestTheUserNameSaysWhichMailbox(t *testing.T) {
-	out := device(t, wizard.Data{Bucket: "koh-post", Prefix: "mail/ole/", Region: "eu-north-1"})
-	name := out["user"].(string)
-	for _, part := range []string{"s3mail", "koh-post", "mail-ole"} {
-		if !strings.Contains(name, part) {
-			t.Errorf("%q does not contain %q", name, part)
-		}
-	}
-	if strings.ContainsAny(name, "/. _") {
-		t.Errorf("%q contains characters IAM does not take", name)
-	}
-}
-
-func TestABucketIsRequired(t *testing.T) {
-	a := &wizard.Wizard{}
-	if _, err := a.Device(context.Background(), wizard.Data{Prefix: "mail/"}); err == nil {
-		t.Error("a device without a bucket was accepted")
-	}
-}
-
-// The ARNs travel with the code, because the device cannot work them out.
+// What is left to test here without AWS.
 //
-// They are not secret: an ARN names a resource, it does not open it, and the
-// policy decides what the device may do with it. What would be a mistake is
-// leaving them out - then the phone knows it should register somewhere and not
-// where.
-func TestTheCodeCarriesThePushTargets(t *testing.T) {
-	const prod = "arn:aws:sns:eu-north-1:123456789012:app/APNS/s3mail-ios"
-	const sandbox = "arn:aws:sns:eu-north-1:123456789012:app/APNS_SANDBOX/s3mail-ios"
-	const topic = "arn:aws:sns:eu-north-1:123456789012:s3mail-neue-mail"
+// Device() used to be a pure function that rendered a policy and a payload, and
+// it was tested as one. It is not that any more: it creates an IAM user, mints
+// a key and looks for platform applications. The parts worth testing moved to
+// where they can be exercised - awsx.DevicePolicy, awsx.DeviceUserName,
+// core.SealSecret, awsx.fromPolicies - and each of them has its own tests.
+//
+// Leaving a test here that "checks Device()" by mocking three AWS clients would
+// prove that the mocks were written to match the code, which is not the same as
+// proving anything.
 
-	out := device(t, wizard.Data{Bucket: "post", Prefix: "mail/ole/",
-		Region: "eu-north-1", PushTopic: topic,
-		PushApps: map[string]string{"production": prod, "development": sandbox}})
-
-	var payload map[string]any
-	if err := json.Unmarshal([]byte(out["payload"].(string)), &payload); err != nil {
-		t.Fatal(err)
+// The applications reach the policy in a stable order. Two runs of the wizard
+// that produce different documents would show up as a diff nobody can explain.
+func TestThePolicySeesTheARNsInAStableOrder(t *testing.T) {
+	apps := map[string]string{
+		"production":  "arn:b",
+		"development": "arn:a",
 	}
-	apps, ok := payload["pushApps"].(map[string]any)
-	if !ok || len(apps) != 2 {
-		t.Fatalf("both platform applications should be in the code: %v", payload["pushApps"])
+	first := pushARNs(apps)
+	for i := 0; i < 20; i++ {
+		if got := pushARNs(apps); len(got) != len(first) || got[0] != first[0] || got[1] != first[1] {
+			t.Fatalf("order changed between runs: %v then %v", first, got)
+		}
 	}
-	// Named, not just present: two ARNs look alike, and a device that picks
-	// the wrong one gets an endpoint that looks fine and receives nothing.
-	if apps["development"] != sandbox || apps["production"] != prod {
-		t.Errorf("the environments are mixed up: %v", apps)
-	}
-	if payload["pushTopic"] != topic {
-		t.Errorf("topic missing from the code: %v", payload["pushTopic"])
-	}
-	// And the policy has to match what the code promises.
-	if !strings.Contains(out["policy"].(string), "sns:CreatePlatformEndpoint") {
-		t.Error("the code names a place to register, the policy does not allow it")
+	if first[0] != "arn:a" || first[1] != "arn:b" {
+		t.Errorf("not sorted: %v", first)
 	}
 }
 
-// No push asked for: an empty list, not a missing field. A phone that finds no
-// key at all cannot tell "no push here" from "this code is too old to know".
-func TestWithoutPushTheListIsEmptyNotAbsent(t *testing.T) {
-	out := device(t, wizard.Data{Bucket: "post", Region: "eu-north-1"})
-	var payload map[string]any
-	if err := json.Unmarshal([]byte(out["payload"].(string)), &payload); err != nil {
-		t.Fatal(err)
-	}
-	apps, present := payload["pushApps"]
-	if !present {
-		t.Fatal("pushApps is missing entirely")
-	}
-	if m, ok := apps.(map[string]any); !ok || len(m) != 0 {
-		t.Errorf("expected an empty object, got %v", apps)
-	}
-	if strings.Contains(out["policy"].(string), "sns:") {
-		t.Error("SNS permissions without push being asked for")
+// Empty entries would become a policy resource of "", which IAM rejects with a
+// message that names neither the wizard nor the empty string.
+func TestEmptyARNsAreDropped(t *testing.T) {
+	got := pushARNs(map[string]string{"production": "", "development": "  ", "x": "arn:a"})
+	if len(got) != 1 || got[0] != "arn:a" {
+		t.Errorf("got %v", got)
 	}
 }
 
-// The code as a picture, so nobody types four hundred characters into a phone.
-func TestTheCodeComesWithAnImage(t *testing.T) {
-	out := device(t, wizard.Data{Bucket: "post", Prefix: "mail/ole/",
-		Region: "eu-north-1", PushTopic: "arn:aws:sns:x:1:t",
-		PushApps: map[string]string{"production": "arn:p", "development": "arn:d"}})
-
-	svg, _ := out["qr"].(string)
-	if !strings.HasPrefix(svg, "<svg") {
-		t.Fatalf("no image with the code: %.60s", svg)
-	}
-	// The quiet zone is the part a reader silently needs; without it the code
-	// looks right to a person and fails on a phone.
-	if !strings.Contains(svg, "viewBox=") || !strings.Contains(svg, `fill="#fff"`) {
-		t.Error("the image has no viewBox or no white ground")
-	}
-}
-
-// A picture is a convenience; the text below it is the fallback. Losing the
-// image must not lose the dialog.
-func TestWithoutAnImageTheCodeIsStillThere(t *testing.T) {
-	out := device(t, wizard.Data{Bucket: "post", Region: "eu-north-1"})
-	if out["payload"] == "" {
-		t.Error("no payload")
-	}
-	if _, present := out["qr"]; !present {
-		t.Error("the qr field is missing entirely - the page cannot tell empty from absent")
+// An absent map travels as {} and not as null: a phone that finds no field
+// cannot tell "no push here" from "this code is too old to know about it".
+func TestAnAbsentMapTravelsAsEmpty(t *testing.T) {
+	if m := notNilMap(nil); m == nil || len(m) != 0 {
+		t.Errorf("got %v", m)
 	}
 }
