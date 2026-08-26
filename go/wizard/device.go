@@ -12,6 +12,7 @@ import (
 	"git.ole-hartwig.eu/development/s3mail/s3mail/awsx"
 	"git.ole-hartwig.eu/development/s3mail/s3mail/config"
 	"git.ole-hartwig.eu/development/s3mail/s3mail/i18n"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/qr"
 )
 
 // Letting a second device into the mailbox - a phone, in practice.
@@ -72,9 +73,23 @@ func (a *Wizard) Device(_ context.Context, d Data) (map[string]any, error) {
 		return nil, err
 	}
 
+	// The code as an image, so nobody types four hundred characters into a
+	// phone. Rendered here and not in the browser: the encoder is Go, it is
+	// tested, and one place that produces the code is one place to get it
+	// wrong.
+	//
+	// A payload too large for a symbol is not an error worth stopping for - the
+	// text below it can still be copied, and refusing the whole dialog over a
+	// missing picture would be the wrong trade.
+	image := ""
+	if code, err := qr.Encode(string(payload)); err == nil {
+		image = code.SVG(4)
+	}
+
 	return map[string]any{
 		"policy":  policy,
 		"payload": string(payload),
+		"qr":      image,
 		"user":    suggestedUserName(d.Bucket, prefix),
 	}, nil
 }

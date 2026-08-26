@@ -140,3 +140,32 @@ func TestWithoutPushTheListIsEmptyNotAbsent(t *testing.T) {
 		t.Error("SNS permissions without push being asked for")
 	}
 }
+
+// The code as a picture, so nobody types four hundred characters into a phone.
+func TestTheCodeComesWithAnImage(t *testing.T) {
+	out := device(t, wizard.Data{Bucket: "post", Prefix: "mail/ole/",
+		Region: "eu-north-1", PushTopic: "arn:aws:sns:x:1:t",
+		PushApps: map[string]string{"production": "arn:p", "development": "arn:d"}})
+
+	svg, _ := out["qr"].(string)
+	if !strings.HasPrefix(svg, "<svg") {
+		t.Fatalf("no image with the code: %.60s", svg)
+	}
+	// The quiet zone is the part a reader silently needs; without it the code
+	// looks right to a person and fails on a phone.
+	if !strings.Contains(svg, "viewBox=") || !strings.Contains(svg, `fill="#fff"`) {
+		t.Error("the image has no viewBox or no white ground")
+	}
+}
+
+// A picture is a convenience; the text below it is the fallback. Losing the
+// image must not lose the dialog.
+func TestWithoutAnImageTheCodeIsStillThere(t *testing.T) {
+	out := device(t, wizard.Data{Bucket: "post", Region: "eu-north-1"})
+	if out["payload"] == "" {
+		t.Error("no payload")
+	}
+	if _, present := out["qr"]; !present {
+		t.Error("the qr field is missing entirely - the page cannot tell empty from absent")
+	}
+}

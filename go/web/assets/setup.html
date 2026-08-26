@@ -157,6 +157,7 @@
 
         <label style="margin-top:12px">{{t "setup.deviceCode"}}</label>
         <div class="hint">{{t "setup.deviceCodeHint"}}</div>
+        <div id="devQR" style="margin:10px 0;max-width:320px"></div>
         <textarea id="devPayload" readonly rows="4"
                   style="width:100%;font-family:ui-monospace,monospace;font-size:11px"></textarea>
         <button id="devPayloadCopy">{{t "setup.copy"}}</button>
@@ -352,6 +353,10 @@ $("#device").onclick = async () => {
     $("#devUser").value = d.user;
     $("#devPolicy").value = d.policy;
     $("#devPayload").value = d.payload;
+    // Der Server liefert fertiges SVG. Kein innerHTML mit fremdem Inhalt: das
+    // hier ist selbst erzeugtes Markup aus dem eigenen Encoder, kein Text aus
+    // einer Mail.
+    $("#devQR").innerHTML = d.qr || "";
     $("#deviceBox").style.display = "";
   } catch (e) { say("#devMsg", e.message, true); }
   finally { b.disabled = false; }
