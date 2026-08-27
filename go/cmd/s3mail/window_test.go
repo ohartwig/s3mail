@@ -46,3 +46,38 @@ func TestWindowArgs(t *testing.T) {
 		t.Errorf("a profile directory of its own is missing: %v", args)
 	}
 }
+
+// The second start is the one somebody was annoyed enough to report: every
+// click left another browser beside the last, while the window they wanted sat
+// open behind them.
+//
+// Raising is by process id, and the test is here because the obvious way is
+// wrong in a way nobody notices on their own machine: `open -a "Google Chrome"`
+// raises whichever Chrome the person already had open, not ours. Both are the
+// same bundle. Measured on a real machine - the front process stayed the other
+// one.
+func TestTheWindowIsRaisedByProcessAndNotByName(t *testing.T) {
+	script := raiseScript(31053)
+
+	if !strings.Contains(script, "unix id is 31053") {
+		t.Errorf("not addressed by process id: %q", script)
+	}
+	if strings.Contains(script, "Google Chrome") || strings.Contains(script, "open -a") {
+		t.Errorf("addressed by application - that raises the wrong instance: %q", script)
+	}
+	if !strings.Contains(script, "frontmost") {
+		t.Errorf("nothing in here brings a window forward: %q", script)
+	}
+}
+
+// The profile path is what tells our window from any other browser. If it stops
+// being distinctive, appModePID starts answering about somebody else's browser
+// - and a start would raise a stranger's window instead of opening a mailbox.
+func TestTheProfilePathIsOurs(t *testing.T) {
+	if !strings.Contains(profileDir(), "s3mail") {
+		t.Errorf("%q says nothing about who it belongs to", profileDir())
+	}
+	if !strings.Contains(strings.Join(windowArgs("http://x/"), " "), profileDir()) {
+		t.Error("the window starts on a different profile than the one we look for")
+	}
+}
