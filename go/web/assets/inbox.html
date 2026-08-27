@@ -322,7 +322,7 @@ const canSend = () => over.can_send === true;
 // not a character, so the same word can be an SVG in the browser and an SF
 // Symbol on the phone.
 const ic = (name, cls) =>
-  `<svg class="ic${cls ? " " + cls : ""}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
+  `<svg class="ic${cls ? " " + cls : ""}" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-${name}"/></svg>`;
 
 const esc = s => (s ?? "").toString().replace(/[&<>"']/g, c =>
   ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -721,8 +721,8 @@ function openMenu(anchor, html) {
 
 function folderMenu(anchor, pick) {
   const m = openMenu(anchor, over.folders.map(f =>
-      `<div class="opt" data-f="${esc(f.name)}">${f.icon} ${esc(f.label)}</div>`).join("")
-    + '<div class="opt" style="gap:4px"><input id="mkFolder" placeholder="${T["menu.newFolder"]}"></div>');
+      `<div class="opt" data-f="${esc(f.name)}">${ic(f.icon || "folder")}${esc(f.label)}</div>`).join("")
+    + `<div class="opt" style="gap:4px"><input id="mkFolder" placeholder="${esc(T["menu.newFolder"])}"></div>`);
   m.querySelectorAll("[data-f]").forEach(el =>
     el.onclick = () => { closeMenus(); pick(el.dataset.f); });
   m.querySelector("#mkFolder").onkeydown = e => {
