@@ -56,3 +56,46 @@ func TestSomethingElseEntirelyIsNotAnEndpoint(t *testing.T) {
 		t.Error("NotFound is not an existing endpoint")
 	}
 }
+
+// The refusal that is a decision, told apart from the ones that are faults.
+//
+// This mattered enough to cost an evening: a device could not read its own
+// endpoint, Register treated that as fatal, and push died on the second launch
+// of every phone. The right cannot simply be granted - SNS authorises it
+// against the platform application, so on a shared one it would reach other
+// mailboxes' endpoints - so the refusal is permanent by design and has to be
+// survivable.
+func TestBeingRefusedTheRepairIsNotAFault(t *testing.T) {
+	denied := &types.AuthorizationErrorException{
+		Message: aws.String("User: arn:aws:iam::1:user/s3mail-devices/ole/phone is not " +
+			"authorized to perform: SNS:GetEndpointAttributes"),
+	}
+	if !isNotAllowed(denied) {
+		t.Error("the refusal was not recognised - registering would abort on it")
+	}
+
+	// Everything else must stay a fault. Swallowing a real failure here would
+	// hand back an endpoint ARN for an endpoint that is not there.
+	for name, err := range map[string]error{
+		"not found":         &types.NotFoundException{Message: aws.String("gone")},
+		"invalid parameter": &types.InvalidParameterException{Message: aws.String("nope")},
+		"nothing at all":    nil,
+	} {
+		if isNotAllowed(err) {
+			t.Errorf("%s was taken for a refusal", name)
+		}
+	}
+}
+
+// SNS says AuthorizationError where S3 and IAM say AccessDenied, and the
+// difference is not cosmetic: it is what told a 403 from the bucket apart from
+// a 403 from push while both were broken at once.
+func TestTheRefusalIsNotAnAccessDenied(t *testing.T) {
+	var denied *types.AuthorizationErrorException
+	if _, ok := any(denied).(interface{ ErrorCode() string }); !ok {
+		t.Skip("the SDK type no longer reports a code")
+	}
+	if got := (&types.AuthorizationErrorException{}).ErrorCode(); got != "AuthorizationError" {
+		t.Errorf("SNS now answers %q - the note in isNotAllowed is out of date", got)
+	}
+}
