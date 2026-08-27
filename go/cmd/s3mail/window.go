@@ -4,10 +4,13 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -53,15 +56,69 @@ func appModeBrowser() []string {
 	}
 }
 
+// profileDir is the browser profile s3mail keeps to itself, so it does not
+// share the session of a running browser window.
+//
+// It doubles as the mark by which our own window is recognised: no other
+// program passes this path, so a browser process carrying it is one we started.
+func profileDir() string {
+	return filepath.Join(os.TempDir(), "s3mail-fenster")
+}
+
 // windowArgs are the switches that turn a browser into a program window.
 func windowArgs(url string) []string {
 	return []string{
 		"--app=" + url,
 		"--window-size=1280,860",
-		// A profile of our own, so s3mail does not share the session of a running
-		// browser window.
-		"--user-data-dir=" + filepath.Join(os.TempDir(), "s3mail-fenster"),
+		"--user-data-dir=" + profileDir(),
 	}
+}
+
+// appModePID finds the browser that is already showing our window.
+//
+// pgrep answers with the whole family - renderer, GPU, network - and only the
+// one without "--type=" is the process that owns the window. Raising a helper
+// does nothing at all, silently.
+func appModePID() (int, bool) {
+	// Without the leading dashes: pgrep would read "--user-data-dir=..." as its
+	// own option and fail, and a failing pgrep reads as "nothing running".
+	out, err := exec.Command("pgrep", "-f", "user-data-dir="+profileDir()).Output()
+	if err != nil {
+		return 0, false
+	}
+	for _, line := range strings.Fields(string(out)) {
+		pid, err := strconv.Atoi(line)
+		if err != nil {
+			continue
+		}
+		cmd, err := exec.Command("ps", "-p", line, "-o", "command=").Output()
+		if err != nil || strings.Contains(string(cmd), "--type=") {
+			continue
+		}
+		return pid, true
+	}
+	return 0, false
+}
+
+// raiseScript is the AppleScript that brings one process to the front.
+//
+// By process id and not by application name: the s3mail window and whatever
+// browser somebody has open for their own use are two instances of the same
+// bundle, and `open -a "Google Chrome"` raises the other one - measured, not
+// assumed.
+func raiseScript(pid int) string {
+	return fmt.Sprintf(
+		"tell application \"System Events\" to set frontmost of "+
+			"(first process whose unix id is %d) to true", pid)
+}
+
+// raiseWindow brings our window forward, and says whether it managed to.
+//
+// It can fail: macOS gates this behind Accessibility, and a program that has
+// not been granted it gets an error rather than a window. That is why the
+// answer is checked - see startAppModeMac for what happens then.
+func raiseWindow(pid int) bool {
+	return exec.Command("osascript", "-e", raiseScript(pid)).Run() == nil
 }
 
 func startAppMode(url string) bool {
@@ -95,6 +152,18 @@ func startAppMode(url string) bool {
 // in the background - and to whoever double clicked, it looks like nothing
 // happens. `open -n` forces a new instance, and that one honours the switches.
 func startAppModeMac(url string) bool {
+	// A window of ours is already open. Then this start has nothing to open -
+	// it has something to find. Forcing another instance is what made every
+	// double click leave a browser behind; handing the address to the running
+	// one is no better, because --app= is a startup switch and a running
+	// browser drops it, leaving a plain window with no mailbox in it. Both
+	// measured on a real machine before this was written.
+	if pid, ok := appModePID(); ok {
+		// Not raising is a poor outcome and still the better one: the window is
+		// there, and a second browser beside it is exactly what was reported.
+		raiseWindow(pid)
+		return true
+	}
 	for _, name := range appModeBrowser() {
 		if _, err := os.Stat("/Applications/" + name + ".app"); err != nil {
 			continue
