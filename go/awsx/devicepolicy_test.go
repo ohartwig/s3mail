@@ -153,8 +153,12 @@ func TestPushIsTwoActionsAndNoMore(t *testing.T) {
 			t.Errorf("%s missing, the device cannot register itself: %v", want, got)
 		}
 	}
+	// The two that repair an endpoint are absent here on purpose: nothing said
+	// the application belongs to this mailbox alone, and on a shared one they
+	// reach every other mailbox's endpoints.
 	for _, forbidden := range []string{"sns:Publish", "sns:DeleteEndpoint",
-		"sns:Unsubscribe", "sns:*"} {
+		"sns:Unsubscribe", "sns:*",
+		"sns:SetEndpointAttributes", "sns:GetEndpointAttributes"} {
 		if strings.Contains(joined, forbidden) {
 			t.Errorf("%s granted - a lost phone could use it: %v", forbidden, got)
 		}
@@ -211,5 +215,53 @@ func TestPushNeedsBothTheAppsAndTheTopic(t *testing.T) {
 		Bucket: "post", PushTopic: "arn:aws:sns:x:1:t"})), " ")
 	if strings.Contains(onlyTopic, "sns:") {
 		t.Error("a topic alone is not push - the device cannot register")
+	}
+}
+
+// A device that cannot repair its own endpoint loses push for good.
+//
+// APNs disables an endpoint whose token went stale and nothing re-enables it on
+// its own, so the recovery core.DecidePush describes needs both actions. The
+// price is that SNS authorises them against the application, which is why they
+// arrive through their own field and only for an application this mailbox owns.
+func TestOwnApplicationsMayBeRepaired(t *testing.T) {
+	const own = "arn:aws:sns:eu-north-1:123456789012:app/APNS/s3mail-ios-ole"
+	d := policy(t, awsx.DevicePolicyOpts{
+		Bucket: "post", Prefix: "mail/ole/",
+		PushApps: []string{own}, PushTopic: "arn:aws:sns:x:1:t",
+		RefreshApps: []string{own}})
+
+	joined := strings.Join(actions(t, d), " ")
+	for _, want := range []string{"sns:GetEndpointAttributes", "sns:SetEndpointAttributes"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("%s missing - the device cannot recover a disabled endpoint", want)
+		}
+	}
+
+	// And on that application only. A wildcard here would be every app in the
+	// account, which is exactly the reach the field exists to avoid.
+	for _, st := range d["Statement"].([]any) {
+		m := st.(map[string]any)
+		acts, ok := m["Action"].([]any)
+		if !ok || len(acts) == 0 || acts[0].(string) != "sns:GetEndpointAttributes" {
+			continue
+		}
+		for _, r := range m["Resource"].([]any) {
+			if r.(string) != own {
+				t.Errorf("repair allowed on %q, which is not this mailbox's application", r)
+			}
+		}
+	}
+}
+
+// The shared application is the dangerous case, and it is the default.
+func TestASharedApplicationIsNotRepairable(t *testing.T) {
+	const shared = "arn:aws:sns:eu-north-1:123456789012:app/APNS/s3mail-ios"
+	got := strings.Join(actions(t, policy(t, awsx.DevicePolicyOpts{
+		Bucket: "post", PushApps: []string{shared},
+		PushTopic: "arn:aws:sns:x:1:t"})), " ")
+
+	if strings.Contains(got, "EndpointAttributes") {
+		t.Errorf("a device may change endpoints on a shared application: %s", got)
 	}
 }

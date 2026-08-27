@@ -51,6 +51,20 @@ type DevicePolicyOpts struct {
 	// PushTopic is the SNS topic that carries "new mail". The device subscribes
 	// its own endpoint to it.
 	PushTopic string
+	// RefreshApps are the platform applications whose endpoints this device may
+	// read and update. Usually shorter than PushApps, and never longer.
+	//
+	// The device needs this to recover: APNs disables an endpoint whose token
+	// went stale, and nothing re-enables it on its own - see core.DecidePush.
+	// Without the right, push works once and then quietly stops.
+	//
+	// What keeps it out of PushApps is that SNS authorises both actions against
+	// the *application* and not the endpoint. On an application shared by
+	// several mailboxes, this right would let any paired phone point another
+	// mailbox's endpoint at itself, or switch it off. So only an application
+	// that belongs to this mailbox alone belongs in here - awsx.PushTargets
+	// answers whether that is what it found.
+	RefreshApps []string
 }
 
 // DevicePolicy renders the policy document for a device user.
@@ -62,12 +76,16 @@ type DevicePolicyOpts struct {
 //     uses, and an unused permission is one nobody notices being abused.
 //   - **No sending unless asked.** See AllowSend.
 //
-// Push, when it is asked for, is two actions and no more. The device registers
-// itself - CreatePlatformEndpoint - and subscribes that endpoint to the topic.
-// It gets neither Publish nor Delete: a phone that could publish to the topic
-// could send a notification to every other device on the mailbox, and one that
-// could delete endpoints could silence them. Both are things a stolen phone
-// should not be able to do, and neither is needed to receive a notification.
+// Push is two actions by default: the device registers itself -
+// CreatePlatformEndpoint - and subscribes that endpoint to the topic. It gets
+// neither Publish nor Delete: a phone that could publish to the topic could
+// send a notification to every other device on the mailbox, and one that could
+// delete endpoints could silence them. Both are things a stolen phone should
+// not be able to do, and neither is needed to receive a notification.
+//
+// Two more - GetEndpointAttributes and SetEndpointAttributes - only where the
+// platform application belongs to this mailbox alone. See RefreshApps for why
+// that condition is not a detail.
 //
 // Everything else mirrors the mailbox exactly, including the prefix condition
 // on ListBucket - without it the device could list the whole bucket, which is
@@ -107,18 +125,23 @@ func DevicePolicy(o DevicePolicyOpts) (string, error) {
 	if o.AllowSend {
 		out = append(out, stmt{Effect: "Allow", Action: "ses:SendRawEmail", Resource: "*"})
 	}
+	// Trimmed rather than trusted: an empty string in the list would render as
+	// a resource that matches nothing, which reads like a permission and is not.
+	clean := func(in []string) []string {
+		out := make([]string, 0, len(in))
+		for _, arn := range in {
+			if arn = strings.TrimSpace(arn); arn != "" {
+				out = append(out, arn)
+			}
+		}
+		return out
+	}
 	if len(o.PushApps) > 0 {
 		// Subscribe is on the topic, CreatePlatformEndpoint on the platform
 		// applications - two different resources, so two statements. Written
 		// out rather than merged with a wildcard: "sns:*" on "*" would be one
 		// line shorter and would also let a lost phone publish to the topic.
-		apps := make([]string, 0, len(o.PushApps))
-		for _, arn := range o.PushApps {
-			if arn = strings.TrimSpace(arn); arn != "" {
-				apps = append(apps, arn)
-			}
-		}
-		if len(apps) > 0 {
+		if apps := clean(o.PushApps); len(apps) > 0 {
 			out = append(out, stmt{Effect: "Allow",
 				Action: "sns:CreatePlatformEndpoint", Resource: apps})
 		}
@@ -126,6 +149,11 @@ func DevicePolicy(o DevicePolicyOpts) (string, error) {
 			out = append(out, stmt{Effect: "Allow",
 				Action: "sns:Subscribe", Resource: o.PushTopic})
 		}
+	}
+	if refresh := clean(o.RefreshApps); len(refresh) > 0 {
+		out = append(out, stmt{Effect: "Allow",
+			Action:   []string{"sns:GetEndpointAttributes", "sns:SetEndpointAttributes"},
+			Resource: refresh})
 	}
 	if o.KMSKey != "" {
 		out = append(out, stmt{Effect: "Allow",

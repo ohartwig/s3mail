@@ -62,3 +62,28 @@ func TestOnlyThisAppsPlatformApplicationsCount(t *testing.T) {
 		t.Error("an application without the attribute was rejected")
 	}
 }
+
+// Which generation of platform application this is, and it decides a permission.
+//
+// The first pair was shared by the whole account; the second is named for one
+// mailbox. Only the second may carry the right to change an endpoint, so the
+// distinction has to be exact rather than roughly right.
+func TestAMailboxRecognisesItsOwnApplication(t *testing.T) {
+	const base = "arn:aws:sns:eu-north-1:123456789012:app/APNS_SANDBOX/"
+
+	if !ownsApp(base+"s3mail-ios-sandbox-ole", "ole") {
+		t.Error("the mailbox did not recognise its own application")
+	}
+	if ownsApp(base+"s3mail-ios-sandbox", "ole") {
+		t.Error("the shared application was taken for this mailbox's own")
+	}
+	// Another mailbox whose name ends the same way. "ole" must not match
+	// "carole", or one mailbox repairs another's endpoints.
+	if ownsApp(base+"s3mail-ios-sandbox-carole", "ole") {
+		t.Error("carole's application was taken for ole's")
+	}
+	// No mailbox means nothing is owned - the caller has not said whose it is.
+	if ownsApp(base+"s3mail-ios-sandbox-ole", "") {
+		t.Error("an application was owned by nobody in particular")
+	}
+}
