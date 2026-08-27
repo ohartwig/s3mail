@@ -60,6 +60,20 @@ func (p *Push) Register(ctx context.Context, appARN, storedARN, token string) (s
 		case isNotFound(err):
 			// The endpoint is gone - deleted, or this is a restore onto
 			// another phone. Not an error: it is the reason to make a new one.
+		case isNotAllowed(err):
+			// No right to look. Also not an error, and this is the common case
+			// rather than an exotic one: SNS authorises reading an endpoint
+			// against the *platform application*, so on an application shared
+			// by several mailboxes the right cannot be granted without letting
+			// one device reach another's endpoints - see DevicePolicyOpts.
+			//
+			// Registering does not need it. CreatePlatformEndpoint below is
+			// idempotent for a token it already knows, so the device still
+			// ends up with its endpoint. What is lost is repair: an endpoint
+			// APNs disabled while the token stayed the same will not come
+			// back. Rare - a token that goes stale is usually replaced, and a
+			// new token makes a new endpoint - and far better than refusing to
+			// register at all, which is what this used to do.
 		default:
 			return "", err
 		}
@@ -74,6 +88,13 @@ func (p *Push) Register(ctx context.Context, appARN, storedARN, token string) (s
 			EndpointArn: aws.String(storedARN),
 			Attributes:  map[string]string{"Token": token, "Enabled": "true"},
 		})
+		if isNotAllowed(err) {
+			// The endpoint is there and this is the ARN for it. Saying so is
+			// more truthful than an error: what failed is the repair, not the
+			// registration, and a device that reports failure here would stop
+			// receiving the notifications it can still receive.
+			return storedARN, nil
+		}
 		return storedARN, err
 	}
 
@@ -93,6 +114,9 @@ func (p *Push) Register(ctx context.Context, appARN, storedARN, token string) (s
 			EndpointArn: aws.String(arn),
 			Attributes:  map[string]string{"Token": token, "Enabled": "true"},
 		})
+		if isNotAllowed(seterr) {
+			return arn, nil
+		}
 		return arn, seterr
 	}
 	return "", err
@@ -122,6 +146,16 @@ func (p *Push) Subscribe(ctx context.Context, topicARN, endpointARN string) (str
 func isNotFound(err error) bool {
 	var nf *types.NotFoundException
 	return errors.As(err, &nf)
+}
+
+// isNotAllowed reports the one refusal that is a design decision rather than a
+// fault: the device has no right to read or change an endpoint.
+//
+// SNS answers with AuthorizationError and not AccessDenied, which is worth
+// writing down - it is the reason this was mistaken for an S3 problem once.
+func isNotAllowed(err error) bool {
+	var denied *types.AuthorizationErrorException
+	return errors.As(err, &denied)
 }
 
 // existingEndpoint digs the ARN out of "Endpoint arn:aws:sns:... already exists
