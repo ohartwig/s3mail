@@ -214,29 +214,68 @@ func (d *Devices) dropKeys(ctx context.Context, user string) error {
 //
 // Keyed by Apple's environment names, because that is what the device compares
 // against its own provisioning profile.
-func (d *Devices) PushTargets(ctx context.Context, bundleID string) (map[string]string, error) {
+//
+// The second answer - own - says whether every application found belongs to
+// this mailbox alone, and it decides a permission rather than a preference.
+// SNS authorises GetEndpointAttributes and SetEndpointAttributes against the
+// *application*, never the endpoint. On an application shared by several
+// mailboxes, handing a device those two would let it retarget or silence a
+// different mailbox's phone - so the right may only be granted where the
+// application is named for one mailbox. See DevicePolicyOpts.RefreshApps.
+//
+// Both generations are accepted on purpose. The shared pair came first and is
+// still what most accounts have; a device paired against it registers exactly
+// as before and simply does not get the refresh right.
+func (d *Devices) PushTargets(ctx context.Context, bundleID, mailbox string) (map[string]string, bool, error) {
 	out, err := d.sns.ListPlatformApplications(ctx, &sns.ListPlatformApplicationsInput{})
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	apps := map[string]string{}
+	own := map[string]bool{}
 	for _, a := range out.PlatformApplications {
 		arn := aws.ToString(a.PlatformApplicationArn)
 		// The ARN carries the platform: .../app/APNS/name or
 		// .../app/APNS_SANDBOX/name. Matching on the attribute would need
 		// another call per application.
+		env := ""
 		switch {
 		case strings.Contains(arn, ":app/APNS_SANDBOX/"):
-			if matchesBundle(a.Attributes, bundleID) {
-				apps["development"] = arn
-			}
+			env = "development"
 		case strings.Contains(arn, ":app/APNS/"):
-			if matchesBundle(a.Attributes, bundleID) {
-				apps["production"] = arn
-			}
+			env = "production"
+		default:
+			continue
+		}
+		if !matchesBundle(a.Attributes, bundleID) {
+			continue
+		}
+		// The mailbox's own application wins over the shared one whatever
+		// order SNS listed them in.
+		mine := ownsApp(arn, mailbox)
+		if _, seen := apps[env]; seen && !mine {
+			continue
+		}
+		apps[env] = arn
+		own[env] = mine
+	}
+	all := len(apps) > 0
+	for _, mine := range own {
+		if !mine {
+			all = false
 		}
 	}
-	return apps, nil
+	return apps, all, nil
+}
+
+// ownsApp says whether an application is named for this mailbox rather than
+// shared by all of them - "s3mail-ios-sandbox-ole" against "s3mail-ios-sandbox".
+func ownsApp(arn, mailbox string) bool {
+	if mailbox == "" {
+		return false
+	}
+	name := arn[strings.LastIndex(arn, "/")+1:]
+	return strings.HasSuffix(name, "-"+mailbox)
 }
 
 // matchesBundle keeps another app's notifications out of this mailbox. An

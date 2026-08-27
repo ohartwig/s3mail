@@ -79,7 +79,10 @@ func (a *Wizard) Device(ctx context.Context, d Data) (map[string]any, error) {
 	// Look for the platform applications rather than asking. Failing to find
 	// them is not a reason to stop: a mailbox without push is still a mailbox,
 	// and the device simply will not register.
-	apps, _ := devices.PushTargets(ctx, appleBundleID)
+	// ownApps says whether the platform applications belong to this mailbox
+	// alone. It decides one permission and nothing else - see
+	// awsx.DevicePolicyOpts.RefreshApps.
+	apps, ownApps, _ := devices.PushTargets(ctx, appleBundleID, found.Mailbox)
 	topic := strings.TrimSpace(d.PushTopic)
 	if topic == "" && found.PushTopic != "" {
 		topic = found.PushTopic
@@ -92,7 +95,12 @@ func (a *Wizard) Device(ctx context.Context, d Data) (map[string]any, error) {
 		// cannot be used is one nobody watches.
 		AllowSend: strings.TrimSpace(d.From) != "",
 		PushApps:  pushARNs(apps),
-		PushTopic: topic,
+		// Only where the application is this mailbox's own. On the shared pair
+		// the right would reach other mailboxes' endpoints, so a device paired
+		// against those registers and simply cannot refresh - which is what
+		// every device did before this existed.
+		RefreshApps: refreshARNs(apps, ownApps),
+		PushTopic:   topic,
 	})
 	if err != nil {
 		return nil, err
@@ -183,6 +191,19 @@ func (a *Wizard) DeviceAbandon(ctx context.Context, d Data) (map[string]any, err
 // platform applications from any other in the account. Picking the wrong one
 // produces an endpoint that looks fine and receives nothing.
 const appleBundleID = "eu.ole-hartwig.s3mail"
+
+// refreshARNs is pushARNs, or nothing at all when the applications are shared.
+//
+// Written as its own function so the condition has a name: the difference
+// between "may repair its own endpoint" and "may reach into another mailbox's"
+// is one boolean, and a boolean inlined in a struct literal is a boolean nobody
+// reads twice.
+func refreshARNs(apps map[string]string, own bool) []string {
+	if !own {
+		return nil
+	}
+	return pushARNs(apps)
+}
 
 // pushARNs is the policy's view of the applications: the ARNs, in a stable
 // order so two runs produce the same document.
