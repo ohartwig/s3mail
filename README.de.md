@@ -47,6 +47,30 @@ verschlüsselt – `kms.<region>.amazonaws.com`.
 
 Nicht gebraucht werden Lambda, EC2, VPC oder eine WorkMail-Organisation.
 
+### Der kurze Weg: CloudFormation
+
+Bucket, Bucket-Policy, IAM-Benutzer samt Policy, die Geräte-Boundary und die
+SES-Empfangsregel legt eine Vorlage an – siehe
+[`go/deploy/README.md`](go/deploy/README.md):
+
+```bash
+aws cloudformation create-stack \
+  --stack-name s3mail \
+  --template-body file://go/deploy/s3mail.json \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --parameters \
+      ParameterKey=MailDomain,ParameterValue=firma.de \
+      ParameterKey=MailboxLocalPart,ParameterValue=info \
+      ParameterKey=MailBucket,ParameterValue=mein-eindeutiger-bucket
+```
+
+Die Domain muss vorher in SES verifiziert sein – dafür braucht es DNS-Einträge,
+die nur du setzen kannst. Zwei Schritte kann die Vorlage nicht abschließen, und
+beide sind ein Befehl: das Rule-Set aktivieren und einen Zugangsschlüssel
+erzeugen.
+
+Wer es von Hand in der Konsole machen will oder muss, findet den Weg hier:
+
 ### Einrichten, der Reihe nach
 
 1. **Region wählen.** SES nimmt Mail nur in bestimmten Regionen entgegen; der
@@ -796,14 +820,16 @@ sie melden dann einen Rechtefehler im Klartext.
 
 ## Grenzen
 
-- **Kein Postfach auf dem Telefon.** Zwei Entwürfe liegen dafür vor:
-  [`IMAP.md`](IMAP.md) — erreicht jedes Mailprogramm, verlangt aber einen
-  laufenden Rechner — und [`IOS.md`](IOS.md), eine native App für iPhone und
-  iPad, die direkt mit S3 und SES spricht und deshalb keinen braucht. Gebaut ist
-  von beidem bisher nur die UID-Vergabe aus Schritt 1 von IMAP.
-- Kein IMAP: ein normales Mailprogramm kann das Postfach nicht öffnen. Senden
+- **Kein IMAP**: ein normales Mailprogramm kann das Postfach nicht öffnen. Senden
   ginge dort über den SMTP-Endpunkt von SES, lesen nicht – SES kennt keinen
-  Postfachdienst.
+  Postfachdienst. Warum das schwer ist und wo der Weg durchginge, steht in
+  [`IMAP.md`](IMAP.md); gebaut ist davon nichts.
+
+  Auf dem Telefon gibt es dafür inzwischen eine **native iOS-App**, die denselben
+  Bucket direkt liest – mit eigenem IAM-Benutzer und einer Rechtegrenze, die sie
+  auf das Prefix dieses Postfachs deckelt. Gekoppelt wird über einen QR-Code samt
+  sechsstelliger PIN; der Schlüssel reist versiegelt im Code, die PIN nicht.
+  Siehe [`IOS.md`](IOS.md).
 - **Keine Thread-Gruppierung.** Die Liste zeigt einzelne Mails, keine Fäden.
   Richtiges Threading braucht `References`, eine Normalisierung der Betreffs und
   einen Umgang mit Fäden, die ein Ticketsystem abgeschnitten hat — eine Woche
@@ -874,7 +900,7 @@ wieder weg, der deswegen klagt.
 cd go && go test ./...
 ```
 
-Zehn Pakete, gut hundert Testfunktionen, kein AWS-Zugriff: `s3fake` bildet S3 mit
+Sechzehn Pakete, kein AWS-Zugriff: `s3fake` bildet S3 mit
 ETags, Präfix-Listing, Objekt-Metadaten und serverseitiger Verschlüsselung nach.
 Abgedeckt sind Index, Ordner, Verschieben samt Zustandsübernahme,
 Papierkorb-Regeln, Tags, Regel-Engine, Suche, Versand-Header, Zustand von
@@ -885,5 +911,5 @@ HTTP-Schicht, Zugangskontrolle und Fehlerübersetzung.
 Eine einzelne Gruppe:
 
 ```bash
-go test ./store/ -run TestVerschiebenNimmtDenZustandMit -v
+go test ./store/ -run TestMoveCarriesTheState -v
 ```
