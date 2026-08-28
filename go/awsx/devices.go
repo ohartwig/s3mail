@@ -309,7 +309,7 @@ func DeviceUserName(mailbox, name string) string {
 	}
 	device := clean(name)
 	if device == "" {
-		device = "geraet"
+		device = "device"
 	}
 	if len(device) > 32 {
 		device = device[:32]
