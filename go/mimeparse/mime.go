@@ -8,6 +8,7 @@ package mimeparse
 
 import (
 	"fmt"
+	"html"
 	"io"
 	"mime"
 	"net/mail"
@@ -164,12 +165,25 @@ var (
 	spaceRe  = regexp.MustCompile(`\s+`)
 )
 
-// StripHTML entspricht strip_html().
+// StripHTML turns an HTML body into the plain text a preview shows.
+//
+// Entities go through html.UnescapeString and not through a hand-written list.
+// The list had six entries - &nbsp; &amp; &lt; &gt; &quot; &#39; - and
+// everything else came out raw: a newsletter reading "Die Wochenk&uuml;che
+// &middot; Januar" in the message list. Every named and numeric entity there
+// is lives in the standard library, and keeping a subset of them here was a
+// list that could only ever be incomplete.
+//
+// Unescaped after the tags are gone, not before: otherwise an escaped
+// "&lt;script&gt;" would turn into one and then be stripped as if the mail had
+// written it.
 func StripHTML(raw string) string {
 	s := scriptRe.ReplaceAllString(raw, " ")
 	s = tagRe.ReplaceAllString(s, " ")
-	s = strings.NewReplacer("&nbsp;", " ", "&amp;", "&", "&lt;", "<",
-		"&gt;", ">", "&quot;", `"`, "&#39;", "'").Replace(s)
+	s = html.UnescapeString(s)
+	// A non-breaking space is a space in a preview - UnescapeString turns it
+	// into U+00A0, which spaceRe does not collapse.
+	s = strings.ReplaceAll(s, "\u00a0", " ")
 	return strings.TrimSpace(spaceRe.ReplaceAllString(s, " "))
 }
 

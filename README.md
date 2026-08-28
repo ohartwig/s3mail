@@ -118,7 +118,7 @@ subfolders are mail folders:
 
 ```
 mail/                     ← the prefix from the SES receipt rule = inbox
-mail/archive/
+mail/archiv/              ← the prefix is the German word, and it is real
 mail/spam/
 mail/trash/
 mail/sent/                ← a copy of everything sent

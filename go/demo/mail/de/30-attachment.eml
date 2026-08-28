@@ -8,7 +8,7 @@ Content-Type: multipart/mixed; boundary="grenze"
 --grenze
 Content-Type: text/plain; charset=utf-8
 
-Hier sind die Notizen, wie versprochen. Nichts Ueberraschendes darin - die
+Hier sind die Notizen, wie versprochen. Nichts Überraschendes darin - die
 einzige offene Frage ist weiterhin die nach dem Termin.
 
 Anna
@@ -18,6 +18,6 @@ Content-Disposition: attachment; filename="notizen.txt"
 
 Dienstag, kurze Besprechung
 - Termin: weiterhin offen, bis Freitag entscheiden
-- Budget: unveraendert
-- Naechstes: Anna schreibt die Zusammenfassung
+- Budget: unverändert
+- Nächstes: Anna schreibt die Zusammenfassung
 --grenze--
