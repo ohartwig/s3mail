@@ -162,6 +162,13 @@ func main() {
 	srv.WithWizard(wiz)
 
 	if *demoMode {
+		// The sample mail is written at startup, before any browser has said
+		// what it reads - so without this a German machine gets a German
+		// interface around English mail. The configuration still wins where it
+		// has an answer; the environment only fills the gap.
+		if k.Language == "" {
+			k.Language = i18n.FromEnv()
+		}
 		if err := activateDemo(ctx, srv, k, *refreshSecs); err != nil {
 			startErr = err.Error()
 		}

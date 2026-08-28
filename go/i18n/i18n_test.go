@@ -137,3 +137,32 @@ func TestNoMarkupInTheCatalogue(t *testing.T) {
 		}
 	}
 }
+
+func TestFromEnvReadsThePosixOrder(t *testing.T) {
+	for _, c := range []struct {
+		name              string
+		all, messages, la string
+		want              string
+	}{
+		{"LC_ALL wins", "es_ES.UTF-8", "de_DE.UTF-8", "de_DE.UTF-8", "es"},
+		{"LC_MESSAGES over LANG", "", "es_ES.UTF-8", "de_DE.UTF-8", "es"},
+		{"LANG when alone", "", "", "de_DE.UTF-8", "de"},
+		{"region is dropped", "", "", "de_AT", "de"},
+		{"no codeset", "", "", "es", "es"},
+		{"C is not a language", "C", "", "", Fallback},
+		{"POSIX neither", "POSIX", "", "", Fallback},
+		// A language with no catalog must not win over one that has it -
+		// otherwise a French machine gets English while LANG still says fr.
+		{"unknown falls through", "fr_FR.UTF-8", "", "de_DE.UTF-8", "de"},
+		{"nothing set", "", "", "", Fallback},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Setenv("LC_ALL", c.all)
+			t.Setenv("LC_MESSAGES", c.messages)
+			t.Setenv("LANG", c.la)
+			if got := FromEnv(); got != c.want {
+				t.Errorf("FromEnv() = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
