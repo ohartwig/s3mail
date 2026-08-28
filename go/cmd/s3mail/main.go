@@ -23,8 +23,10 @@ import (
 
 	"git.ole-hartwig.eu/development/s3mail/s3mail/awsx"
 	"git.ole-hartwig.eu/development/s3mail/s3mail/config"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/demo"
 	"git.ole-hartwig.eu/development/s3mail/s3mail/i18n"
 	"git.ole-hartwig.eu/development/s3mail/s3mail/keyring"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/s3fake"
 	"git.ole-hartwig.eu/development/s3mail/s3mail/store"
 	"git.ole-hartwig.eu/development/s3mail/s3mail/web"
 	"git.ole-hartwig.eu/development/s3mail/s3mail/wizard"
@@ -58,6 +60,7 @@ func main() {
 		refreshSecs = flag.Int("refresh", 60, cat.T("cli.refresh"))
 		mcpMode     = flag.Bool("mcp", false, cat.T("cli.mcp"))
 		mcpReadOnly = flag.Bool("mcp-readonly", false, cat.T("cli.mcpReadonly"))
+		demoMode    = flag.Bool("demo", false, cat.T("cli.demo"))
 	)
 	flag.Parse()
 
@@ -76,8 +79,12 @@ func main() {
 	// keep it, and rather than quietly writing plain text - which would undo the
 	// bucket's own encryption for every message ever opened - s3mail stops and
 	// asks for a decision. See keyring/keyring.go.
+	// --demo is exempt: it writes nothing to disk in the first place, so there
+	// is nothing to encrypt and no reason to demand a keyring. Somebody who
+	// wants to see what this looks like should not be stopped by a decision
+	// about a cache that will never be written.
 	var cacheKey []byte
-	if !*noCache && !*plainCache {
+	if !*noCache && !*plainCache && !*demoMode {
 		key, err := keyring.Key()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, cat.T("cli.noKeyring"))
@@ -154,7 +161,11 @@ func main() {
 	}
 	srv.WithWizard(wiz)
 
-	if len(k.Accounts) > 0 && !*setup {
+	if *demoMode {
+		if err := activateDemo(ctx, srv, k, *refreshSecs); err != nil {
+			startErr = err.Error()
+		}
+	} else if len(k.Accounts) > 0 && !*setup {
 		if err := activate(ctx, srv, k, *noSend, *refreshSecs, cacheDir(), cacheKey); err != nil {
 			// At startup there is no request and therefore no language from
 			// the browser - the one from the configuration has to do.
@@ -240,6 +251,40 @@ func serverConfig(k config.Config, refreshSeconds int) map[string]any {
 		"config_file": config.File(), "refresh_seconds": refreshSeconds,
 		"language": k.Language,
 	}
+}
+
+// activateDemo puts the sample mailbox up: the same client over a bucket that
+// does not exist.
+//
+// It is here so somebody can see what this is before they own an AWS account -
+// the same reason the iOS app carries one. And it is where the screenshots come
+// from, which is the second reason: nobody should have to photograph real
+// correspondence to show what a mail client looks like.
+//
+// Nothing is written to disk (no cache directory) and nothing can be sent (no
+// sender on the account, so the compose button never appears). A sample that
+// left traces or offered a button that cannot work would be worse than none.
+func activateDemo(ctx context.Context, srv *web.Server, k config.Config,
+	refreshSeconds int) error {
+	objects, err := demo.Objects(k.Language, time.Now())
+	if err != nil {
+		return err
+	}
+	fake := s3fake.New()
+	for key, body := range objects {
+		fake.Objs[key] = body
+	}
+	// allowDelete is false, as it is everywhere the mail is not the reader's to
+	// destroy: the trash is a folder.
+	mb := store.NewMailbox(ctx, fake, nil, "demo", demo.Root, "", nil, false)
+	if _, err := mb.Refresh(ctx); err != nil {
+		return err
+	}
+	srv.SetAccounts([]web.Account{{
+		ID: "demo", Name: i18n.Get(k.Language).T("demo.mailbox"), Mailbox: mb,
+	}})
+	srv.Config = serverConfig(k, refreshSeconds)
+	return nil
 }
 
 // activate builds mailbox and sending from a configuration.

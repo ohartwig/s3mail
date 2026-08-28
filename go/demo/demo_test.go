@@ -50,7 +50,9 @@ func TestTheSampleIsAMailboxAndNotAMockOfOne(t *testing.T) {
 func TestTheSampleFillsMoreThanTheInbox(t *testing.T) {
 	mb := open(t, "en")
 
-	for _, folder := range []string{"sent", "archive"} {
+	// The constants and not the words: "archiv" is not the English spelling, and
+	// writing it out by hand is what put the sample in a folder of its own.
+	for _, folder := range []string{core.Sent, core.Archive} {
 		if len(inFolder(mb, folder)) == 0 {
 			t.Errorf("%s is empty - the folder list has nothing to show", folder)
 		}

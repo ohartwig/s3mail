@@ -125,3 +125,39 @@ func TestTheIndexCarriesTheSenderAddress(t *testing.T) {
 		t.Errorf("FromAddr = %q", s.FromAddr)
 	}
 }
+
+// The preview of an HTML mail has to read like text, not like markup.
+//
+// The entity list here used to have six entries, and a newsletter showed up in
+// the message list as "Die Wochenk&uuml;che &middot; Januar" — found by looking
+// at a screenshot, not by a test, which is why there is one now. Every entity
+// worth handling is in the standard library; a subset maintained by hand could
+// only ever be incomplete.
+func TestThePreviewResolvesEveryEntityAndNotSix(t *testing.T) {
+	for in, want := range map[string]string{
+		// The six that used to be covered.
+		"<p>A&nbsp;B</p>":        "A B",
+		"<p>Tom &amp; Jerry</p>": "Tom & Jerry",
+		"<p>&lt;tag&gt;</p>":     "<tag>",
+		// And the ones that were not.
+		"<h1>Die Wochenk&uuml;che</h1>":     "Die Wochenküche",
+		"<p>Ausgabe 12 &middot; Januar</p>": "Ausgabe 12 · Januar",
+		"<p>caf&eacute;</p>":                "café",
+		"<p>&#8217;s</p>":                   "’s",
+		"<p>3 &times; 4 &ndash; 5</p>":      "3 × 4 – 5",
+	} {
+		if got := StripHTML(in); got != want {
+			t.Errorf("StripHTML(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// Script and style never belong in a preview: their content is code, and a
+// mail whose first hundred characters are CSS shows nothing in the list.
+func TestThePreviewDropsScriptAndStyle(t *testing.T) {
+	got := StripHTML(
+		`<style>.a{color:red}</style><p>Hallo</p><script>alert(1)</script>`)
+	if got != "Hallo" {
+		t.Errorf("got %q", got)
+	}
+}

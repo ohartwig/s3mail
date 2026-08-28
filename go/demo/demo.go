@@ -23,6 +23,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"git.ole-hartwig.eu/development/s3mail/s3mail/core"
 )
 
 // Sample mail as files rather than as string constants in Go: the code here is
@@ -41,15 +43,20 @@ const Root = "demo/"
 // The age is subtracted from the caller's clock rather than baked into the
 // files, because a mailbox whose newest mail is from January looks abandoned in
 // a screenshot taken in August.
+// The folder names come from core and are not written out here. They are real
+// S3 prefixes, and one of them is not the English word: Archive is "archiv".
+// Spelling it by hand put the sample into a folder of its own, next to the real
+// archive - which a screenshot showed and a test did not, because a folder
+// somebody made up lists exactly like one that was always there.
 var placement = map[string]struct {
 	folder string
 	age    time.Duration
 }{
-	"10-welcome.eml":    {"", 35 * time.Minute},
-	"20-newsletter.eml": {"", 5 * time.Hour},
-	"30-attachment.eml": {"", 26 * time.Hour},
-	"40-sent.eml":       {"sent", 25 * time.Hour},
-	"50-archive.eml":    {"archive", 9 * 24 * time.Hour},
+	"10-welcome.eml":    {core.Inbox, 35 * time.Minute},
+	"20-newsletter.eml": {core.Inbox, 5 * time.Hour},
+	"30-attachment.eml": {core.Inbox, 26 * time.Hour},
+	"40-sent.eml":       {core.Sent, 25 * time.Hour},
+	"50-archive.eml":    {core.Archive, 9 * 24 * time.Hour},
 }
 
 // Languages lists what the sample mail has been written in.
