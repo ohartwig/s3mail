@@ -1,0 +1,34 @@
+From: Die Wochenkueche <news@example.com>
+To: du@example.org
+Subject: =?utf-8?q?Sechs_Dinge=2C_f=C3=BCr_die_sich_der_Ofen_lohnt?=
+Date: Mon, 01 Jan 2026 07:30:00 +0000
+Message-ID: <demo-newsletter@example.com>
+Content-Type: text/html; charset=utf-8
+
+<html><body style="font-family:sans-serif;color:#222;margin:0">
+<div style="background:#1f4d3a;color:#fff;padding:22px 20px">
+  <h1 style="margin:0;font-size:22px">Die Wochenk&uuml;che</h1>
+  <p style="margin:6px 0 0;opacity:.85;font-size:13px">Ausgabe 12 &middot; Januar</p>
+</div>
+<div style="padding:20px">
+  <p>Kurze Tage, lange Schmorzeiten. Sechs Dinge, f&uuml;r die sich der Ofen
+  in diesem Monat lohnt.</p>
+  <img src="https://example.com/tracker.gif" width="600" height="180"
+       alt="Ein Bild, das nicht geladen wurde">
+  <h2 style="font-size:16px;margin:18px 0 6px">1. Zwiebeln, sehr langsam</h2>
+  <p style="margin:0 0 14px">Vierzig Minuten, nicht f&uuml;nfzehn. Der
+  Unterschied ist das ganze Gericht.</p>
+  <h2 style="font-size:16px;margin:18px 0 6px">2. Ein Topf Bohnen</h2>
+  <p style="margin:0 0 14px">Billig, geduldig, und am zweiten Tag besser.</p>
+  <table style="width:100%;border-collapse:collapse;margin-top:18px">
+    <tr style="background:#f3f3f1">
+      <th style="text-align:left;padding:8px">Gericht</th>
+      <th style="text-align:left;padding:8px">Ofen</th>
+    </tr>
+    <tr><td style="padding:8px">Geschmorte Schulter</td><td style="padding:8px">3 h</td></tr>
+    <tr><td style="padding:8px">Bohnentopf</td><td style="padding:8px">2 h</td></tr>
+  </table>
+  <p style="color:#777;font-size:12px;margin-top:22px">
+  Du liest ein Beispiel. Nichts davon wurde jemandem geschickt.</p>
+</div>
+</body></html>

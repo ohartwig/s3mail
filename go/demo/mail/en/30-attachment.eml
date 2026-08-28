@@ -1,0 +1,23 @@
+From: Anna Beck <anna@example.org>
+To: you@example.org
+Subject: The notes from Tuesday
+Date: Mon, 01 Jan 2026 11:15:00 +0000
+Message-ID: <demo-attachment@example.org>
+Content-Type: multipart/mixed; boundary="grenze"
+
+--grenze
+Content-Type: text/plain; charset=utf-8
+
+Here are the notes, as promised. Nothing surprising in them - the only
+open question is still the one about the deadline.
+
+Anna
+--grenze
+Content-Type: text/plain; charset=utf-8; name="notes.txt"
+Content-Disposition: attachment; filename="notes.txt"
+
+Tuesday, short meeting
+- Deadline: still open, decide by Friday
+- Budget: unchanged
+- Next: Anna writes the summary
+--grenze--

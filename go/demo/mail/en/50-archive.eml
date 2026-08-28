@@ -1,0 +1,11 @@
+From: Bookshop <orders@example.com>
+To: you@example.org
+Subject: Your order has shipped
+Date: Mon, 01 Jan 2026 08:00:00 +0000
+Message-ID: <demo-archive@example.com>
+Content-Type: text/plain; charset=utf-8
+
+Your parcel left the warehouse this morning and should arrive within two
+working days.
+
+Nothing was ordered. Nothing was shipped. This is a sample.

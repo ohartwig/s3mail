@@ -1,0 +1,23 @@
+From: Anna Beck <anna@example.org>
+To: tu@example.org
+Subject: Las notas del martes
+Date: Mon, 01 Jan 2026 11:15:00 +0000
+Message-ID: <demo-attachment@example.org>
+Content-Type: multipart/mixed; boundary="grenze"
+
+--grenze
+Content-Type: text/plain; charset=utf-8
+
+Aquí están las notas, como prometí. Nada sorprendente en ellas: la única
+pregunta abierta sigue siendo la del plazo.
+
+Anna
+--grenze
+Content-Type: text/plain; charset=utf-8; name="notas.txt"
+Content-Disposition: attachment; filename="notas.txt"
+
+Martes, reunión corta
+- Plazo: sigue abierto, decidir antes del viernes
+- Presupuesto: sin cambios
+- Siguiente: Anna escribe el resumen
+--grenze--

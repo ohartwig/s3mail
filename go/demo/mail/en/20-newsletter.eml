@@ -1,0 +1,33 @@
+From: The Weekly Kitchen <news@example.com>
+To: you@example.org
+Subject: Six things worth cooking in January
+Date: Mon, 01 Jan 2026 07:30:00 +0000
+Message-ID: <demo-newsletter@example.com>
+Content-Type: text/html; charset=utf-8
+
+<html><body style="font-family:sans-serif;color:#222;margin:0">
+<div style="background:#1f4d3a;color:#fff;padding:22px 20px">
+  <h1 style="margin:0;font-size:22px">The Weekly Kitchen</h1>
+  <p style="margin:6px 0 0;opacity:.85;font-size:13px">Issue 12 &middot; January</p>
+</div>
+<div style="padding:20px">
+  <p>Short days, long braises. Six things worth the oven this month.</p>
+  <img src="https://example.com/tracker.gif" width="600" height="180"
+       alt="A photograph that has not been loaded">
+  <h2 style="font-size:16px;margin:18px 0 6px">1. Onions, very slowly</h2>
+  <p style="margin:0 0 14px">Forty minutes, not fifteen. The difference is
+  the whole dish.</p>
+  <h2 style="font-size:16px;margin:18px 0 6px">2. A pot of beans</h2>
+  <p style="margin:0 0 14px">Cheap, patient, and better on the second day.</p>
+  <table style="width:100%;border-collapse:collapse;margin-top:18px">
+    <tr style="background:#f3f3f1">
+      <th style="text-align:left;padding:8px">Dish</th>
+      <th style="text-align:left;padding:8px">Oven</th>
+    </tr>
+    <tr><td style="padding:8px">Braised shoulder</td><td style="padding:8px">3 h</td></tr>
+    <tr><td style="padding:8px">Bean pot</td><td style="padding:8px">2 h</td></tr>
+  </table>
+  <p style="color:#777;font-size:12px;margin-top:22px">
+  You are reading a sample. Nothing here was sent to anybody.</p>
+</div>
+</body></html>

@@ -1,0 +1,23 @@
+From: Anna Beck <anna@example.org>
+To: du@example.org
+Subject: Die Notizen von Dienstag
+Date: Mon, 01 Jan 2026 11:15:00 +0000
+Message-ID: <demo-attachment@example.org>
+Content-Type: multipart/mixed; boundary="grenze"
+
+--grenze
+Content-Type: text/plain; charset=utf-8
+
+Hier sind die Notizen, wie versprochen. Nichts Ueberraschendes darin - die
+einzige offene Frage ist weiterhin die nach dem Termin.
+
+Anna
+--grenze
+Content-Type: text/plain; charset=utf-8; name="notizen.txt"
+Content-Disposition: attachment; filename="notizen.txt"
+
+Dienstag, kurze Besprechung
+- Termin: weiterhin offen, bis Freitag entscheiden
+- Budget: unveraendert
+- Naechstes: Anna schreibt die Zusammenfassung
+--grenze--
