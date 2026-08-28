@@ -147,7 +147,10 @@ func (a *Wizard) Device(ctx context.Context, d Data) (map[string]any, error) {
 	}
 
 	return map[string]any{
-		"user":    device.User,
+		"user": device.User,
+		// Handed back on close so the dialog can be settled - see
+		// DeviceAbandon. An id, not a secret.
+		"key":     device.AccessKey,
 		"pin":     pin,
 		"payload": string(payload),
 		"qr":      image,
@@ -177,14 +180,44 @@ func (a *Wizard) DeviceAbandon(ctx context.Context, d Data) (map[string]any, err
 	}
 	devices := awsx.NewDevices(cfg, "")
 
-	used, err := devices.Used(ctx, user)
-	if err != nil || used {
-		return map[string]any{"removed": false}, nil
+	minted := strings.TrimSpace(d.DeviceKey)
+	state := core.Pairing{Minted: minted}
+	if minted != "" {
+		used, err := devices.KeyUsed(ctx, minted)
+		others, oerr := devices.OtherKeys(ctx, user, minted)
+		// Either question going unanswered means the same thing: decide
+		// nothing. See core.DecidePairing.
+		state.Used, state.Others = used, len(others)
+		state.CanTell = err == nil && oerr == nil
 	}
-	if err := devices.Remove(ctx, user); err != nil {
-		return nil, fmt.Errorf("%s", awsx.PlainText(err, d.Profile, cat))
+
+	switch core.DecidePairing(state) {
+	case core.PairingDone:
+		// The phone took it, so the key it replaced is dead weight.
+		others, err := devices.OtherKeys(ctx, user, minted)
+		if err != nil {
+			return map[string]any{"removed": false}, nil
+		}
+		for _, old := range others {
+			if err := devices.DropKey(ctx, user, old); err != nil {
+				return nil, fmt.Errorf("%s", awsx.PlainText(err, d.Profile, cat))
+			}
+		}
+		return map[string]any{"removed": false, "paired": true}, nil
+
+	case core.PairingDropDevice:
+		if err := devices.Remove(ctx, user); err != nil {
+			return nil, fmt.Errorf("%s", awsx.PlainText(err, d.Profile, cat))
+		}
+		return map[string]any{"removed": true}, nil
+
+	case core.PairingKeepPrevious:
+		if err := devices.DropKey(ctx, user, minted); err != nil {
+			return nil, fmt.Errorf("%s", awsx.PlainText(err, d.Profile, cat))
+		}
+		return map[string]any{"removed": false, "kept": true}, nil
 	}
-	return map[string]any{"removed": true}, nil
+	return map[string]any{"removed": false}, nil
 }
 
 // appleBundleID is the identifier of the iOS app, used to tell this app's
