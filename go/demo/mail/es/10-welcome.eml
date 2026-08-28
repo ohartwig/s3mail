@@ -1,0 +1,20 @@
+From: s3mail <hola@example.org>
+To: tu@example.org
+Subject: =?utf-8?q?Este_es_un_buz=C3=B3n_de_ejemplo?=
+Date: Mon, 01 Jan 2026 09:00:00 +0000
+Message-ID: <demo-welcome@example.org>
+Content-Type: text/plain; charset=utf-8
+
+Nada de esto es real, y nada de esto sale de tu teléfono.
+
+s3mail lee el correo que Amazon SES escribe en un bucket de S3 que es
+tuyo. Sin servidor por medio, sin buzón en la máquina de otra persona: el
+bucket es tuyo y esta aplicación habla directamente con él.
+
+Para usarlo de verdad hacen falta dos cosas: una cuenta de AWS con un
+bucket configurado para SES, y el programa de escritorio de s3mail, que
+entrega a este teléfono un código de vinculación. Lo demás lo averigua
+solo.
+
+Echa un vistazo. Desliza un mensaje, abre el boletín, toca la estrella. Se
+comporta igual que con correo real, porque debajo es el mismo código.

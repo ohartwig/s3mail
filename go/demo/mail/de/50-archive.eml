@@ -1,0 +1,12 @@
+From: Buchhandlung <bestellung@example.com>
+To: du@example.org
+Subject: Deine Bestellung ist unterwegs
+Date: Mon, 01 Jan 2026 08:00:00 +0000
+Message-ID: <demo-archive@example.com>
+Content-Type: text/plain; charset=utf-8
+
+Dein Paket hat heute Morgen das Lager verlassen und sollte in zwei
+Werktagen ankommen.
+
+Es wurde nichts bestellt. Es wurde nichts verschickt. Dies ist ein
+Beispiel.

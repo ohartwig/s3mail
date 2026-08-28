@@ -1,0 +1,20 @@
+From: s3mail <hello@example.org>
+To: you@example.org
+Subject: This is a sample mailbox
+Date: Mon, 01 Jan 2026 09:00:00 +0000
+Message-ID: <demo-welcome@example.org>
+Content-Type: text/plain; charset=utf-8
+
+Nothing here is real, and nothing here leaves your phone.
+
+s3mail reads mail that Amazon SES writes into an S3 bucket you own. No
+server in between, no mailbox on somebody else's machine: the bucket is
+yours, and this app talks to it directly.
+
+To use it for real you need two things - an AWS account with a bucket set
+up for SES, and the s3mail desktop program, which hands this phone a
+pairing code. Everything else it works out on its own.
+
+Have a look around. Swipe a message, open the newsletter, tap the star.
+It all behaves exactly as it does with real mail, because it is the same
+code underneath.

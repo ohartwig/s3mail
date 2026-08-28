@@ -1,0 +1,33 @@
+From: La Cocina Semanal <news@example.com>
+To: tu@example.org
+Subject: Seis cosas que merecen el horno en enero
+Date: Mon, 01 Jan 2026 07:30:00 +0000
+Message-ID: <demo-newsletter@example.com>
+Content-Type: text/html; charset=utf-8
+
+<html><body style="font-family:sans-serif;color:#222;margin:0">
+<div style="background:#1f4d3a;color:#fff;padding:22px 20px">
+  <h1 style="margin:0;font-size:22px">La Cocina Semanal</h1>
+  <p style="margin:6px 0 0;opacity:.85;font-size:13px">N&uacute;mero 12 &middot; enero</p>
+</div>
+<div style="padding:20px">
+  <p>D&iacute;as cortos, guisos largos. Seis cosas que merecen el horno este mes.</p>
+  <img src="https://example.com/tracker.gif" width="600" height="180"
+       alt="Una fotograf&iacute;a que no se ha cargado">
+  <h2 style="font-size:16px;margin:18px 0 6px">1. Cebollas, muy despacio</h2>
+  <p style="margin:0 0 14px">Cuarenta minutos, no quince. La diferencia es
+  el plato entero.</p>
+  <h2 style="font-size:16px;margin:18px 0 6px">2. Una olla de alubias</h2>
+  <p style="margin:0 0 14px">Baratas, pacientes y mejores al segundo d&iacute;a.</p>
+  <table style="width:100%;border-collapse:collapse;margin-top:18px">
+    <tr style="background:#f3f3f1">
+      <th style="text-align:left;padding:8px">Plato</th>
+      <th style="text-align:left;padding:8px">Horno</th>
+    </tr>
+    <tr><td style="padding:8px">Paletilla guisada</td><td style="padding:8px">3 h</td></tr>
+    <tr><td style="padding:8px">Olla de alubias</td><td style="padding:8px">2 h</td></tr>
+  </table>
+  <p style="color:#777;font-size:12px;margin-top:22px">
+  Est&aacute;s leyendo un ejemplo. Nada de esto se envi&oacute; a nadie.</p>
+</div>
+</body></html>

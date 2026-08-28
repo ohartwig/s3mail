@@ -1,0 +1,21 @@
+From: s3mail <hallo@example.org>
+To: du@example.org
+Subject: Dies ist ein Beispiel-Postfach
+Date: Mon, 01 Jan 2026 09:00:00 +0000
+Message-ID: <demo-welcome@example.org>
+Content-Type: text/plain; charset=utf-8
+
+Nichts hiervon ist echt, und nichts hiervon verlaesst dein Telefon.
+
+s3mail liest Post, die Amazon SES in einen S3-Bucket schreibt, der dir
+gehoert. Kein Server dazwischen, kein Postfach auf fremden Rechnern: der
+Bucket ist deiner, und diese App redet direkt mit ihm.
+
+Fuer den echten Betrieb brauchst du zweierlei - ein AWS-Konto mit einem
+Bucket, den SES beschreibt, und das s3mail-Programm fuer den Schreibtisch,
+das diesem Telefon einen Kopplungscode gibt. Alles Weitere findet es
+selbst heraus.
+
+Sieh dich um. Wisch ueber eine Nachricht, oeffne den Newsletter, tippe auf
+den Stern. Es verhaelt sich genau wie mit echter Post, weil darunter
+derselbe Code liegt.
