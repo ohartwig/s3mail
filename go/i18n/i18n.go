@@ -16,6 +16,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 )
@@ -149,6 +150,33 @@ func FromHeader(header string) string {
 	for _, w := range wishes {
 		if _, ok := catalogs[w.code]; ok {
 			return w.code
+		}
+	}
+	return Fallback
+}
+
+// FromEnv picks a language from the environment, for the moment before there
+// is a browser to ask.
+//
+// At startup nothing has been requested yet, so FromHeader has nothing to work
+// on - and falling straight back to English gives a German machine a German
+// interface with English sample mail, which looks like a bug because it is one.
+//
+// The POSIX order is LC_ALL over LC_MESSAGES over LANG, and the value looks
+// like "de_DE.UTF-8": the language is what comes before the underscore. "C"
+// and "POSIX" mean "no language chosen" and are left alone rather than being
+// read as a country.
+func FromEnv() string {
+	for _, name := range []string{"LC_ALL", "LC_MESSAGES", "LANG"} {
+		value := os.Getenv(name)
+		if value == "" || value == "C" || value == "POSIX" {
+			continue
+		}
+		code, _, _ := strings.Cut(value, ".")
+		code, _, _ = strings.Cut(code, "_")
+		code = strings.ToLower(strings.TrimSpace(code))
+		if _, ok := catalogs[code]; ok {
+			return code
 		}
 	}
 	return Fallback
