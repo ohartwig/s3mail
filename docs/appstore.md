@@ -110,7 +110,7 @@ requirements of Guideline 1.2 do not apply. Note for the questionnaire: HTML mai
 renders in a sandboxed web view with no navigation and no address bar, so this is
 **not** "unrestricted web access".
 
-**Export compliance — decide, do not guess.** The app uses encryption:
+**Export compliance — declared.** The app uses encryption:
 
 | Where | What |
 |---|---|
@@ -119,15 +119,23 @@ renders in a sandboxed web view with no navigation and no address bar, so this i
 | Client-side encrypted mail | AES-GCM and AES-CBC, plus KMS for the wrapped key |
 | The keychain entry | iOS, `WhenUnlockedThisDeviceOnly` |
 
-All of it is standard algorithms — nothing proprietary and nothing home-grown.
-That normally means the exemption applies and
-`ITSAppUsesNonExemptEncryption = false` can go into the build settings, which
-stops App Store Connect asking at every upload.
+All of it is standard algorithms — nothing proprietary and nothing home-grown,
+so the exemption applies. `INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO` is
+set in both configurations of the app target, which stops App Store Connect
+asking at every upload. The table above is what the declaration rests on; keep
+it current if the crypto ever changes.
 
-It is **not set today**, deliberately: an export declaration is a legal statement
-about the app, and the fact that the crypto comes from Go's standard library
-rather than Apple's frameworks is the detail worth confirming before signing it.
-The table above is what somebody needs to answer correctly.
+One trap, because the Info.plist is generated rather than checked in: for keys
+Xcode does not know the type of, an `INFOPLIST_KEY_` setting can land in the
+plist as the **string** `"NO"` rather than a boolean, and App Store Connect
+reads a string as no declaration at all — silently. Verify against the built
+app, not the build settings:
+
+```bash
+plutil -extract ITSAppUsesNonExemptEncryption raw -expect bool \
+    "$(xcodebuild -project ios-app/s3mail.xcodeproj -scheme s3mail \
+        -showBuildSettings 2>/dev/null | awk '/ BUILT_PRODUCTS_DIR/{print $3}')/s3mail.app/Info.plist"
+```
 
 ## Screenshots
 
