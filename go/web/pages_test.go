@@ -409,3 +409,25 @@ func TestTheCoreNamesIconsRatherThanDrawingThem(t *testing.T) {
 		}
 	}
 }
+
+// Closing the pairing dialog has to say which key it handed out.
+//
+// Without it the wizard cannot tell the two outcomes apart - phone took the
+// key, or nobody scanned anything - and it used to guess by taking every key
+// away. Opening the dialog was then enough to lock out a phone that had been
+// working a moment earlier, which is exactly the bug this line prevents.
+func TestClosingThePairingSaysWhichKeyItHandedOut(t *testing.T) {
+	out := page("setup", PageWizard, "de", nil)
+
+	if !strings.Contains(out, "device_key:") {
+		t.Error("the dialog closes without naming its key - the wizard has to guess")
+	}
+	if !strings.Contains(out, "pairedKey = d.key") {
+		t.Error("the key from the pairing is never kept, so there is nothing to send back")
+	}
+	// The outcome where a previous pairing survives is the new one, and the
+	// only one that has something reassuring to say.
+	if !strings.Contains(out, "setup.devicePairingKept") {
+		t.Error("nothing tells anybody that their paired phone is still fine")
+	}
+}

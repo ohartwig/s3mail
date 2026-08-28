@@ -114,9 +114,15 @@ func (d *Devices) Create(ctx context.Context, o DeviceOpts) (Device, error) {
 		return Device{}, err
 	}
 
-	// One key per device. An old one is taken away first: two live keys for one
-	// phone means revoking the phone is two actions, and somebody will do one.
-	if err := d.dropKeys(ctx, name); err != nil {
+	// The key that is already there stays. Taking it away here is what locked
+	// people out: opening the dialog was enough, and a phone that had been
+	// working a moment earlier answered with "the key does not exist" - a 403
+	// that names neither the cause nor the way back.
+	//
+	// "One key per device" is still the resting state, it is just reached at
+	// the other end: whichever key the phone actually uses survives, the other
+	// goes. See Settle, and DeviceAbandon in the wizard for when that runs.
+	if err := d.makeRoomForAKey(ctx, name); err != nil {
 		return Device{}, err
 	}
 	key, err := d.iam.CreateAccessKey(ctx, &iam.CreateAccessKeyInput{
@@ -130,6 +136,110 @@ func (d *Devices) Create(ctx context.Context, o DeviceOpts) (Device, error) {
 		AccessKey: aws.ToString(key.AccessKey.AccessKeyId),
 		Secret:    aws.ToString(key.AccessKey.SecretAccessKey),
 	}, nil
+}
+
+// makeRoomForAKey keeps the device under the IAM limit of two access keys.
+//
+// One old and one new is the normal state while a pairing is open, and it is
+// the whole point: the phone keeps working until it has taken the new key. A
+// third would be refused by IAM, and its existence means an earlier pairing was
+// neither finished nor abandoned. The key to drop is then the oldest that has
+// never been used - nobody is relying on a key that never made a call.
+func (d *Devices) makeRoomForAKey(ctx context.Context, user string) error {
+	keys, err := d.iam.ListAccessKeys(ctx, &iam.ListAccessKeysInput{
+		UserName: aws.String(user),
+	})
+	var missing *iamtypes.NoSuchEntityException
+	if errors.As(err, &missing) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if len(keys.AccessKeyMetadata) < 2 {
+		return nil
+	}
+
+	var drop *iamtypes.AccessKeyMetadata
+	for i := range keys.AccessKeyMetadata {
+		k := &keys.AccessKeyMetadata[i]
+		used, err := d.KeyUsed(ctx, aws.ToString(k.AccessKeyId))
+		// "Cannot tell" counts as used, here as everywhere: it must never be
+		// the reason a working phone loses its key.
+		if err != nil || used {
+			continue
+		}
+		if drop == nil || (k.CreateDate != nil && drop.CreateDate != nil &&
+			k.CreateDate.Before(*drop.CreateDate)) {
+			drop = k
+		}
+	}
+	if drop == nil {
+		// Both have been used. Two phones under one device name, or one phone
+		// paired twice and both codes taken. The older one is the one that was
+		// meant to be replaced.
+		for i := range keys.AccessKeyMetadata {
+			k := &keys.AccessKeyMetadata[i]
+			if drop == nil || (k.CreateDate != nil && drop.CreateDate != nil &&
+				k.CreateDate.Before(*drop.CreateDate)) {
+				drop = k
+			}
+		}
+	}
+	_, err = d.iam.DeleteAccessKey(ctx, &iam.DeleteAccessKeyInput{
+		UserName: aws.String(user), AccessKeyId: drop.AccessKeyId,
+	})
+	return err
+}
+
+// KeyUsed says whether one particular key has ever made a call.
+//
+// Per key and not per device, because that is the question a pairing asks: the
+// device may well have an older key in daily use, and what decides the outcome
+// is whether the phone has taken the *new* one.
+func (d *Devices) KeyUsed(ctx context.Context, keyID string) (bool, error) {
+	out, err := d.iam.GetAccessKeyLastUsed(ctx, &iam.GetAccessKeyLastUsedInput{
+		AccessKeyId: aws.String(keyID),
+	})
+	if err != nil {
+		// Cannot tell - and "cannot tell" must not read as "unused", or a
+		// pairing that only looks abandoned takes a working phone's key away.
+		return true, err
+	}
+	return out.AccessKeyLastUsed != nil && out.AccessKeyLastUsed.LastUsedDate != nil, nil
+}
+
+// OtherKeys lists the device's keys apart from the named one.
+func (d *Devices) OtherKeys(ctx context.Context, user, except string) ([]string, error) {
+	keys, err := d.iam.ListAccessKeys(ctx, &iam.ListAccessKeysInput{
+		UserName: aws.String(user),
+	})
+	var missing *iamtypes.NoSuchEntityException
+	if errors.As(err, &missing) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(keys.AccessKeyMetadata))
+	for _, k := range keys.AccessKeyMetadata {
+		if id := aws.ToString(k.AccessKeyId); id != except {
+			out = append(out, id)
+		}
+	}
+	return out, nil
+}
+
+// DropKey takes one key away.
+func (d *Devices) DropKey(ctx context.Context, user, keyID string) error {
+	_, err := d.iam.DeleteAccessKey(ctx, &iam.DeleteAccessKeyInput{
+		UserName: aws.String(user), AccessKeyId: aws.String(keyID),
+	})
+	var missing *iamtypes.NoSuchEntityException
+	if errors.As(err, &missing) {
+		return nil
+	}
+	return err
 }
 
 // Used says whether the device has ever made a call with its key.
@@ -309,7 +419,7 @@ func DeviceUserName(mailbox, name string) string {
 	}
 	device := clean(name)
 	if device == "" {
-		device = "geraet"
+		device = "device"
 	}
 	if len(device) > 32 {
 		device = device[:32]

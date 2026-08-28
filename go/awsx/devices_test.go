@@ -23,8 +23,8 @@ func TestAwkwardNamesBecomeLegalOnes(t *testing.T) {
 		"Oles iPhone":     "s3mail-ole-oles-iphone",
 		"iPad (Küche)":    "s3mail-ole-ipad-kche",
 		"  Test  ":        "s3mail-ole-test",
-		"!!!":             "s3mail-ole-geraet",
-		"":                "s3mail-ole-geraet",
+		"!!!":             "s3mail-ole-device",
+		"":                "s3mail-ole-device",
 		"Ole_Test.Device": "s3mail-ole-ole-test-device",
 	}
 	for in, want := range cases {

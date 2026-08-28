@@ -68,6 +68,12 @@ type Data struct {
 	// DeviceUser identifies a pairing that is being finished or abandoned. The
 	// wizard sends back what Device() gave it.
 	DeviceUser string `json:"device_user"`
+	// DeviceKey is the access key that pairing handed out. It decides what
+	// closing the dialog means: taken by the phone, or never used at all.
+	//
+	// The key *id*, not the secret - it names a key, it does not open one, and
+	// the browser has to be able to hand it back.
+	DeviceKey string `json:"device_key"`
 
 	// Account is the mailbox being edited, by its ID. Empty means the first one,
 	// "new" means: add one. Without it a second mailbox would overwrite the

@@ -153,3 +153,60 @@ func checkPIN(pin string) error {
 	}
 	return nil
 }
+
+// What closing the setup dialog should do about the keys.
+//
+// The decision sits here and not in the wizard for the same reason
+// DecidePush does: it has four branches, three of them are about not
+// destroying something, and it was previously buried between AWS calls where
+// nothing could reach it. Every branch below was a way somebody could lose
+// access to their mailbox.
+type PairingOutcome int
+
+const (
+	// PairingUnknown: leave everything alone. No key was handed out, or AWS
+	// would not say whether it was used. Doing nothing is always safe here;
+	// a leftover key is visible and fixable, a phone that went silent is not.
+	PairingUnknown PairingOutcome = iota
+	// PairingDone: the phone took the new key. Whatever it replaced can go,
+	// which restores one key per device - the property that makes locking out
+	// a lost phone a single click rather than two.
+	PairingDone
+	// PairingDropDevice: the key was never used and there was nothing before
+	// it. The device was created for a pairing that did not happen, so it goes
+	// with it - and the code on screen becomes a ciphertext for a key that no
+	// longer exists.
+	PairingDropDevice
+	// PairingKeepPrevious: never used, but a phone was already paired. Only
+	// the new key goes. This is the case that did not exist before: opening
+	// the dialog used to take the working phone's key away before anybody had
+	// scanned anything.
+	PairingKeepPrevious
+)
+
+// Pairing is what the wizard knows when the dialog closes.
+type Pairing struct {
+	// Minted is the key the dialog handed out. Empty means none was.
+	Minted string
+	// Used is whether the phone has made a call with that key.
+	Used bool
+	// CanTell is false when AWS would not answer. Then Used means nothing.
+	CanTell bool
+	// Others counts the device's remaining keys - what it had before this
+	// dialog opened.
+	Others int
+}
+
+// DecidePairing answers what to do with the keys.
+func DecidePairing(p Pairing) PairingOutcome {
+	if p.Minted == "" || !p.CanTell {
+		return PairingUnknown
+	}
+	if p.Used {
+		return PairingDone
+	}
+	if p.Others == 0 {
+		return PairingDropDevice
+	}
+	return PairingKeepPrevious
+}

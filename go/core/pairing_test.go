@@ -126,3 +126,53 @@ func TestGeneratedPINsAreAlwaysSixDigits(t *testing.T) {
 		t.Errorf("only %d different PINs in 200 draws", len(seen))
 	}
 }
+
+// What closing the setup dialog does about the keys.
+//
+// The case this exists for is the one that used to be missing: a phone was
+// paired, somebody opened the dialog again - to look, to pair a second device,
+// for any reason - and the working phone's key was taken away before anyone had
+// scanned anything. It answered with a 403 saying the key does not exist, and
+// the only way back was through the same dialog that caused it.
+func TestOpeningTheDialogDoesNotCostAWorkingPhoneItsKey(t *testing.T) {
+	got := core.DecidePairing(core.Pairing{
+		Minted: "AKIANEW", CanTell: true, Used: false, Others: 1})
+
+	if got != core.PairingKeepPrevious {
+		t.Errorf("a phone that was paired before loses its key: %v", got)
+	}
+}
+
+func TestATakenKeyRetiresTheOneItReplaced(t *testing.T) {
+	got := core.DecidePairing(core.Pairing{
+		Minted: "AKIANEW", CanTell: true, Used: true, Others: 1})
+
+	if got != core.PairingDone {
+		t.Errorf("the replaced key stays, and one device now has two: %v", got)
+	}
+}
+
+// The first pairing of a device, abandoned. Then there is nothing to protect,
+// and the user exists only because of a pairing that did not happen.
+func TestAnAbandonedFirstPairingRemovesTheDevice(t *testing.T) {
+	got := core.DecidePairing(core.Pairing{
+		Minted: "AKIANEW", CanTell: true, Used: false, Others: 0})
+
+	if got != core.PairingDropDevice {
+		t.Errorf("an abandoned code keeps working: %v", got)
+	}
+}
+
+// "Cannot tell" must never destroy anything. A network hiccup while asking
+// whether a key was used is not evidence that it was not.
+func TestNotKnowingChangesNothing(t *testing.T) {
+	for name, p := range map[string]core.Pairing{
+		"no answer from AWS": {Minted: "AKIANEW", CanTell: false, Used: false, Others: 1},
+		"no key handed out":  {Minted: "", CanTell: true, Used: false, Others: 1},
+		"neither":            {Minted: "", CanTell: false},
+	} {
+		if got := core.DecidePairing(p); got != core.PairingUnknown {
+			t.Errorf("%s: decided %v instead of leaving it alone", name, got)
+		}
+	}
+}

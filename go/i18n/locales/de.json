@@ -236,6 +236,7 @@
   "setup.credentials.hint": "Wird als AWS-Profil in ~/.aws/credentials gespeichert (nur für dich lesbar) – dem Standardort, den auch die AWS-Werkzeuge benutzen.",
   "setup.device": "Zweites Gerät",
   "setup.deviceAbandoned": "Abgebrochen – der Zugang wurde wieder entfernt.",
+  "setup.devicePairingKept": "Abgebrochen – der neue Zugang wurde entfernt, das bisher gekoppelte Gerät läuft weiter.",
   "setup.deviceCode": "Code für das Gerät",
   "setup.deviceCodeHint": "Trägt kein Passwort. Den Schlüssel des neuen Benutzers tippen Sie auf dem Gerät einmal ein – ein Foto dieses Codes gibt niemandem Zugang.",
   "setup.deviceDone": "Fertig",

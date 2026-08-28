@@ -345,12 +345,16 @@ $("#setLife").onclick = async () => {
 // it: that separation is why a photograph of this screen is not the device's
 // access.
 let pairing = null;
+// The key this dialog handed out. Closing means something different depending
+// on whether the phone took it, and only the key id can tell the two apart.
+let pairedKey = null;
 
 $("#device").onclick = async () => {
   const b = $("#device"); b.disabled = true;
   try {
     const d = await api("/api/setup/device", {...collect(), device_name: $("#devName").value});
     pairing = d.user;
+    pairedKey = d.key || "";
     $("#devPin").textContent = d.pin.replace(/(\d{3})(\d{3})/, "$1 $2");
     drawQR($("#devQR"), d.qr);
     $("#devPush").style.display = d.push ? "none" : "";
@@ -360,18 +364,23 @@ $("#device").onclick = async () => {
   finally { b.disabled = false; }
 };
 
-// Closing the dialog takes the key back if the phone never used it. This bounds
-// the exposure of a code far better than the PIN does: an abandoned code
-// becomes a ciphertext for a key that no longer exists.
+// Closing the dialog is where a pairing is settled, and the key decides how.
+//
+// Taken by the phone: whatever key it replaced goes, and one key per device is
+// the resting state again. Never used: this key goes instead and the phone that
+// was working before this dialog opened keeps working. That is why opening the
+// dialog no longer costs somebody their mailbox.
 $("#devDone").onclick = async () => {
-  const user = pairing;
-  pairing = null;
+  const user = pairing, key = pairedKey;
+  pairing = null; pairedKey = null;
   $("#deviceBox").style.display = "none";
   $("#devQR").innerHTML = ""; $("#devPin").textContent = "";
   if (!user) return;
   try {
-    const d = await api("/api/setup/device/abandon", {...collect(), device_user: user});
+    const d = await api("/api/setup/device/abandon",
+                        {...collect(), device_user: user, device_key: key});
     if (d.removed) say("#devMsg", T["setup.deviceAbandoned"]);
+    else if (d.kept) say("#devMsg", T["setup.devicePairingKept"]);
   } catch { /* the wizard has nothing useful to say here; the key stays */ }
 };
 

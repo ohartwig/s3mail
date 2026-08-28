@@ -236,6 +236,7 @@
   "setup.credentials.hint": "Stored as an AWS profile in ~/.aws/credentials (readable only by you) — the standard place the AWS tools use as well.",
   "setup.device": "Second device",
   "setup.deviceAbandoned": "Cancelled – the access was removed again.",
+  "setup.devicePairingKept": "Cancelled – the new access was removed; the device paired before this keeps working.",
   "setup.deviceCode": "Code for the device",
   "setup.deviceCodeHint": "Carries no password. You type the new user's key on the device once — a photograph of this code gives nobody access.",
   "setup.deviceDone": "Done",
