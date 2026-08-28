@@ -1,0 +1,482 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "s3mail: an S3 bucket that SES writes mail into, and an IAM user narrow enough to be the only thing that reads it. Creates no access key - see the outputs for the one command that does.",
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {
+            "default": "Mailbox"
+          },
+          "Parameters": [
+            "MailDomain",
+            "MailboxLocalPart",
+            "MailBucket"
+          ]
+        }
+      ],
+      "ParameterLabels": {
+        "MailDomain": {
+          "default": "Your mail domain, already verified in SES"
+        },
+        "MailboxLocalPart": {
+          "default": "The part before the @"
+        },
+        "MailBucket": {
+          "default": "Bucket name (globally unique)"
+        }
+      }
+    }
+  },
+  "Parameters": {
+    "MailDomain": {
+      "Type": "String",
+      "Description": "The domain SES receives for, e.g. example.org. Verify it in SES first - this template cannot, because it needs DNS records only you can add.",
+      "AllowedPattern": "^[a-z0-9.-]+\\\\.[a-z]{2,}$"
+    },
+    "MailboxLocalPart": {
+      "Type": "String",
+      "Description": "The part before the @, e.g. ole. Also the folder in the bucket and the path device users live under.",
+      "AllowedPattern": "^[a-z0-9][a-z0-9._-]{0,30}$"
+    },
+    "MailBucket": {
+      "Type": "String",
+      "Description": "Name for the bucket. S3 bucket names are globally unique, so pick something of your own.",
+      "AllowedPattern": "^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$"
+    }
+  },
+  "Resources": {
+    "MailBucketResource": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Metadata": {
+        "Comment": "Retain on delete, and deliberately: deleting the stack must not delete somebody's mail."
+      },
+      "Properties": {
+        "BucketName": {
+          "Ref": "MailBucket"
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        }
+      }
+    },
+    "MailBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Metadata": {
+        "Comment": "An explicit Deny beats every Allow, AdministratorAccess included. This is the only way on AWS to build a separation that does not depend on somebody choosing to hold back. Whoever owns the bucket can still change this policy - what it buys is that doing so is a deliberate, visible act."
+      },
+      "Properties": {
+        "Bucket": {
+          "Ref": "MailBucketResource"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "AllowSESPuts",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ses.amazonaws.com"
+              },
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Sub": "arn:${AWS::Partition}:s3:::${MailBucket}/*"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "AWS:SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                  }
+                }
+              }
+            },
+            {
+              "Sid": "OnlyMailboxesReadContents",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": [
+                "s3:GetObject",
+                "s3:GetObjectVersion",
+                "s3:GetObjectAttributes"
+              ],
+              "Resource": {
+                "Fn::Sub": "arn:${AWS::Partition}:s3:::${MailBucket}/*"
+              },
+              "Condition": {
+                "StringNotLike": {
+                  "aws:PrincipalArn": [
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:iam::${AWS::AccountId}:user/s3mail/s3mail-${MailboxLocalPart}"
+                    },
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:iam::${AWS::AccountId}:user/s3mail-devices/${MailboxLocalPart}/*"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "Sid": "ListingMailboxesAndManagersOnly",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:ListBucket",
+              "Resource": {
+                "Fn::Sub": "arn:${AWS::Partition}:s3:::${MailBucket}"
+              },
+              "Condition": {
+                "StringNotLike": {
+                  "aws:PrincipalArn": [
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:iam::${AWS::AccountId}:user/s3mail/s3mail-${MailboxLocalPart}"
+                    },
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:iam::${AWS::AccountId}:user/s3mail-devices/${MailboxLocalPart}/*"
+                    },
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:iam::${AWS::AccountId}:root"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "MailboxUser": {
+      "Type": "AWS::IAM::User",
+      "Metadata": {
+        "Comment": "The access s3mail runs as. It reads its own policy to work out bucket, prefix and sender - which is why nobody has to type them. Its own ARN is written out rather than asked for with GetAtt: an inline policy that resolves the user it is attached to depends on itself, and CloudFormation refuses the stack with a circular dependency."
+      },
+      "Properties": {
+        "UserName": {
+          "Fn::Sub": "s3mail-${MailboxLocalPart}"
+        },
+        "Path": "/s3mail/",
+        "Policies": [
+          {
+            "PolicyName": "mailbox",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Sid": "ListOwnPrefixOnly",
+                  "Effect": "Allow",
+                  "Action": "s3:ListBucket",
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:s3:::${MailBucket}"
+                  },
+                  "Condition": {
+                    "StringLike": {
+                      "s3:prefix": {
+                        "Fn::Sub": "mail/${MailboxLocalPart}/*"
+                      }
+                    }
+                  }
+                },
+                {
+                  "Sid": "OwnMailbox",
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:PutObject",
+                    "s3:DeleteObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:s3:::${MailBucket}/mail/${MailboxLocalPart}/*"
+                  }
+                },
+                {
+                  "Sid": "SendAsSelfOnly",
+                  "Effect": "Allow",
+                  "Action": [
+                    "ses:SendRawEmail",
+                    "ses:SendEmail"
+                  ],
+                  "Resource": "*",
+                  "Condition": {
+                    "StringEquals": {
+                      "ses:FromAddress": {
+                        "Fn::Sub": "${MailboxLocalPart}@${MailDomain}"
+                      }
+                    }
+                  }
+                },
+                {
+                  "Sid": "WizardConvenience",
+                  "Effect": "Allow",
+                  "Action": [
+                    "ses:ListIdentities",
+                    "ses:GetIdentityVerificationAttributes"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Sid": "SuppressionList",
+                  "Effect": "Allow",
+                  "Action": [
+                    "ses:PutSuppressedDestination",
+                    "ses:ListSuppressedDestinations",
+                    "ses:GetSuppressedDestination",
+                    "ses:DeleteSuppressedDestination"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Sid": "ReadOwnPolicy",
+                  "Effect": "Allow",
+                  "Action": [
+                    "iam:ListUserPolicies",
+                    "iam:ListAttachedUserPolicies",
+                    "iam:GetUserPolicy"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:iam::${AWS::AccountId}:user/s3mail/s3mail-${MailboxLocalPart}"
+                  }
+                },
+                {
+                  "Sid": "ReadOwnAttachedPolicies",
+                  "Effect": "Allow",
+                  "Action": [
+                    "iam:GetPolicy",
+                    "iam:GetPolicyVersion"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/s3mail/*"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "ManagedPolicyArns": [
+          {
+            "Ref": "DeviceAdmin"
+          }
+        ]
+      }
+    },
+    "DeviceBoundary": {
+      "Type": "AWS::IAM::ManagedPolicy",
+      "Metadata": {
+        "Comment": "The most a paired phone may ever hold, whatever policy is written for it. Never attached as a policy - only ever as a permissions boundary."
+      },
+      "Properties": {
+        "ManagedPolicyName": {
+          "Fn::Sub": "s3mail-${MailboxLocalPart}-device-boundary"
+        },
+        "Path": "/s3mail/",
+        "Description": "Ceiling for devices paired with this mailbox.",
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "ListOwnPrefixOnly",
+              "Effect": "Allow",
+              "Action": "s3:ListBucket",
+              "Resource": {
+                "Fn::Sub": "arn:${AWS::Partition}:s3:::${MailBucket}"
+              },
+              "Condition": {
+                "StringLike": {
+                  "s3:prefix": [
+                    {
+                      "Fn::Sub": "mail/${MailboxLocalPart}/*"
+                    },
+                    {
+                      "Fn::Sub": "mail/${MailboxLocalPart}/"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "Sid": "OwnMailbox",
+              "Effect": "Allow",
+              "Action": [
+                "s3:GetObject",
+                "s3:PutObject",
+                "s3:DeleteObject"
+              ],
+              "Resource": {
+                "Fn::Sub": "arn:${AWS::Partition}:s3:::${MailBucket}/mail/${MailboxLocalPart}/*"
+              }
+            },
+            {
+              "Sid": "SendAsSelf",
+              "Effect": "Allow",
+              "Action": [
+                "ses:SendRawEmail",
+                "ses:SendEmail"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "StringEquals": {
+                  "ses:FromAddress": {
+                    "Fn::Sub": "${MailboxLocalPart}@${MailDomain}"
+                  }
+                }
+              }
+            },
+            {
+              "Sid": "ReadOwnPolicy",
+              "Effect": "Allow",
+              "Action": [
+                "iam:ListUserPolicies",
+                "iam:GetUserPolicy"
+              ],
+              "Resource": {
+                "Fn::Sub": "arn:${AWS::Partition}:iam::${AWS::AccountId}:user/s3mail-devices/${MailboxLocalPart}/*"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "DeviceAdmin": {
+      "Type": "AWS::IAM::ManagedPolicy",
+      "Metadata": {
+        "Comment": "Lets the mailbox pair its own phones, and only with the boundary attached - without that condition this would be a privilege escalation with extra steps. DeleteUserPermissionsBoundary is deliberately absent."
+      },
+      "Properties": {
+        "ManagedPolicyName": {
+          "Fn::Sub": "s3mail-${MailboxLocalPart}-devices"
+        },
+        "Path": "/s3mail/",
+        "Description": "Lets this mailbox pair devices for itself, capped by the matching boundary.",
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "CreateDeviceUserWithCeiling",
+              "Effect": "Allow",
+              "Action": [
+                "iam:CreateUser",
+                "iam:PutUserPolicy",
+                "iam:PutUserPermissionsBoundary"
+              ],
+              "Resource": {
+                "Fn::Sub": "arn:${AWS::Partition}:iam::${AWS::AccountId}:user/s3mail-devices/${MailboxLocalPart}/*"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "iam:PermissionsBoundary": {
+                    "Ref": "DeviceBoundary"
+                  }
+                }
+              }
+            },
+            {
+              "Sid": "ManageOwnDevices",
+              "Effect": "Allow",
+              "Action": [
+                "iam:CreateAccessKey",
+                "iam:DeleteAccessKey",
+                "iam:ListAccessKeys",
+                "iam:GetAccessKeyLastUsed",
+                "iam:DeleteUserPolicy",
+                "iam:ListUserPolicies",
+                "iam:GetUserPolicy",
+                "iam:DeleteUser",
+                "iam:GetUser",
+                "iam:TagUser",
+                "iam:ListUserTags"
+              ],
+              "Resource": {
+                "Fn::Sub": "arn:${AWS::Partition}:iam::${AWS::AccountId}:user/s3mail-devices/${MailboxLocalPart}/*"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "ReceiptRuleSet": {
+      "Type": "AWS::SES::ReceiptRuleSet",
+      "Properties": {
+        "RuleSetName": {
+          "Fn::Sub": "s3mail-${MailboxLocalPart}"
+        }
+      }
+    },
+    "ReceiptRule": {
+      "Type": "AWS::SES::ReceiptRule",
+      "DependsOn": "MailBucketPolicy",
+      "Metadata": {
+        "Comment": "Depends on the bucket policy: SES checks that it may write before it accepts the rule."
+      },
+      "Properties": {
+        "RuleSetName": {
+          "Ref": "ReceiptRuleSet"
+        },
+        "Rule": {
+          "Name": {
+            "Fn::Sub": "${MailboxLocalPart}-to-s3"
+          },
+          "Enabled": true,
+          "ScanEnabled": true,
+          "TlsPolicy": "Optional",
+          "Recipients": [
+            {
+              "Fn::Sub": "${MailboxLocalPart}@${MailDomain}"
+            }
+          ],
+          "Actions": [
+            {
+              "S3Action": {
+                "BucketName": {
+                  "Ref": "MailBucketResource"
+                },
+                "ObjectKeyPrefix": {
+                  "Fn::Sub": "mail/${MailboxLocalPart}/"
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "Bucket": {
+      "Description": "What to enter in s3mail, if it ever asks.",
+      "Value": {
+        "Ref": "MailBucketResource"
+      }
+    },
+    "Prefix": {
+      "Description": "The folder inside the bucket.",
+      "Value": {
+        "Fn::Sub": "mail/${MailboxLocalPart}/"
+      }
+    },
+    "MailboxUser": {
+      "Description": "The IAM user s3mail runs as.",
+      "Value": {
+        "Ref": "MailboxUser"
+      }
+    },
+    "NextSteps": {
+      "Description": "What this template cannot do for you",
+      "Value": {
+        "Fn::Sub": "1) Activate the rule set: aws ses set-active-receipt-rule-set --rule-set-name s3mail-${MailboxLocalPart} --region ${AWS::Region}  2) Mint a key: aws iam create-access-key --user-name s3mail-${MailboxLocalPart}  3) Start s3mail and enter that key. It works the rest out from the policy."
+      }
+    }
+  }
+}
