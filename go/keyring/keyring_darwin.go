@@ -38,8 +38,7 @@ func load() ([]byte, error) {
 	out, err := exec.Command("/usr/bin/security", "find-generic-password",
 		"-a", account(), "-s", Service, "-w").Output()
 	if err != nil {
-		var exit *exec.ExitError
-		if errors.As(err, &exit) {
+		if _, exit := errors.AsType[*exec.ExitError](err); exit {
 			return nil, errNotFound // item is simply not there yet
 		}
 		return nil, ErrUnavailable

@@ -174,9 +174,7 @@ func (s *State) fetchOps(ctx context.Context, keys []string) [][]core.Op {
 	sem := make(chan struct{}, s.Workers)
 	var wg sync.WaitGroup
 	for i, key := range keys {
-		wg.Add(1)
-		go func(i int, key string) {
-			defer wg.Done()
+		wg.Go(func() {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 			obj, err := s.s3.Get(ctx, s.bucket, key, "")
@@ -190,7 +188,7 @@ func (s *State) fetchOps(ctx context.Context, keys []string) [][]core.Op {
 				return
 			}
 			out[i] = h.Ops
-		}(i, key)
+		})
 	}
 	wg.Wait()
 	return out
@@ -344,13 +342,11 @@ func (s *State) Compact(ctx context.Context, merged []string) {
 	sem := make(chan struct{}, s.Workers)
 	var wg sync.WaitGroup
 	for _, key := range merged {
-		wg.Add(1)
-		go func(key string) {
-			defer wg.Done()
+		wg.Go(func() {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 			_ = s.s3.Delete(ctx, s.bucket, key) // the watermark catches errors
-		}(key)
+		})
 	}
 	wg.Wait()
 }

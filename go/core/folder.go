@@ -90,8 +90,8 @@ func NewStore(root string) *Store {
 
 // Mid is the base name - the key the state hangs on.
 func (s *Store) Mid(key string) string {
-	if i := strings.LastIndex(key, "/"); i >= 0 {
-		return key[i+1:]
+	if _, after, ok := strings.CutLast(key, "/"); ok {
+		return after
 	}
 	return key
 }
@@ -99,8 +99,8 @@ func (s *Store) Mid(key string) string {
 // FolderOf reads the folder out of a key.
 func (s *Store) FolderOf(key string) string {
 	rest := strings.TrimPrefix(key, s.Root)
-	if i := strings.LastIndex(rest, "/"); i >= 0 {
-		return rest[:i]
+	if before, _, ok := strings.CutLast(rest, "/"); ok {
+		return before
 	}
 	return Inbox
 }

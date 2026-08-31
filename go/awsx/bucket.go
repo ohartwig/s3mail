@@ -22,8 +22,7 @@ const LifecycleRuleID = "s3mail-trash"
 func (a *S3) Buckets(ctx context.Context) ([]string, error) {
 	resp, err := a.c.ListBuckets(ctx, &s3.ListBucketsInput{})
 	if err != nil {
-		var api smithy.APIError
-		if errors.As(err, &api) && (api.ErrorCode() == "AccessDenied" ||
+		if api, ok := errors.AsType[smithy.APIError](err); ok && (api.ErrorCode() == "AccessDenied" ||
 			api.ErrorCode() == "AccessDeniedException") {
 			// An empty slice, not nil: a nil slice becomes JSON `null`, and the
 			// interface calls .map() on it. A missing s3:ListAllMyBuckets is the normal

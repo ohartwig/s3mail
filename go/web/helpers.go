@@ -5,10 +5,7 @@ package web
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
-
-	"git.ole-hartwig.eu/development/s3mail/s3mail/wizard"
 )
 
 func readJSON(r *http.Request, target any) error {
@@ -16,8 +13,4 @@ func readJSON(r *http.Request, target any) error {
 		return nil
 	}
 	return json.NewDecoder(r.Body).Decode(target)
-}
-
-func asInputError(err error, target *wizard.InputError) bool {
-	return errors.As(err, target)
 }

@@ -86,9 +86,9 @@ func (s *Server) changeSuppression(w http.ResponseWriter, r *http.Request, acc *
 // list, and SES would refuse the entry.
 func addressFrom(s string) string {
 	s = strings.TrimSpace(s)
-	if i := strings.LastIndex(s, "<"); i >= 0 {
-		if j := strings.Index(s[i:], ">"); j > 0 {
-			s = s[i+1 : i+j]
+	if _, after, ok := strings.CutLast(s, "<"); ok {
+		if before, _, ok := strings.Cut(after, ">"); ok {
+			s = before
 		}
 	}
 	s = strings.Trim(strings.TrimSpace(s), `"'`)

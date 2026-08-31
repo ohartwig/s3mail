@@ -111,8 +111,7 @@ func PlainText(err error, profile string, cat i18n.Catalog) string {
 	text := err.Error()
 
 	// no such profile
-	var missingProfile config.SharedConfigProfileNotExistError
-	if errors.As(err, &missingProfile) {
+	if _, missingProfile := errors.AsType[config.SharedConfigProfileNotExistError](err); missingProfile {
 		return cat.Tf("aws.noSuchProfile", profile, keys)
 	}
 
@@ -132,8 +131,7 @@ func PlainText(err error, profile string, cat i18n.Catalog) string {
 		return cat.T("aws.noRegion")
 	}
 
-	var api smithy.APIError
-	if errors.As(err, &api) {
+	if api, ok := errors.AsType[smithy.APIError](err); ok {
 		switch api.ErrorCode() {
 		case "InvalidClientTokenId", "UnrecognizedClientException", "AuthFailure",
 			"InvalidAccessKeyId":
@@ -183,8 +181,7 @@ func IsAuthProblem(err error) bool {
 	if err == nil {
 		return false
 	}
-	var missingProfile config.SharedConfigProfileNotExistError
-	if errors.As(err, &missingProfile) {
+	if _, missingProfile := errors.AsType[config.SharedConfigProfileNotExistError](err); missingProfile {
 		return true
 	}
 	text := err.Error()
@@ -194,8 +191,7 @@ func IsAuthProblem(err error) bool {
 		strings.Contains(text, "failed to refresh cached credentials") {
 		return true
 	}
-	var api smithy.APIError
-	if errors.As(err, &api) {
+	if api, ok := errors.AsType[smithy.APIError](err); ok {
 		switch api.ErrorCode() {
 		case "InvalidClientTokenId", "UnrecognizedClientException", "AuthFailure",
 			"InvalidAccessKeyId", "SignatureDoesNotMatch", "ExpiredToken",

@@ -1,6 +1,6 @@
 module git.ole-hartwig.eu/development/s3mail/s3mail
 
-go 1.25.0
+go 1.27.0
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.43.8 // indirect

@@ -78,8 +78,8 @@ func mailboxOf(prefix string) string {
 	if p == "" {
 		return ""
 	}
-	if i := strings.LastIndex(p, "/"); i >= 0 {
-		return p[i+1:]
+	if _, after, ok := strings.CutLast(p, "/"); ok {
+		return after
 	}
 	return p
 }

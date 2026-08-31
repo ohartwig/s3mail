@@ -310,8 +310,8 @@ func newMessageID(sender string) string {
 	b := make([]byte, 12)
 	_, _ = rand.Read(b)
 	domain := "s3mail.local"
-	if i := strings.LastIndex(sender, "@"); i >= 0 {
-		domain = sender[i+1:]
+	if _, after, ok := strings.CutLast(sender, "@"); ok {
+		domain = after
 	}
 	return "<" + hex.EncodeToString(b) + "@" + strings.Trim(domain, "<> ") + ">"
 }
