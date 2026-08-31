@@ -431,3 +431,29 @@ func TestClosingThePairingSaysWhichKeyItHandedOut(t *testing.T) {
 		t.Error("nothing tells anybody that their paired phone is still fine")
 	}
 }
+
+// TestTheFolderBadgeCountsUnread - the number beside a folder is what every mail
+// program promises in that spot: what is still unread. It used to fall back to
+// the total as soon as nothing was unread, so a folder read to the end kept
+// wearing a number, and a fresh mailbox - where everything is unread - showed
+// the same figure twice as "17/17". The tag row one line below always did it
+// right; this is the folder row catching up.
+func TestTheFolderBadgeCountsUnread(t *testing.T) {
+	out := page("inbox", PageMailbox, "de", map[string]any{"bucket": "b"})
+
+	i := strings.Index(out, `<span class="cnt">`)
+	if i < 0 {
+		t.Fatal("no badge in the sidebar at all")
+	}
+	badge := out[i:min(i+60, len(out))]
+	if !strings.Contains(badge, "f.unread") {
+		t.Errorf("the folder badge does not read f.unread: %q", badge)
+	}
+	if strings.Contains(badge, "f.count") {
+		t.Errorf("the folder badge falls back to f.count - that is the total: %q", badge)
+	}
+	// The total is not lost, it moved into the tooltip.
+	if !strings.Contains(out, "side.folderTotal") {
+		t.Error("no tooltip carrying the total - the number is simply gone")
+	}
+}

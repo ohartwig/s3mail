@@ -311,6 +311,7 @@
   "side.filterName": "Name des Filters",
   "side.filterNeedsQuery": "Erst etwas in die Suche tippen – der Filter merkt sich, was dort steht",
   "side.folderName": "Ordnername",
+  "side.folderTotal": "%d Nachricht(en) im Ordner",
   "side.folders": "Ordner",
   "side.newFilter": "Aktuelle Suche als Filter merken",
   "side.newFolder": "Neuer Ordner",
