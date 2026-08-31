@@ -40,10 +40,50 @@ include:
       rules-config:
         - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
 
+  # Automatische Merge-Request-Pruefung. Nur Ausloeser: der Job haelt kein
+  # Geheimnis, sondern startet eine Downstream-Pipeline in
+  # devops/ai-code-review, deren geschuetzter Standardzweig die AWS-Rolle
+  # uebernimmt. Wer den eigenen MR-Zweig umschreibt, bekommt darueber nichts -
+  # dieselbe Vertrauensgrenze wie beim Signieren.
+  #
+  # Kein `stage`, also bleibt die Voreinstellung `.post`. Das ist Absicht:
+  # `.post` existiert immer, waehrend ein benannter Stage aus der Komponente an
+  # der eigenen `stages:`-Liste hier scheitern wuerde - und zwar so, dass die
+  # Pipeline gar nicht erst entsteht, nicht nur der Job ausfaellt.
+  #
+  # renovate: datasource=gitlab-tags depName=devops/ci-cd-components/ai-tools/ai-review
+  - component: ${CI_SERVER_HOST}/devops/ci-cd-components/ai-tools/ai-review@1.2.6
+    inputs:
+      enabled: 'true'
+
 stages:
   - test
   - build
   - release
+
+# Merge-Request-Pipelines, damit ai:review ueberhaupt anspringen kann: seine
+# Regel verlangt CI_PIPELINE_SOURCE == "merge_request_event", und bis hierher
+# kannte dieses Projekt ausschliesslich Zweig-Pipelines (source = push). Ohne
+# diesen Block stuende der Job in der Datei und liefe nie - der Fehler, der wie
+# eine erledigte Aufgabe aussieht.
+#
+# Die zweite Regel verhindert die doppelte Pipeline: sobald ein Merge Request
+# offen ist, laeuft nur noch dessen Pipeline und nicht zusaetzlich die des
+# Zweigs. Ohne sie kostet jeder Push in einen Zweig mit offenem MR zwei volle
+# Laeufe, und bei vier Plattformbauten plus Signatur ist das kein
+# Rundungsfehler.
+#
+# Die Tag-Regel muss mit: ein workflow-Block ersetzt die Voreinstellung
+# vollstaendig, und ohne sie entstuende keine Tag-Pipeline mehr - also kein
+# Release. Genau die Sorte Folgeschaden, die weiter oben schon einmal drei
+# Pipelines nach dem Merge gekostet hat.
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH
 
 variables:
   # GO_IMAGE aus einem eigenen goldenen Bild (devops/images/golang), nicht
