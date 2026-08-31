@@ -25,3 +25,7 @@ s3mail-cache/
 ._*
 .Spotlight-V100
 .Trashes
+
+# Go-Bauartefakt: `go build ./cmd/s3mail` legt die Datei in go/ ab
+/go/s3mail
+/go/s3mail.exe
