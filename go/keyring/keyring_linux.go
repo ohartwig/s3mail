@@ -26,8 +26,7 @@ func load() ([]byte, error) {
 	}
 	out, err := exec.Command("secret-tool", "lookup", "service", Service).Output()
 	if err != nil {
-		var exit *exec.ExitError
-		if errors.As(err, &exit) {
+		if _, exit := errors.AsType[*exec.ExitError](err); exit {
 			return nil, errNotFound
 		}
 		return nil, ErrUnavailable

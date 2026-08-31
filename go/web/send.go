@@ -5,6 +5,7 @@ package web
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -165,8 +166,7 @@ func (s *Server) wizardRoutes() {
 		d.Language = s.language(r)
 		res, err := fn(r.Context(), d)
 		if err != nil {
-			var input wizard.InputError
-			if asInputError(err, &input) {
+			if input, ok := errors.AsType[wizard.InputError](err); ok {
 				s.writeError(w, http.StatusBadRequest, input.Text)
 				return
 			}

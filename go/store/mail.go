@@ -216,13 +216,11 @@ func (m *Mailbox) Refresh(ctx context.Context) (RefreshResult, error) {
 	var wg sync.WaitGroup
 	fresh := make([]core.Message, len(todo))
 	for i, o := range todo {
-		wg.Add(1)
-		go func(i int, o ObjectInfo) {
-			defer wg.Done()
+		wg.Go(func() {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 			fresh[i] = m.summarize(ctx, o)
-		}(i, o)
+		})
 	}
 	wg.Wait()
 

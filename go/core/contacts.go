@@ -114,8 +114,8 @@ func Addresses(msgs []Message, query string, limit int) []Contact {
 // off, because "Schmidt, Peter" arrives quoted and would otherwise keep them.
 func displayName(from string) string {
 	name := from
-	if i := strings.LastIndex(from, "<"); i >= 0 {
-		name = from[:i]
+	if before, _, ok := strings.CutLast(from, "<"); ok {
+		name = before
 	} else if strings.Contains(from, "@") {
 		return "" // bare address, no name to take
 	}

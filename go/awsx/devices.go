@@ -98,8 +98,8 @@ func (d *Devices) Create(ctx context.Context, o DeviceOpts) (Device, error) {
 			{Key: aws.String("s3mail-paired"), Value: aws.String(time.Now().UTC().Format(time.RFC3339))},
 		},
 	})
-	var exists *iamtypes.EntityAlreadyExistsException
-	if err != nil && !errors.As(err, &exists) {
+	_, exists := errors.AsType[*iamtypes.EntityAlreadyExistsException](err)
+	if err != nil && !exists {
 		return Device{}, err
 	}
 	// An existing user is not an error worth stopping for: somebody paired this
@@ -149,8 +149,7 @@ func (d *Devices) makeRoomForAKey(ctx context.Context, user string) error {
 	keys, err := d.iam.ListAccessKeys(ctx, &iam.ListAccessKeysInput{
 		UserName: aws.String(user),
 	})
-	var missing *iamtypes.NoSuchEntityException
-	if errors.As(err, &missing) {
+	if _, missing := errors.AsType[*iamtypes.NoSuchEntityException](err); missing {
 		return nil
 	}
 	if err != nil {
@@ -214,8 +213,7 @@ func (d *Devices) OtherKeys(ctx context.Context, user, except string) ([]string,
 	keys, err := d.iam.ListAccessKeys(ctx, &iam.ListAccessKeysInput{
 		UserName: aws.String(user),
 	})
-	var missing *iamtypes.NoSuchEntityException
-	if errors.As(err, &missing) {
+	if _, missing := errors.AsType[*iamtypes.NoSuchEntityException](err); missing {
 		return nil, nil
 	}
 	if err != nil {
@@ -235,8 +233,7 @@ func (d *Devices) DropKey(ctx context.Context, user, keyID string) error {
 	_, err := d.iam.DeleteAccessKey(ctx, &iam.DeleteAccessKeyInput{
 		UserName: aws.String(user), AccessKeyId: aws.String(keyID),
 	})
-	var missing *iamtypes.NoSuchEntityException
-	if errors.As(err, &missing) {
+	if _, missing := errors.AsType[*iamtypes.NoSuchEntityException](err); missing {
 		return nil
 	}
 	return err
@@ -284,12 +281,11 @@ func (d *Devices) Remove(ctx context.Context, user string) error {
 	_, err := d.iam.DeleteUserPolicy(ctx, &iam.DeleteUserPolicyInput{
 		UserName: aws.String(user), PolicyName: aws.String("mailbox"),
 	})
-	var missing *iamtypes.NoSuchEntityException
-	if err != nil && !errors.As(err, &missing) {
+	if _, missing := errors.AsType[*iamtypes.NoSuchEntityException](err); err != nil && !missing {
 		return err
 	}
 	_, err = d.iam.DeleteUser(ctx, &iam.DeleteUserInput{UserName: aws.String(user)})
-	if err != nil && !errors.As(err, &missing) {
+	if _, missing := errors.AsType[*iamtypes.NoSuchEntityException](err); err != nil && !missing {
 		return err
 	}
 	return nil
@@ -299,8 +295,7 @@ func (d *Devices) dropKeys(ctx context.Context, user string) error {
 	keys, err := d.iam.ListAccessKeys(ctx, &iam.ListAccessKeysInput{
 		UserName: aws.String(user),
 	})
-	var missing *iamtypes.NoSuchEntityException
-	if errors.As(err, &missing) {
+	if _, missing := errors.AsType[*iamtypes.NoSuchEntityException](err); missing {
 		return nil
 	}
 	if err != nil {
@@ -384,7 +379,10 @@ func ownsApp(arn, mailbox string) bool {
 	if mailbox == "" {
 		return false
 	}
-	name := arn[strings.LastIndex(arn, "/")+1:]
+	_, name, ok := strings.CutLast(arn, "/")
+	if !ok {
+		name = arn
+	}
 	return strings.HasSuffix(name, "-"+mailbox)
 }
 

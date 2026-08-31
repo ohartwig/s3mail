@@ -115,8 +115,8 @@ func Run(ctx context.Context, s3 store.S3, kms store.KMS, ses SESChecker,
 		add(Item{Name: cat.T("check.sender"), OK: true, Skipped: true, Detail: cat.T("check.notChecked")})
 	} else {
 		domain := sender
-		if i := strings.LastIndex(sender, "@"); i >= 0 {
-			domain = sender[i+1:]
+		if _, after, ok := strings.CutLast(sender, "@"); ok {
+			domain = after
 		}
 		good, err := ses.Verified(ctx, sender, domain)
 		switch {
@@ -193,8 +193,8 @@ func display(prefix string) string {
 }
 
 func baseName(key string) string {
-	if i := strings.LastIndex(key, "/"); i >= 0 {
-		return key[i+1:]
+	if _, after, ok := strings.CutLast(key, "/"); ok {
+		return after
 	}
 	return key
 }

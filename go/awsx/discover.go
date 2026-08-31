@@ -83,8 +83,8 @@ func userFromArn(arn string) string {
 		return ""
 	}
 	rest := arn[i+len(":user/"):]
-	if j := strings.LastIndex(rest, "/"); j >= 0 { // Pfad abschneiden
-		rest = rest[j+1:]
+	if _, after, ok := strings.CutLast(rest, "/"); ok { // cut the path off
+		rest = after
 	}
 	return rest
 }
@@ -133,6 +133,9 @@ func BucketRegion(ctx context.Context, cfg aws.Config, bucket string) string {
 		}
 		return cfg.Region
 	}
+	// errors.As and not errors.AsType: AsType constrains its type parameter to
+	// error, and this anonymous interface carries no Error method - it only
+	// digs the HTTP response out of whatever the SDK wrapped.
 	var response interface{ HTTPResponse() *http.Response }
 	if errors.As(err, &response) {
 		if r := response.HTTPResponse().Header.Get("x-amz-bucket-region"); r != "" {

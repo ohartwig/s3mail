@@ -25,7 +25,7 @@ The macOS packages are signed and notarised, so no `xattr` and no right-click
 dance. Windows packages are not signed; SmartScreen will say so. Every platform
 ships `SHA256SUMS` with a cosign signature.
 
-Building it yourself needs Go 1.25 or newer. Nothing else — CGO is off.
+Building it yourself needs Go 1.27 or newer. Nothing else — CGO is off.
 
 Outbound, s3mail talks to `s3.<region>.amazonaws.com`,
 `email.<region>.amazonaws.com` and, for encrypted mail,

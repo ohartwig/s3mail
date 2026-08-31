@@ -144,8 +144,8 @@ func (p *Push) Subscribe(ctx context.Context, topicARN, endpointARN string) (str
 }
 
 func isNotFound(err error) bool {
-	var nf *types.NotFoundException
-	return errors.As(err, &nf)
+	_, ok := errors.AsType[*types.NotFoundException](err)
+	return ok
 }
 
 // isNotAllowed reports the one refusal that is a design decision rather than a
@@ -154,15 +154,15 @@ func isNotFound(err error) bool {
 // SNS answers with AuthorizationError and not AccessDenied, which is worth
 // writing down - it is the reason this was mistaken for an S3 problem once.
 func isNotAllowed(err error) bool {
-	var denied *types.AuthorizationErrorException
-	return errors.As(err, &denied)
+	_, ok := errors.AsType[*types.AuthorizationErrorException](err)
+	return ok
 }
 
 // existingEndpoint digs the ARN out of "Endpoint arn:aws:sns:... already exists
 // with the same Token, but different attributes."
 func existingEndpoint(err error) (string, bool) {
-	var invalid *types.InvalidParameterException
-	if !errors.As(err, &invalid) {
+	invalid, ok := errors.AsType[*types.InvalidParameterException](err)
+	if !ok {
 		return "", false
 	}
 	text := aws.ToString(invalid.Message)
