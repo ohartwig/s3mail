@@ -26,6 +26,24 @@ include:
   # Katalog-Projekt, und dort loest GitLab nur einen vollstaendigen Tag auf.
   # Renovate haelt ihn nach.
   # renovate: datasource=gitlab-tags depName=devops/ci-cd-components/build-provenance
+  # The estate's Go pipeline: gofmt, vet, tests and the automated review, plus
+  # the language-neutral hygiene every repository here gets. Only what this
+  # repository actually ships -- four platforms, notarisation, the release --
+  # stays written out below, which is the split the template draws on purpose.
+  #
+  # `stages:` below therefore has to name `quick` as well: a consumer's own list
+  # REPLACES the composed one, and a job in a stage nobody declared stops the
+  # pipeline being created at all.
+  #
+  # renovate: datasource=gitlab-tags depName=devops/ci-cd-components/composed-default-pipelines
+  - component: ${CI_SERVER_HOST}/devops/ci-cd-components/composed-default-pipelines/go@1.60.1
+    inputs:
+      working-directory: go
+      # No `test-args`: test:go is overridden below to keep this repository's
+      # coverage reporting, and that override replaces the script anyway.
+      # Declaring the arguments here as well would leave two places claiming to
+      # decide how the tests run.
+
   - component: ${CI_SERVER_HOST}/devops/ci-cd-components/build-provenance/sign-artifact@2.0.54
     inputs:
       stage: release
@@ -40,50 +58,25 @@ include:
       rules-config:
         - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
 
-  # Automatische Merge-Request-Pruefung. Nur Ausloeser: der Job haelt kein
-  # Geheimnis, sondern startet eine Downstream-Pipeline in
-  # devops/ai-code-review, deren geschuetzter Standardzweig die AWS-Rolle
-  # uebernimmt. Wer den eigenen MR-Zweig umschreibt, bekommt darueber nichts -
-  # dieselbe Vertrauensgrenze wie beim Signieren.
-  #
-  # Kein `stage`, also bleibt die Voreinstellung `.post`. Das ist Absicht:
-  # `.post` existiert immer, waehrend ein benannter Stage aus der Komponente an
-  # der eigenen `stages:`-Liste hier scheitern wuerde - und zwar so, dass die
-  # Pipeline gar nicht erst entsteht, nicht nur der Job ausfaellt.
-  #
-  # renovate: datasource=gitlab-tags depName=devops/ci-cd-components/ai-tools/ai-review
-  - component: ${CI_SERVER_HOST}/devops/ci-cd-components/ai-tools/ai-review@1.2.6
-    inputs:
-      enabled: 'true'
 
+# MUST stay a superset of the composed template's stages. A consumer's list
+# REPLACES the composed one, so `quick` and `test` are not decoration here --
+# they belong to go@1.60.1, and `build` and `release` are this repository's own.
+#
+# The trap is that adding a stage to the template is a change over there that
+# breaks the pipeline over here, and it breaks it in the worst way: no YAML
+# error, no jobs, and a pipeline that counts as failed the instant it is
+# requested ("chosen stage X does not exist"). The estate has been bitten by
+# exactly this three times, which is why every template repeats the warning.
+#
+# So: when the pin above moves, read the template's `stages:` before merging.
+# Nothing checks this automatically.
 stages:
-  - test
-  - build
-  - release
+  - quick     # go@1.60.1
+  - test      # go@1.60.1
+  - build     # ours
+  - release   # ours
 
-# Merge-Request-Pipelines, damit ai:review ueberhaupt anspringen kann: seine
-# Regel verlangt CI_PIPELINE_SOURCE == "merge_request_event", und bis hierher
-# kannte dieses Projekt ausschliesslich Zweig-Pipelines (source = push). Ohne
-# diesen Block stuende der Job in der Datei und liefe nie - der Fehler, der wie
-# eine erledigte Aufgabe aussieht.
-#
-# Die zweite Regel verhindert die doppelte Pipeline: sobald ein Merge Request
-# offen ist, laeuft nur noch dessen Pipeline und nicht zusaetzlich die des
-# Zweigs. Ohne sie kostet jeder Push in einen Zweig mit offenem MR zwei volle
-# Laeufe, und bei vier Plattformbauten plus Signatur ist das kein
-# Rundungsfehler.
-#
-# Die Tag-Regel muss mit: ein workflow-Block ersetzt die Voreinstellung
-# vollstaendig, und ohne sie entstuende keine Tag-Pipeline mehr - also kein
-# Release. Genau die Sorte Folgeschaden, die weiter oben schon einmal drei
-# Pipelines nach dem Merge gekostet hat.
-workflow:
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
-      when: never
-    - if: $CI_COMMIT_TAG
-    - if: $CI_COMMIT_BRANCH
 
 variables:
   # GO_IMAGE aus einem eigenen goldenen Bild (devops/images/golang), nicht
@@ -121,25 +114,21 @@ default:
     max: 2
     when:
       - runner_system_failure
-      - stuck_or_timeout_failure
       - scheduler_failure
-  before_script:
-    - cd go
-  cache:
-    key:
-      files:
-        - go/go.sum
-    paths:
-      - .go/pkg/mod
+      # Not stuck_or_timeout_failure: deprecated, and /ci/lint says so. It was
+      # split into the more specific reasons, of which this is the one that
+      # means the runner lost its dependency rather than the job failing.
+      - runner_external_dependency_failure
 
 # --------------------------------------------------------------------------- #
 # Test
 # --------------------------------------------------------------------------- #
-test:
-  stage: test
+# gofmt and vet now come from the template as lint:gofmt and lint:vet. What the
+# template does not carry is the coverage reporting, so test:go is extended
+# rather than replaced: image, cache, stage and the working directory stay as
+# the component defines them, and only the parts below are added.
+test:go:
   script:
-    - test -z "$(gofmt -l .)" || { echo "nicht formatiert:"; gofmt -l .; exit 1; }
-    - go vet ./...
     - go test -race -coverprofile=coverage.out ./...
     - go tool cover -func=coverage.out | tail -1
   coverage: '/total:\s+\(statements\)\s+(\d+\.\d+)%/'
@@ -153,7 +142,22 @@ test:
 # --------------------------------------------------------------------------- #
 .build:
   stage: build
-  needs: [test]
+  needs: [test:go]
+  # `cd go` and the module cache sit here, not in `default:`. In `default:` they
+  # reached the composed jobs as well, and those run at the repository root:
+  # verify:component-integrity looked for .gitlab-ci.yml inside go/ and reported
+  # it unreadable, and check:quick had trufflehog try to clone go/ as a git
+  # repository. Both went red on the first run of this pipeline for that reason
+  # alone. The component's own Go jobs bring their own `cd`, so nothing else
+  # needs this.
+  before_script:
+    - cd go
+  cache:
+    key:
+      files:
+        - go/go.sum
+    paths:
+      - .go/pkg/mod
   script:
     # -trimpath nimmt die Pfade des Baurechners aus dem Binary, damit zwei Läufe
     # dasselbe Ergebnis liefern.
