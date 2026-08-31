@@ -301,7 +301,7 @@ func (s *Server) writePage(w http.ResponseWriter, content string) {
 	// host check against DNS rebinding, the origin check against CSRF, and the
 	// token itself against another reader on the same machine. SameSite=Strict
 	// keeps it off cross-site requests.
-	http.SetCookie(w, &http.Cookie{Name: "s3mail", Value: s.Token, Path: "/", //nosemgrep: go.lang.security.audit.net.cookie-missing-secure.cookie-missing-secure
+	http.SetCookie(w, &http.Cookie{Name: "s3mail", Value: s.Token, Path: "/", // nosemgrep: go.lang.security.audit.net.cookie-missing-secure.cookie-missing-secure
 		HttpOnly: true, SameSite: http.SameSiteStrictMode})
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = w.Write([]byte(content))
@@ -416,7 +416,7 @@ func (s *Server) routes() {
 		code := i18n.Get(r.PathValue("code")).Code
 		// No Secure flag, for the reason writePage gives - and this one carries
 		// a language code, not a secret.
-		http.SetCookie(w, &http.Cookie{Name: "s3mail_lang", Value: code, Path: "/", //nosemgrep: go.lang.security.audit.net.cookie-missing-secure.cookie-missing-secure
+		http.SetCookie(w, &http.Cookie{Name: "s3mail_lang", Value: code, Path: "/", // nosemgrep: go.lang.security.audit.net.cookie-missing-secure.cookie-missing-secure
 			HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: 60 * 60 * 24 * 365})
 		target := r.Header.Get("Referer")
 		if target == "" || !strings.HasPrefix(target, "http") {
