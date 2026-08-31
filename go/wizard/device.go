@@ -7,7 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 
 	"git.ole-hartwig.eu/development/s3mail/s3mail/awsx"
@@ -247,7 +247,7 @@ func pushARNs(apps map[string]string) []string {
 			out = append(out, arn)
 		}
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 

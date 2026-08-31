@@ -36,7 +36,7 @@ func byName(items []check.Item) map[string]check.Item {
 func TestEverythingOK(t *testing.T) {
 	f := s3fake.New()
 	f.Store("mail/m1", []byte("From: a@b.de\r\nSubject: x\r\n\r\nText\r\n"))
-	p := check.Run(context.Background(), f, nil, nil, "test-bucket", "mail/", "", i18n.Get("de"))
+	p := check.Run(t.Context(), f, nil, nil, "test-bucket", "mail/", "", i18n.Get("de"))
 	if !check.AllOK(p) {
 		t.Errorf("not everything green: %+v", p)
 	}
@@ -65,7 +65,7 @@ func TestMissingPermissionNamesTheAction(t *testing.T) {
 	f.Store("mail/m1", []byte("From: a@b.de\r\n\r\nText\r\n"))
 	f.PutErr = errors.New("AccessDenied")
 
-	p := check.Run(context.Background(), f, nil, nil, "test-bucket", "mail/", "", i18n.Get("de"))
+	p := check.Run(t.Context(), f, nil, nil, "test-bucket", "mail/", "", i18n.Get("de"))
 	k := byName(p)
 	if k[label("check.write")].OK {
 		t.Fatal("write error not noticed")
@@ -80,7 +80,7 @@ func TestMissingPermissionNamesTheAction(t *testing.T) {
 
 func TestEmptyMailboxIsNoError(t *testing.T) {
 	f := s3fake.New()
-	p := check.Run(context.Background(), f, nil, nil, "test-bucket", "mail/", "", i18n.Get("de"))
+	p := check.Run(t.Context(), f, nil, nil, "test-bucket", "mail/", "", i18n.Get("de"))
 	k := byName(p)
 	if !k[label("check.listBucket")].OK || !strings.Contains(k[label("check.listBucket")].Detail, "noch nichts") {
 		t.Errorf("%+v", k[label("check.listBucket")])
@@ -98,7 +98,7 @@ func TestInternalObjectsAreNotMail(t *testing.T) {
 	f := s3fake.New()
 	f.Store("mail/"+store.StateObject, []byte(`{"messages":{}}`))
 	f.Store("mail/"+store.StateOps+"x.json", []byte(`{"ops":[]}`))
-	p := byName(check.Run(context.Background(), f, nil, nil, "test-bucket", "mail/", "", i18n.Get("de")))
+	p := byName(check.Run(t.Context(), f, nil, nil, "test-bucket", "mail/", "", i18n.Get("de")))
 	if !p[label("check.readMail")].Skipped {
 		t.Errorf("state file checked as mail: %+v", p[label("check.readMail")])
 	}
@@ -146,14 +146,14 @@ func TestEncryptionIsDetected(t *testing.T) {
 	f := s3fake.New()
 	f.Store("mail/enc", body)
 	f.SetMeta("mail/enc", meta)
-	p := byName(check.Run(context.Background(), f, &kmsFake{key: key}, nil,
+	p := byName(check.Run(t.Context(), f, &kmsFake{key: key}, nil,
 		"test-bucket", "mail/", "", i18n.Get("de")))
 	if !p[label("check.encryption")].OK || p[label("check.encryption")].Detail != label("check.encryption.clientOk") {
 		t.Errorf("%+v", p[label("check.encryption")])
 	}
 
 	// without kms:Decrypt the item has to be red and name the action
-	p = byName(check.Run(context.Background(), f,
+	p = byName(check.Run(t.Context(), f,
 		&kmsFake{err: errors.New("AccessDenied")}, nil, "test-bucket", "mail/", "", i18n.Get("de")))
 	if p[label("check.encryption")].OK {
 		t.Error("missing kms:Decrypt not noticed")
@@ -166,7 +166,7 @@ func TestEncryptionIsDetected(t *testing.T) {
 	g := s3fake.New()
 	g.Store("mail/m1", []byte("From: a@b.de\r\n\r\nText\r\n"))
 	g.SetSSE("mail/m1", store.CopyOpts{ServerSideEncryption: "aws:kms"})
-	p = byName(check.Run(context.Background(), g, nil, nil, "test-bucket", "mail/", "", i18n.Get("de")))
+	p = byName(check.Run(t.Context(), g, nil, nil, "test-bucket", "mail/", "", i18n.Get("de")))
 	if !p[label("check.encryption")].OK || p[label("check.encryption")].Detail != label("check.encryption.serverKms") {
 		t.Errorf("%+v", p[label("check.encryption")])
 	}
@@ -187,7 +187,7 @@ func (s *sesFake) Verified(_ context.Context, _, _ string) ([]string, error) {
 func TestSESSender(t *testing.T) {
 	f := s3fake.New()
 	f.Store("mail/m1", []byte("From: a@b.de\r\n\r\nText\r\n"))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	p := byName(check.Run(ctx, f, nil, &sesFake{good: []string{"support@firma.de"}},
 		"test-bucket", "mail/", "support@firma.de", i18n.Get("de")))
@@ -215,7 +215,7 @@ func TestSESSender(t *testing.T) {
 func TestHintNamesThePrefixFirst(t *testing.T) {
 	f := s3fake.New()
 	f.ListErr = errors.New("AccessDenied")
-	p := byName(check.Run(context.Background(), f, nil, nil,
+	p := byName(check.Run(t.Context(), f, nil, nil,
 		"test-bucket", "mail/ole/", "", i18n.Get("de")))
 
 	h := p[label("check.listBucket")].Hint

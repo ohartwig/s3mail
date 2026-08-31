@@ -17,7 +17,7 @@ func TestOpNamesSort(t *testing.T) {
 	n := 0
 	s.Now = func() time.Time { n++; return time.Date(2026, 8, 21, 10, 0, n, 0, time.UTC) }
 	var before string
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		name := s.opName()
 		if !strings.HasSuffix(name, ".json") {
 			t.Fatalf("%q", name)
@@ -33,7 +33,7 @@ func TestOpNamesSort(t *testing.T) {
 // name in the same microsecond, and one would be gone.
 func TestInstanceIDIsUnique(t *testing.T) {
 	seen := map[string]bool{}
-	for i := 0; i < 200; i++ {
+	for range 200 {
 		k := InstanceID()
 		if seen[k] {
 			t.Fatalf("Kennung %q zweimal", k)

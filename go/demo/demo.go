@@ -20,7 +20,7 @@ import (
 	"embed"
 	"fmt"
 	"path"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -71,7 +71,7 @@ func Languages() []string {
 			out = append(out, e.Name())
 		}
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 

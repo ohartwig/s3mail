@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -127,7 +127,7 @@ func (s *Store) Internal(key string) bool {
 	if strings.HasSuffix(key, SendingSuffix) {
 		return true
 	}
-	for _, part := range strings.Split(strings.TrimPrefix(key, s.Root), "/") {
+	for part := range strings.SplitSeq(strings.TrimPrefix(key, s.Root), "/") {
 		if strings.HasPrefix(part, ".") {
 			return true
 		}
@@ -189,7 +189,7 @@ func Folders(index []Message, d *Data) []FolderInfo {
 			own = append(own, name)
 		}
 	}
-	sort.Strings(own)
+	slices.Sort(own)
 	for _, name := range own {
 		c := counts[name]
 		out = append(out, FolderInfo{name, name, "\U0001F4C1", false, c.count, c.unread})

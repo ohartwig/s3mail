@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"sort"
+	"slices"
 	"testing"
 )
 
@@ -47,7 +47,7 @@ func TestSearchAgainstPython(t *testing.T) {
 	for q := range expected {
 		query = append(query, q)
 	}
-	sort.Strings(query)
+	slices.Sort(query)
 
 	for _, q := range query {
 		got := []string{}

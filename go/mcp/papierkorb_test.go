@@ -5,7 +5,6 @@ package mcp
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -16,7 +15,7 @@ import (
 func serveWith(t *testing.T, prepare func(*Server), lines ...string) []map[string]any {
 	t.Helper()
 	mb := mailbox(t)
-	s := New(context.Background(), []Account{
+	s := New(t.Context(), []Account{
 		{ID: "post", Name: "post@firma.de", Mailbox: mb, From: "post@firma.de"}})
 	prepare(s)
 
@@ -25,7 +24,7 @@ func serveWith(t *testing.T, prepare func(*Server), lines ...string) []map[strin
 		t.Fatal(err)
 	}
 	var answers []map[string]any
-	for _, line := range strings.Split(strings.TrimSpace(out.String()), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(out.String()), "\n") {
 		if line == "" {
 			continue
 		}

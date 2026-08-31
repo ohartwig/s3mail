@@ -27,7 +27,7 @@ func TestThePolicySeesTheARNsInAStableOrder(t *testing.T) {
 		"development": "arn:a",
 	}
 	first := pushARNs(apps)
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		if got := pushARNs(apps); len(got) != len(first) || got[0] != first[0] || got[1] != first[1] {
 			t.Fatalf("order changed between runs: %v then %v", first, got)
 		}

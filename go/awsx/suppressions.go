@@ -4,8 +4,9 @@
 package awsx
 
 import (
+	"cmp"
 	"context"
-	"sort"
+	"slices"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -80,6 +81,6 @@ func (s *Suppressions) List(ctx context.Context) ([]Entry, error) {
 			break
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Since > out[j].Since })
+	slices.SortFunc(out, func(a, b Entry) int { return cmp.Compare(b.Since, a.Since) })
 	return out, nil
 }

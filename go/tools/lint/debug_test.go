@@ -39,7 +39,7 @@ func TestTheDebugLogCannotCarryMail(t *testing.T) {
 		for _, bad := range forbidden {
 			// The comment in debug.go names them on purpose, to say why they are
 			// not used. A comment is not a call.
-			for _, line := range strings.Split(text, "\n") {
+			for line := range strings.SplitSeq(text, "\n") {
 				trimmed := strings.TrimSpace(line)
 				if strings.HasPrefix(trimmed, "//") {
 					continue
@@ -62,7 +62,7 @@ func TestTheDebugLogCannotCarryMail(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, line := range strings.Split(string(blob), "\n") {
+	for line := range strings.SplitSeq(string(blob), "\n") {
 		if !strings.Contains(line, "debugf(") {
 			continue
 		}

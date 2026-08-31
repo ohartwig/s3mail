@@ -4,7 +4,6 @@
 package store_test
 
 import (
-	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -31,12 +30,12 @@ func buildMailbox(t *testing.T) (*s3fake.Fake, *store.Mailbox) {
 	f.Objs["mail/archiv/alt1"] = buildMail("Alt <alt@firma.de>", "post@firma.de",
 		"Altes", "Alter Text.", "Wed, 01 Jul 2026 08:00:00 +0000", "<alt1@x>")
 	f.Objs["andere/nicht-meins"] = []byte("ausserhalb")
-	m := store.NewMailbox(context.Background(), f, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, true)
+	m := store.NewMailbox(t.Context(), f, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, true)
 	return f, m
 }
 
 func TestIndexAndFolders(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	_, m := buildMailbox(t)
 	res, err := m.Refresh(ctx)
 	if err != nil {
@@ -64,7 +63,7 @@ func TestIndexAndFolders(t *testing.T) {
 
 // TestStateAndOpsAreNotMail - otherwise they turn up as messages.
 func TestStateAndOpsAreNotMail(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	_, m := buildMailbox(t)
 	if _, err := m.Refresh(ctx); err != nil {
 		t.Fatal(err)
@@ -88,7 +87,7 @@ func TestStateAndOpsAreNotMail(t *testing.T) {
 }
 
 func TestMoveCarriesTheState(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f, m := buildMailbox(t)
 	if _, err := m.Refresh(ctx); err != nil {
 		t.Fatal(err)
@@ -115,7 +114,7 @@ func TestMoveCarriesTheState(t *testing.T) {
 }
 
 func TestMoveInheritsEncryption(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f, m := buildMailbox(t)
 	f.SSE["mail/m1"] = store.CopyOpts{ServerSideEncryption: "aws:kms",
 		SSEKMSKeyID: "arn:aws:kms:eu-central-1:1:key/abc", StorageClass: "STANDARD_IA"}
@@ -135,7 +134,7 @@ func TestMoveInheritsEncryption(t *testing.T) {
 }
 
 func TestMoveChecks(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	_, m := buildMailbox(t)
 	if _, err := m.Refresh(ctx); err != nil {
 		t.Fatal(err)
@@ -157,7 +156,7 @@ func TestMoveChecks(t *testing.T) {
 }
 
 func TestNameCollision(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f, m := buildMailbox(t)
 	f.Objs["mail/archiv/m1"] = buildMail("X <x@y.de>", "post@firma.de", "Kollision",
 		"Text", "Thu, 05 Aug 2026 09:00:00 +0000", "<k@x>")
@@ -178,7 +177,7 @@ func TestNameCollision(t *testing.T) {
 
 // TestDeleteOnlyFromTrash - the check sits in the store, not in the UI.
 func TestDeleteOnlyFromTrash(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	_, m := buildMailbox(t)
 	if _, err := m.Refresh(ctx); err != nil {
 		t.Fatal(err)
@@ -199,7 +198,7 @@ func TestDeleteOnlyFromTrash(t *testing.T) {
 }
 
 func TestDeleteBlocked(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f := s3fake.New()
 	f.Objs["mail/trash/m1"] = buildMail("a@b.de", "c@d.de", "x", "y",
 		"Mon, 03 Aug 2026 09:00:00 +0000", "<m1@x>")
@@ -215,7 +214,7 @@ func TestDeleteBlocked(t *testing.T) {
 // TestEncryptedMeansNoRangeGet - half a ciphertext cannot be decrypted, so the
 // range GET has to fall away as soon as such an object turns up.
 func TestEncryptedMeansNoRangeGet(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	plain, cases := loadEnvelopes(t)
 	f := s3fake.New()
 	body, key := unpack(t, cases["gcm"])
@@ -246,7 +245,7 @@ func TestEncryptedMeansNoRangeGet(t *testing.T) {
 }
 
 func TestEncryptedWithoutPermissionFailsOnlyThatMail(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	_, cases := loadEnvelopes(t)
 	f := s3fake.New()
 	body, _ := unpack(t, cases["gcm"])
@@ -273,7 +272,7 @@ func TestEncryptedWithoutPermissionFailsOnlyThatMail(t *testing.T) {
 }
 
 func TestRulesWhileIndexing(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	_, m := buildMailbox(t)
 	archiv := core.Archive
 	rules, err := core.CleanRules([]core.Rule{{Contains: "shop.io", Field: "from",
@@ -306,7 +305,7 @@ func TestRulesWhileIndexing(t *testing.T) {
 }
 
 func TestCacheSavesRequests(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f, m := buildMailbox(t)
 	if _, err := m.Refresh(ctx); err != nil {
 		t.Fatal(err)
@@ -330,7 +329,7 @@ func TestCacheSavesRequests(t *testing.T) {
 // access any more. The index was always local, the content was not: until now
 // every opened message was fetched again, attachments and all.
 func TestBodyFromTheCache(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f, m := buildMailbox(t)
 	if _, err := m.Refresh(ctx); err != nil {
 		t.Fatal(err)
@@ -358,7 +357,7 @@ func TestBodyFromTheCache(t *testing.T) {
 // TestCacheHangsOnTheETag - if the object changes, the entry has to expire.
 // Otherwise s3mail shows the old version after the content changed.
 func TestCacheHangsOnTheETag(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f, m := buildMailbox(t)
 	if _, err := m.Refresh(ctx); err != nil {
 		t.Fatal(err)
@@ -383,7 +382,7 @@ func TestCacheHangsOnTheETag(t *testing.T) {
 // TestPartialFetchesAreNotCached - ein gespeichertes Teilstueck
 // would be a truncated message on the next open, without anyone noticing.
 func TestPartialFetchesAreNotCached(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f, m := buildMailbox(t)
 	if _, err := m.Refresh(ctx); err != nil { // fetches only HeaderChunk
 		t.Fatal(err)

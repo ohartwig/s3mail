@@ -9,8 +9,9 @@ package check
 
 import (
 	"context"
-	"git.ole-hartwig.eu/development/s3mail/s3mail/i18n"
 	"strings"
+
+	"git.ole-hartwig.eu/development/s3mail/s3mail/i18n"
 
 	"git.ole-hartwig.eu/development/s3mail/s3mail/store"
 )
@@ -177,7 +178,7 @@ func AllOK(items []Item) bool {
 }
 
 func isInternal(key, prefix string) bool {
-	for _, part := range strings.Split(strings.TrimPrefix(key, prefix), "/") {
+	for part := range strings.SplitSeq(strings.TrimPrefix(key, prefix), "/") {
 		if strings.HasPrefix(part, ".") {
 			return true
 		}

@@ -1,6 +1,9 @@
 package core
 
-import "sort"
+import (
+	"maps"
+	"slices"
+)
 
 // UIDs for IMAP - derived, never negotiated.
 //
@@ -174,10 +177,5 @@ func dropUIDs(d *Data, mids []string) {
 // UIDFolders lists the folders that carry numbering, sorted - tests and the
 // future server both want a stable order.
 func (d *Data) UIDFolders() []string {
-	out := make([]string, 0, len(d.UIDs))
-	for name := range d.UIDs {
-		out = append(out, name)
-	}
-	sort.Strings(out)
-	return out
+	return slices.Sorted(maps.Keys(d.UIDs))
 }

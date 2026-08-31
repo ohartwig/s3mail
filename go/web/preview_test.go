@@ -4,7 +4,6 @@
 package web
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -72,7 +71,7 @@ func TestTheRouteOnlyShowsWhatItMay(t *testing.T) {
 		"<svg xmlns=\"http://www.w3.org/2000/svg\"><script>alert(1)</script></svg>\r\n"+
 		"--B--\r\n"))
 	ts, _, mb := serverWith(t, f)
-	if _, err := mb.Refresh(context.Background()); err != nil {
+	if _, err := mb.Refresh(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 

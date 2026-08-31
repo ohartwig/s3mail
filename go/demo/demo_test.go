@@ -4,7 +4,6 @@
 package demo_test
 
 import (
-	"context"
 	"strings"
 	"testing"
 	"time"
@@ -79,7 +78,7 @@ func TestTheSampleShowsWhatTheClientCanDo(t *testing.T) {
 
 	var html, attached, remoteImage bool
 	for _, m := range inFolder(mb, "") {
-		raw, err := mb.Fetch(context.Background(), m.Key, 0)
+		raw, err := mb.Fetch(t.Context(), m.Key, 0)
 		if err != nil {
 			t.Fatalf("%q does not open: %v", m.Subject, err)
 		}
@@ -141,9 +140,9 @@ func open(t *testing.T, lang string) *store.Mailbox {
 	for key, body := range objs {
 		f.Objs[key] = body
 	}
-	mb := store.NewMailbox(context.Background(), f, nil, "demo", demo.Root,
+	mb := store.NewMailbox(t.Context(), f, nil, "demo", demo.Root,
 		t.TempDir(), nil, false)
-	if _, err := mb.Refresh(context.Background()); err != nil {
+	if _, err := mb.Refresh(t.Context()); err != nil {
 		t.Fatalf("the sample bucket does not refresh: %v", err)
 	}
 	return mb

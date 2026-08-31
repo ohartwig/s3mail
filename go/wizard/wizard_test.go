@@ -4,7 +4,6 @@
 package wizard
 
 import (
-	"context"
 	"encoding/json"
 	"testing"
 
@@ -65,7 +64,7 @@ func TestEditingTheSecondLeavesTheFirstAlone(t *testing.T) {
 
 	wiz := &Wizard{}
 	second := start.Accounts[1].ID()
-	if _, err := wiz.Save(context.Background(), Data{
+	if _, err := wiz.Save(t.Context(), Data{
 		Account: second, Bucket: "post", Prefix: "mail/support/",
 		From: "hilfe@firma.de", Signature: "Support",
 	}); err != nil {
@@ -96,7 +95,7 @@ func TestANewMailboxIsAdded(t *testing.T) {
 	}
 
 	wiz := &Wizard{}
-	if _, err := wiz.Save(context.Background(), Data{
+	if _, err := wiz.Save(t.Context(), Data{
 		Account: "new", Bucket: "post", Prefix: "mail/rechnungen/", From: "rechnung@firma.de",
 	}); err != nil {
 		t.Fatal(err)
@@ -124,7 +123,7 @@ func TestTheSameMailboxTwiceStaysOne(t *testing.T) {
 	}
 
 	wiz := &Wizard{}
-	if _, err := wiz.Save(context.Background(), Data{
+	if _, err := wiz.Save(t.Context(), Data{
 		Account: "new", Bucket: "post", Prefix: "mail/info/", From: "neu@firma.de",
 	}); err != nil {
 		t.Fatal(err)

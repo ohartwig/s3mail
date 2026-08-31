@@ -9,7 +9,7 @@ import "testing"
 // rest in the inbox.
 func from(sender, folder string, n, moved int, tags ...string) []Message {
 	out := make([]Message, 0, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		m := Message{FromAddr: sender, Folder: Inbox, Tags: []string{}}
 		if i < moved {
 			m.Folder = folder
@@ -58,7 +58,7 @@ func TestHalfAndHalfIsNoRule(t *testing.T) {
 // still there says nothing about anybody's intention.
 func TestTheInboxIsNoDecision(t *testing.T) {
 	msgs := make([]Message, 0, 20)
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		msgs = append(msgs, Message{FromAddr: "a@x.de", Folder: Inbox})
 	}
 	if got := Suggest(msgs, nil); len(got) != 0 {
@@ -122,7 +122,7 @@ func TestTheOrderIsStable(t *testing.T) {
 	msgs = append(msgs, from("c@x.de", "werbung", 20, 20)...)
 
 	first := Suggest(msgs, nil)
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		again := Suggest(msgs, nil)
 		for j := range first {
 			if first[j].Contains != again[j].Contains {

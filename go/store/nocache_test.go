@@ -4,7 +4,6 @@
 package store_test
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -21,7 +20,7 @@ import (
 // decrypt them to show them. Whoever encrypts mail with KMS does not expect to
 // find it readable in a cache directory afterwards.
 func TestWithoutACacheNothingReachesTheDisk(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	dir := t.TempDir()
 	f := s3fake.New()
 	f.Store("mail/m1", []byte("From: a@b.de\r\nTo: post@firma.de\r\nSubject: Geheim\r\n"+
@@ -52,7 +51,7 @@ func TestWithoutACacheNothingReachesTheDisk(t *testing.T) {
 // The other direction, so the test above cannot pass for the wrong reason: with
 // a directory the files do appear.
 func TestWithACacheTheFilesAppear(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	dir := t.TempDir()
 	f := s3fake.New()
 	f.Store("mail/m1", []byte("From: a@b.de\r\nSubject: x\r\n\r\ny\r\n"))

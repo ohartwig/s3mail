@@ -4,7 +4,6 @@
 package awsx_test
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -28,11 +27,11 @@ func TestStaticReadsNothingFromTheSurroundings(t *testing.T) {
 	t.Setenv("AWS_SECRET_ACCESS_KEY", "auch falsch")
 	t.Setenv("AWS_PROFILE", "gibt-es-nicht")
 
-	cfg, err := awsx.Static(context.Background(), "UEBERGEBEN", "geheim", "eu-north-1")
+	cfg, err := awsx.Static(t.Context(), "UEBERGEBEN", "geheim", "eu-north-1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	creds, err := cfg.Credentials.Retrieve(context.Background())
+	creds, err := cfg.Credentials.Retrieve(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +53,7 @@ func TestStaticRefusesEmptyCredentials(t *testing.T) {
 		{"no region", "AKIA", "geheim", ""},
 	}
 	for _, c := range cases {
-		if _, err := awsx.Static(context.Background(), c.key, c.secret, c.region); err == nil {
+		if _, err := awsx.Static(t.Context(), c.key, c.secret, c.region); err == nil {
 			t.Errorf("%s: accepted", c.name)
 		}
 	}

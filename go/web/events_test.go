@@ -8,6 +8,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -19,7 +20,7 @@ import (
 func serverForEvents(t *testing.T) (*httptest.Server, *Server) {
 	t.Helper()
 	f := s3fake.New()
-	mb := store.NewMailbox(context.Background(), f, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, true)
+	mb := store.NewMailbox(t.Context(), f, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, true)
 	srv := NewServer(one(mb), testToken, "127.0.0.1", 0, nil)
 	ts := httptest.NewServer(srv)
 	t.Cleanup(ts.Close)
@@ -30,7 +31,7 @@ func serverForEvents(t *testing.T) (*httptest.Server, *Server) {
 // openStream hangs on /api/events and returns the lines as they arrive.
 func openStream(t *testing.T, ts *httptest.Server, srv *Server) (<-chan string, func()) {
 	t.Helper()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	req, _ := http.NewRequestWithContext(ctx, "GET", ts.URL+"/api/events", nil)
 	req.Header.Set("X-S3mail-Token", testToken)
 	resp, err := ts.Client().Do(req)
@@ -96,7 +97,7 @@ func TestAnEventReachesThePage(t *testing.T) {
 				if !strings.Contains(line, `"account":"post"`) {
 					t.Errorf("event without the mailbox: %q", line)
 				}
-				if !contains(got, "event: mail") {
+				if !slices.Contains(got, "event: mail") {
 					t.Errorf("no event name in front of the data: %v", got)
 				}
 				return
@@ -141,7 +142,7 @@ func TestAPageThatDoesNotReadDoesNotBlockTheOthers(t *testing.T) {
 
 	done := make(chan bool, 1)
 	go func() {
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			srv.Notify("post")
 		}
 		done <- true
@@ -172,13 +173,4 @@ func TestShutdownReleasesTheStreams(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("the stream stayed open after StopEvents")
 	}
-}
-
-func contains(l []string, s string) bool {
-	for _, v := range l {
-		if v == s {
-			return true
-		}
-	}
-	return false
 }

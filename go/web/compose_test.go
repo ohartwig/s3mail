@@ -34,7 +34,7 @@ func (f *fakeSender) Send(_ context.Context, n mailer.Message) (string, error) {
 
 func serverWithSender(t *testing.T) (*httptest.Server, *store.Mailbox, *fakeSender) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	f := s3fake.New()
 	f.Store("mail/m1", rawMail("Anna <anna@kunde.de>", "Rechnung 1", "Anbei die Rechnung.",
 		"Mon, 03 Aug 2026 09:00:00 +0000"))
@@ -97,7 +97,7 @@ func TestSentMailIsKept(t *testing.T) {
 // TestSendingSurvivesAFailedCopy - the message is out of the house. Turning the
 // answer into an error would read as "not sent" and get it sent twice.
 func TestSendingSurvivesAFailedCopy(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f := s3fake.New()
 	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, true)
 	accounts := one(mb)
@@ -177,7 +177,7 @@ func TestDraftLandsInTheBucket(t *testing.T) {
 	if mb.FolderOf(d.Key) != core.Drafts {
 		t.Fatalf("draft landed in %q", mb.FolderOf(d.Key))
 	}
-	raw, err := mb.Fetch(context.Background(), d.Key, 0)
+	raw, err := mb.Fetch(t.Context(), d.Key, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -229,7 +229,7 @@ func TestSendingRemovesTheDraft(t *testing.T) {
 // click. Our own scratch paper is a different matter: if it could not be
 // removed, every sent message would leave its draft behind.
 func TestDraftsGoDespiteNoDelete(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f := s3fake.New()
 	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, false)
 	accounts := one(mb)
@@ -249,7 +249,7 @@ func TestDraftsGoDespiteNoDelete(t *testing.T) {
 // past it for received mail.
 func TestOnlyDraftsCanBeDropped(t *testing.T) {
 	_, mb, _ := serverWithSender(t)
-	if err := mb.DropDraft(context.Background(), "mail/m1"); err == nil {
+	if err := mb.DropDraft(t.Context(), "mail/m1"); err == nil {
 		t.Error("a message from the inbox was removed through the draft path")
 	}
 }

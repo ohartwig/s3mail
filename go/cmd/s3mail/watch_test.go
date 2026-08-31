@@ -59,7 +59,7 @@ func TestAMessageTriggersARefreshAndTellsThePage(t *testing.T) {
 	q := &fakeQueue{answers: []answer{{n: 1}}}
 	refreshed := make(chan bool, 4)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	go watchQueue(ctx, srv, "post", q, func(context.Context) error {
 		refreshed <- true
@@ -80,12 +80,12 @@ func TestAFailingQueueDoesNotSpin(t *testing.T) {
 	srv := web.NewServer(nil, "t", "127.0.0.1", 0, nil)
 	q := &fakeQueue{}
 	q.mu.Lock()
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		q.answers = append(q.answers, answer{err: errors.New("AccessDenied")})
 	}
 	q.mu.Unlock()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	go watchQueue(ctx, srv, "post", q, func(context.Context) error { return nil })
 	time.Sleep(300 * time.Millisecond)
 	cancel()
@@ -108,7 +108,7 @@ func TestAFailedRefreshIsNotAnnounced(t *testing.T) {
 	defer srv.Unsubscribe(heard)
 
 	q := &fakeQueue{answers: []answer{{n: 1}}}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	go watchQueue(ctx, srv, "post", q, func(context.Context) error {
 		return errors.New("no permission")
@@ -126,7 +126,7 @@ func TestAFailedRefreshIsNotAnnounced(t *testing.T) {
 func TestTheWatcherStopsWithTheProgram(t *testing.T) {
 	srv := web.NewServer(nil, "t", "127.0.0.1", 0, nil)
 	q := &fakeQueue{}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	stopped := make(chan bool)
 	go func() {
 		watchQueue(ctx, srv, "post", q, func(context.Context) error { return nil })

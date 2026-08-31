@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"sync"
 	"time"
 
@@ -161,7 +161,7 @@ func (s *State) listOps(ctx context.Context) []string {
 	for _, o := range objs {
 		keys = append(keys, o.Key)
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	return keys
 }
 

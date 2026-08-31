@@ -4,7 +4,6 @@
 package store_test
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -25,7 +24,7 @@ var instanceCounter atomic.Uint64
 // would not be reproducible.
 func buildState(t *testing.T, f *s3fake.Fake) *store.State {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	s := store.NewState(ctx, f, "test-bucket", "mail/", filepath.Join(t.TempDir(), "state.json"))
 	n := 0
 	s.Now = func() time.Time {
@@ -54,7 +53,7 @@ func snapshot(t *testing.T, f *s3fake.Fake) *core.Data {
 // TestOneChangeOneSmallOp - the core of the rebuild: not the whole document,
 // but the change.
 func TestOneChangeOneSmallOp(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f := s3fake.New()
 	s := buildState(t, f)
 
@@ -78,7 +77,7 @@ func TestOneChangeOneSmallOp(t *testing.T) {
 
 // TestTwoMachinesNoConflict - beide schreiben, keiner ueberschreibt.
 func TestTwoMachinesNoConflict(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f := s3fake.New()
 	a, b := buildState(t, f), buildState(t, f)
 
@@ -102,10 +101,10 @@ func TestTwoMachinesNoConflict(t *testing.T) {
 }
 
 func TestZusammenfassen(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f := s3fake.New()
 	s := buildState(t, f)
-	for i := 0; i < store.CompactAfter+2; i++ {
+	for i := range store.CompactAfter + 2 {
 		if err := s.Mutate(ctx, core.Op{T: "tags", Mids: []string{"m1"},
 			Add: []string{fmt.Sprintf("t%02d", i)}}); err != nil {
 			t.Fatal(err)
@@ -127,7 +126,7 @@ func TestZusammenfassen(t *testing.T) {
 // TestWatermarkSkipsWhatIsAlreadyIn - that is exactly what the watermark is
 // for: an op left behind must not take effect a second time.
 func TestWatermarkSkipsWhatIsAlreadyIn(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f := s3fake.New()
 	s := buildState(t, f)
 
@@ -153,12 +152,12 @@ func TestWatermarkSkipsWhatIsAlreadyIn(t *testing.T) {
 }
 
 func TestBatchWritesOnce(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f := s3fake.New()
 	s := buildState(t, f)
 
 	err := s.Batch(ctx, func() error {
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			if err := s.Mutate(ctx, core.Op{T: "tags", Mids: []string{fmt.Sprintf("m%d", i)},
 				Add: []string{"stapel"}}); err != nil {
 				return err
@@ -173,7 +172,7 @@ func TestBatchWritesOnce(t *testing.T) {
 		t.Errorf("%d op objects for one batch, expected 1", n)
 	}
 	fresh := buildState(t, f)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		if !has(fresh.Get(fmt.Sprintf("m%d", i)).Tags, "stapel") {
 			t.Fatalf("m%d missing after the batch", i)
 		}
@@ -181,7 +180,7 @@ func TestBatchWritesOnce(t *testing.T) {
 }
 
 func TestSchreibfehlerBehaeltAenderung(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f := s3fake.New()
 	s := buildState(t, f)
 	f.PutErr = errors.New("AccessDenied")
@@ -210,7 +209,7 @@ func TestSchreibfehlerBehaeltAenderung(t *testing.T) {
 }
 
 func TestLocalFallback(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f := s3fake.New()
 	local := filepath.Join(t.TempDir(), "state.json")
 	s := store.NewState(ctx, f, "test-bucket", "mail/", local)

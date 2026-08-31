@@ -92,13 +92,13 @@ func writePNG(path string, c *Code) error {
 	for i := range img.Pix {
 		img.Pix[i] = 0xFF
 	}
-	for y := 0; y < c.Size; y++ {
-		for x := 0; x < c.Size; x++ {
+	for y := range c.Size {
+		for x := range c.Size {
 			if !c.At(x, y) {
 				continue
 			}
-			for dy := 0; dy < scale; dy++ {
-				for dx := 0; dx < scale; dx++ {
+			for dy := range scale {
+				for dx := range scale {
 					img.Set((x+quiet)*scale+dx, (y+quiet)*scale+dy, color.Gray{})
 				}
 			}

@@ -4,10 +4,11 @@
 package store
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -149,7 +150,7 @@ func (m *Mailbox) PendingSends(ctx context.Context) ([]Sending, error) {
 		}
 		out = append(out, s)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
+	slices.SortFunc(out, func(a, b Sending) int { return cmp.Compare(a.Key, b.Key) })
 	return out, nil
 }
 

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"testing"
 )
 
@@ -33,7 +34,7 @@ func loadOps(t *testing.T) ([]Op, *Data) {
 func run(ops []Op, repeats int) *Data {
 	d := NewData()
 	for _, op := range ops {
-		for i := 0; i < repeats; i++ {
+		for range repeats {
 			Apply(d, op)
 		}
 	}
@@ -133,14 +134,14 @@ func TestTwoMachines(t *testing.T) {
 		}
 		e := d.Get("m1")
 		for _, tag := range []string{"start", "von-A", "von-B"} {
-			if !contains(e.Tags, tag) {
+			if !slices.Contains(e.Tags, tag) {
 				t.Errorf("tag %q lost, m1 has %v", tag, e.Tags)
 			}
 		}
 		if !e.Star {
 			t.Error("fremdes Stern-Flag verloren")
 		}
-		if !contains(d.Get("m2").Tags, "von-B") {
+		if !slices.Contains(d.Get("m2").Tags, "von-B") {
 			t.Error("Aenderung an m2 verloren")
 		}
 	}
@@ -169,10 +170,10 @@ func TestMergeMissing(t *testing.T) {
 	Apply(local, Op{T: "tags", Mids: []string{"m9"}, Add: []string{"nur-lokal"}})
 
 	MergeMissing(base, local)
-	if contains(base.Get("m1").Tags, "lokal") {
+	if slices.Contains(base.Get("m1").Tags, "lokal") {
 		t.Error("a known entry was overwritten instead of left alone")
 	}
-	if !contains(base.Get("m9").Tags, "nur-lokal") {
+	if !slices.Contains(base.Get("m9").Tags, "nur-lokal") {
 		t.Error("an unknown entry was not taken over")
 	}
 }

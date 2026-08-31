@@ -1,7 +1,6 @@
 package store_test
 
 import (
-	"context"
 	"testing"
 
 	"git.ole-hartwig.eu/development/s3mail/s3mail/core"
@@ -15,7 +14,7 @@ import (
 // every number owned once, and the valve pulled where it had to be.
 
 func TestUIDTwoMachinesSameNumber(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f := s3fake.New()
 	a, b := buildState(t, f), buildState(t, f)
 
@@ -55,7 +54,7 @@ func TestUIDTwoMachinesSameNumber(t *testing.T) {
 // Every machine has to arrive at the same numbering - that is what makes the
 // numbers usable at all. Two more machines read the same log afterwards.
 func TestUIDAllMachinesAgree(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f := s3fake.New()
 	a, b := buildState(t, f), buildState(t, f)
 
@@ -84,7 +83,7 @@ func TestUIDAllMachinesAgree(t *testing.T) {
 // The numbering has to survive compaction into the snapshot - otherwise every
 // client would resync as soon as the op log is folded up.
 func TestUIDSurvivesCompaction(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f := s3fake.New()
 	s := buildState(t, f)
 
@@ -92,7 +91,7 @@ func TestUIDSurvivesCompaction(t *testing.T) {
 		Mids: []string{"m1"}, Nums: []uint32{1}}); err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < store.CompactAfter+2; i++ {
+	for i := range store.CompactAfter + 2 {
 		if err := s.Mutate(ctx, core.Op{T: "flags", Mids: []string{"m1"},
 			Read: core.Ptr(i%2 == 0)}); err != nil {
 			t.Fatal(err)

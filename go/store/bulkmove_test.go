@@ -4,7 +4,6 @@
 package store_test
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -19,10 +18,10 @@ import (
 
 func filledMailbox(t *testing.T, n int) (*s3fake.Fake, *store.Mailbox, []string) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	f := s3fake.New()
 	var keys []string
-	for i := 0; i < n; i++ {
+	for i := range n {
 		key := fmt.Sprintf("mail/m%02d", i)
 		f.Store(key, []byte(fmt.Sprintf(
 			"From: a@b.de\r\nTo: post@firma.de\r\nSubject: Nr %d\r\n"+
@@ -38,7 +37,7 @@ func filledMailbox(t *testing.T, n int) (*s3fake.Fake, *store.Mailbox, []string)
 
 // One message that will not move must not take the other nineteen with it.
 func TestOneStuckMessageDoesNotStopTheRest(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f, mb, keys := filledMailbox(t, 20)
 	f.CopyErrFor = map[string]error{keys[7]: errors.New("object locked")}
 
@@ -69,7 +68,7 @@ func TestOneStuckMessageDoesNotStopTheRest(t *testing.T) {
 // identical sentences. Ten in a row is enough to know something systemic is
 // wrong.
 func TestManyFailuresInARowStopTheMove(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f, mb, keys := filledMailbox(t, 40)
 	stuck := map[string]error{}
 	for _, k := range keys {
@@ -88,7 +87,7 @@ func TestManyFailuresInARowStopTheMove(t *testing.T) {
 
 // A failure in the middle must not lose what came before it.
 func TestWhatMovedBeforeTheFailureStaysMoved(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f, mb, keys := filledMailbox(t, 5)
 	f.CopyErrFor = map[string]error{keys[0]: errors.New("object locked")}
 

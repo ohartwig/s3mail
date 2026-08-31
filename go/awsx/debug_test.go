@@ -5,7 +5,6 @@ package awsx_test
 
 import (
 	"bytes"
-	"context"
 	"strings"
 	"testing"
 
@@ -26,7 +25,7 @@ func TestTheDebugLogCarriesNoMail(t *testing.T) {
 	awsx.SetDebug(&log)
 	t.Cleanup(func() { awsx.SetDebug(nil) })
 
-	ctx := context.Background()
+	ctx := t.Context()
 	client := awsx.WrapForDebug(f)
 	if _, err := client.List(ctx, "test-bucket", "mail/"); err != nil {
 		t.Fatal(err)
@@ -62,7 +61,7 @@ func TestOffMeansOff(t *testing.T) {
 		t.Fatal("still on after being switched off")
 	}
 	f := s3fake.New()
-	if _, err := awsx.WrapForDebug(f).List(context.Background(), "b", "p"); err != nil {
+	if _, err := awsx.WrapForDebug(f).List(t.Context(), "b", "p"); err != nil {
 		t.Fatal(err)
 	}
 	if log.Len() != 0 {

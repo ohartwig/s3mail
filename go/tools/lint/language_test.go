@@ -67,8 +67,8 @@ func TestCommentsAreEnglish(t *testing.T) {
 // and the bare text of a line inside a /* */ block or below a "//" block, which
 // is where the first sweep lost its fourteen.
 func comment(line string) (string, bool) {
-	if i := strings.Index(line, "//"); i >= 0 && !inString(line[:i]) {
-		return line[i+2:], true
+	if before, after, ok := strings.Cut(line, "//"); ok && !inString(before) {
+		return after, true
 	}
 	trimmed := strings.TrimSpace(line)
 	// A continuation line of a comment block: no code, but prose.

@@ -5,7 +5,6 @@ package mcp
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -17,7 +16,7 @@ import (
 
 func mailbox(t *testing.T) *store.Mailbox {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	f := s3fake.New()
 	f.Store("mail/m1", []byte("From: Anna <anna@kunde.de>\r\nTo: post@firma.de\r\n"+
 		"Subject: Rechnung 1\r\nDate: Mon, 03 Aug 2026 09:00:00 +0000\r\n"+
@@ -32,14 +31,14 @@ func mailbox(t *testing.T) *store.Mailbox {
 func serve(t *testing.T, lines ...string) []map[string]any {
 	t.Helper()
 	mb := mailbox(t)
-	s := New(context.Background(), []Account{
+	s := New(t.Context(), []Account{
 		{ID: "post", Name: "post@firma.de", Mailbox: mb, From: "post@firma.de"}})
 	var out bytes.Buffer
 	if err := s.Serve(strings.NewReader(strings.Join(lines, "\n")+"\n"), &out); err != nil {
 		t.Fatal(err)
 	}
 	var answers []map[string]any
-	for _, line := range strings.Split(strings.TrimSpace(out.String()), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(out.String()), "\n") {
 		if line == "" {
 			continue
 		}
@@ -109,7 +108,7 @@ func TestAskingToSendExplainsWhyNot(t *testing.T) {
 // and it has to say that nothing went out.
 func TestADraftIsWrittenAndNotSent(t *testing.T) {
 	mb := mailbox(t)
-	s := New(context.Background(), []Account{
+	s := New(t.Context(), []Account{
 		{ID: "post", Name: "post", Mailbox: mb, From: "post@firma.de"}})
 	var out bytes.Buffer
 	err := s.Serve(strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/call", "params":{"name":"draft","arguments":{"to":"kunde@x.de","subject":"Angebot","body":"Anbei."}}}`+"\n"), &out)

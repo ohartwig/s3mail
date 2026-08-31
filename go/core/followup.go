@@ -4,7 +4,8 @@
 package core
 
 import (
-	"sort"
+	"cmp"
+	"slices"
 	"time"
 )
 
@@ -79,11 +80,11 @@ func Unanswered(msgs []Message, now time.Time, after time.Duration) []Waiting {
 	}
 
 	// The longest wait first - that is the one worth a second message.
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Days != out[j].Days {
-			return out[i].Days > out[j].Days
-		}
-		return out[i].Key < out[j].Key
+	slices.SortFunc(out, func(a, b Waiting) int {
+		return cmp.Or(
+			cmp.Compare(b.Days, a.Days),
+			cmp.Compare(a.Key, b.Key),
+		)
 	})
 	return out
 }
@@ -99,10 +100,10 @@ func Conversation(msgs []Message, address string) []Message {
 		if m.Folder == Drafts {
 			continue
 		}
-		if m.FromAddr == address || contains(m.ToAddrs, address) {
+		if m.FromAddr == address || slices.Contains(m.ToAddrs, address) {
 			out = append(out, m)
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Date > out[j].Date })
+	slices.SortFunc(out, func(a, b Message) int { return cmp.Compare(b.Date, a.Date) })
 	return out
 }

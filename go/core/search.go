@@ -4,8 +4,9 @@
 package core
 
 import (
+	"cmp"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -76,12 +77,9 @@ func matches(f filter, m Message) bool {
 	case "before", "vor", "hasta":
 		return datePart(m.Date) <= f.value
 	case "tag", "etiqueta":
-		for _, t := range m.Tags {
-			if strings.ToLower(t) == f.value {
-				return true
-			}
-		}
-		return false
+		return slices.ContainsFunc(m.Tags, func(t string) bool {
+			return strings.ToLower(t) == f.value
+		})
 	case "in", "en":
 		// The inbox has no prefix of its own - its key is the empty string.
 		// Which word a reader types for it depends on their language, so all
@@ -146,13 +144,13 @@ func Search(index []Message, d *Data, query string, o SearchOpts) []Message {
 		if o.OnlyStar && !m.Star {
 			continue
 		}
-		if o.Tag != "" && !contains(m.Tags, o.Tag) {
+		if o.Tag != "" && !slices.Contains(m.Tags, o.Tag) {
 			continue
 		}
 		if q.Matches(m) {
 			hits = append(hits, m)
 		}
 	}
-	sort.SliceStable(hits, func(i, j int) bool { return hits[i].Date > hits[j].Date })
+	slices.SortStableFunc(hits, func(a, b Message) int { return cmp.Compare(b.Date, a.Date) })
 	return hits
 }

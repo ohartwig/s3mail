@@ -4,6 +4,7 @@
 package store
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -11,7 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -95,7 +96,7 @@ func (m *Mailbox) Index() []core.Message {
 	for _, v := range m.index {
 		out = append(out, v)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
+	slices.SortFunc(out, func(a, b core.Message) int { return cmp.Compare(a.Key, b.Key) })
 	return out
 }
 
@@ -210,7 +211,7 @@ func (m *Mailbox) Refresh(ctx context.Context) (RefreshResult, error) {
 		}
 	}
 	m.mu.Unlock()
-	sort.Slice(todo, func(i, j int) bool { return todo[i].Key < todo[j].Key })
+	slices.SortFunc(todo, func(a, b ObjectInfo) int { return cmp.Compare(a.Key, b.Key) })
 
 	sem := make(chan struct{}, m.Workers)
 	var wg sync.WaitGroup
@@ -290,7 +291,7 @@ type MoveResult struct {
 	Key     string `json:"key"`
 	NewKey  string `json:"new_key"`
 	Folder  string `json:"folder"`
-	Skipped bool   `json:"skipped,omitempty"`
+	Skipped bool   `json:"skipped,omitzero"`
 	// Err is set when this one message could not be moved. The others were
 	// still moved: a bulk action that reports one failure as total failure
 	// leaves somebody guessing which half happened.
@@ -400,8 +401,8 @@ func (m *Mailbox) freeKey(mid, target string) (string, string) {
 			return candidate, m.Mid(candidate)
 		}
 		stem, dot, ext := mid, "", ""
-		if i := strings.Index(mid, "."); i >= 0 {
-			stem, dot, ext = mid[:i], ".", mid[i+1:]
+		if before, after, ok := strings.Cut(mid, "."); ok {
+			stem, dot, ext = before, ".", after
 		}
 		candidate, _ = m.KeyFor(fmt.Sprintf("%s-%d%s%s", stem, n, dot, ext), target)
 	}
