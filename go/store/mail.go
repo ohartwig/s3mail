@@ -401,8 +401,8 @@ func (m *Mailbox) freeKey(mid, target string) (string, string) {
 			return candidate, m.Mid(candidate)
 		}
 		stem, dot, ext := mid, "", ""
-		if i := strings.Index(mid, "."); i >= 0 {
-			stem, dot, ext = mid[:i], ".", mid[i+1:]
+		if before, after, ok := strings.Cut(mid, "."); ok {
+			stem, dot, ext = before, ".", after
 		}
 		candidate, _ = m.KeyFor(fmt.Sprintf("%s-%d%s%s", stem, n, dot, ext), target)
 	}

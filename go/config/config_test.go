@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -141,11 +142,11 @@ func TestProfileLesen(t *testing.T) {
 
 	p := Profiles()
 	for _, must := range []string{"default", "s3mail", "arbeit"} {
-		if !contains(p, must) {
+		if !slices.Contains(p, must) {
 			t.Errorf("%q missing from %v", must, p)
 		}
 	}
-	if contains(p, "sso-session firma") || contains(p, "firma") {
+	if slices.Contains(p, "sso-session firma") || slices.Contains(p, "firma") {
 		t.Errorf("sso-session read as a profile: %v", p)
 	}
 	if len(p) != 3 {
@@ -168,15 +169,6 @@ func TestPathsSuitThePlatform(t *testing.T) {
 	if runtime.GOOS == "windows" && !strings.Contains(k, "AppData") {
 		t.Errorf("Windows-Pfad: %q", k)
 	}
-}
-
-func contains(l []string, s string) bool {
-	for _, x := range l {
-		if x == s {
-			return true
-		}
-	}
-	return false
 }
 
 // TestTheOldShapeStillLoads is the one that matters on an update: the file with

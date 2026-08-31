@@ -8,6 +8,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -96,7 +97,7 @@ func TestAnEventReachesThePage(t *testing.T) {
 				if !strings.Contains(line, `"account":"post"`) {
 					t.Errorf("event without the mailbox: %q", line)
 				}
-				if !contains(got, "event: mail") {
+				if !slices.Contains(got, "event: mail") {
 					t.Errorf("no event name in front of the data: %v", got)
 				}
 				return
@@ -172,13 +173,4 @@ func TestShutdownReleasesTheStreams(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("the stream stayed open after StopEvents")
 	}
-}
-
-func contains(l []string, s string) bool {
-	for _, v := range l {
-		if v == s {
-			return true
-		}
-	}
-	return false
 }

@@ -78,11 +78,10 @@ func Discover(ctx context.Context, cfg aws.Config) (Finding, error) {
 // userFromArn pulls the user name out of arn:aws:iam::123:user/path/name.
 // For anything else (assumed role, root, a service) "" comes back.
 func userFromArn(arn string) string {
-	i := strings.Index(arn, ":user/")
-	if i < 0 {
+	_, rest, ok := strings.Cut(arn, ":user/")
+	if !ok {
 		return ""
 	}
-	rest := arn[i+len(":user/"):]
 	if _, after, ok := strings.CutLast(rest, "/"); ok { // cut the path off
 		rest = after
 	}

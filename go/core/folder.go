@@ -127,7 +127,7 @@ func (s *Store) Internal(key string) bool {
 	if strings.HasSuffix(key, SendingSuffix) {
 		return true
 	}
-	for _, part := range strings.Split(strings.TrimPrefix(key, s.Root), "/") {
+	for part := range strings.SplitSeq(strings.TrimPrefix(key, s.Root), "/") {
 		if strings.HasPrefix(part, ".") {
 			return true
 		}

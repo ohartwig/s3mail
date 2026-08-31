@@ -137,12 +137,12 @@ func Apply(d *Data, op Op) {
 			e := d.entry(mid)
 			cur := make([]string, 0, len(e.Tags)+len(op.Add))
 			for _, t := range e.Tags {
-				if !contains(op.Remove, t) {
+				if !slices.Contains(op.Remove, t) {
 					cur = append(cur, t)
 				}
 			}
 			for _, t := range op.Add {
-				if !contains(cur, t) {
+				if !slices.Contains(cur, t) {
 					cur = append(cur, t)
 				}
 			}
@@ -170,7 +170,7 @@ func Apply(d *Data, op Op) {
 	case "tagdel":
 		delete(d.Tags, op.Name)
 		for _, e := range d.Messages {
-			if contains(e.Tags, op.Name) {
+			if slices.Contains(e.Tags, op.Name) {
 				rest := make([]string, 0, len(e.Tags))
 				for _, t := range e.Tags {
 					if t != op.Name {
@@ -273,15 +273,6 @@ func MergeMissing(base, other *Data) *Data {
 // TagNames returns the tags in a stable order - Go maps have none.
 func (d *Data) TagNamen() []string {
 	return slices.Sorted(maps.Keys(d.Tags))
-}
-
-func contains(list []string, s string) bool {
-	for _, x := range list {
-		if x == s {
-			return true
-		}
-	}
-	return false
 }
 
 func Ptr[T any](v T) *T { return &v }

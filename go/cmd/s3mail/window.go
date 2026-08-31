@@ -86,7 +86,7 @@ func appModePID() (int, bool) {
 	if err != nil {
 		return 0, false
 	}
-	for _, line := range strings.Fields(string(out)) {
+	for line := range strings.FieldsSeq(string(out)) {
 		pid, err := strconv.Atoi(line)
 		if err != nil {
 			continue

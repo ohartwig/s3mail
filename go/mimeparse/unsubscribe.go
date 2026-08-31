@@ -50,21 +50,21 @@ func unsubscribe(h message.Header) Unsubscribe {
 	}
 	// The header is a comma-separated list of <...> entries. Commas also occur
 	// inside a mailto: query, so split on the brackets rather than on commas.
-	for _, part := range strings.Split(raw, "<") {
+	for part := range strings.SplitSeq(raw, "<") {
 		entry, ok := strings.CutSuffix(strings.TrimSpace(part), ">")
 		if !ok {
-			if i := strings.Index(part, ">"); i >= 0 {
-				entry = strings.TrimSpace(part[:i])
-			} else {
+			before, _, found := strings.Cut(part, ">")
+			if !found {
 				continue
 			}
+			entry = strings.TrimSpace(before)
 		}
 		low := strings.ToLower(entry)
 		switch {
 		case strings.HasPrefix(low, "mailto:") && out.Mail == "":
 			addr, query, _ := strings.Cut(entry[len("mailto:"):], "?")
 			out.Mail = strings.TrimSpace(addr)
-			for _, kv := range strings.Split(query, "&") {
+			for kv := range strings.SplitSeq(query, "&") {
 				if k, v, ok := strings.Cut(kv, "="); ok && strings.EqualFold(k, "subject") {
 					out.Subject = strings.TrimSpace(v)
 				}

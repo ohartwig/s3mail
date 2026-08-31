@@ -6,6 +6,7 @@ package awsx
 import (
 	"encoding/json"
 	"net/url"
+	"slices"
 	"strings"
 )
 
@@ -131,12 +132,9 @@ func list(r json.RawMessage) []string {
 }
 
 func hasPrefix(values []string, p string) bool {
-	for _, w := range values {
-		if strings.HasPrefix(strings.ToLower(w), p) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(values, func(w string) bool {
+		return strings.HasPrefix(strings.ToLower(w), p)
+	})
 }
 
 // fromS3 pulls bucket and prefix out of the resource ARNs of an S3 permission.

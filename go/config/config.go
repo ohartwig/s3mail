@@ -294,7 +294,7 @@ func Profiles() []string {
 		if err != nil {
 			continue
 		}
-		for _, line := range strings.Split(string(blob), "\n") {
+		for line := range strings.SplitSeq(string(blob), "\n") {
 			line = strings.TrimSpace(line)
 			if !strings.HasPrefix(line, "[") || !strings.HasSuffix(line, "]") {
 				continue

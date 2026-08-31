@@ -8,6 +8,7 @@ import (
 	"errors"
 	"mime"
 	"net/mail"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -171,7 +172,7 @@ func TestAttachmentIsWrapped(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, line := range strings.Split(string(n.Raw), "\r\n") {
+	for line := range strings.SplitSeq(string(n.Raw), "\r\n") {
 		if len(line) > 998 {
 			t.Fatalf("line with %d characters - that is beyond what RFC 5322 allows", len(line))
 		}
@@ -228,7 +229,7 @@ func TestDraftKeepsTheBlindCopy(t *testing.T) {
 	if strings.Contains(string(out.Raw), "Bcc") {
 		t.Errorf("the blind copy went out in the header:\n%s", out.Raw)
 	}
-	if !contains(out.To, "still@b.de") {
+	if !slices.Contains(out.To, "still@b.de") {
 		t.Errorf("the blind copy is not among the recipients: %v", out.To)
 	}
 }
@@ -244,13 +245,4 @@ func TestADraftNeedsNoRecipient(t *testing.T) {
 		"post@firma.de", Original{}, now()); !errors.Is(err, ErrNoRecipient) {
 		t.Errorf("sending without a recipient went through: %v", err)
 	}
-}
-
-func contains(l []string, s string) bool {
-	for _, v := range l {
-		if v == s {
-			return true
-		}
-	}
-	return false
 }

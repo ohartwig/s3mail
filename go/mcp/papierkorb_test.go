@@ -25,7 +25,7 @@ func serveWith(t *testing.T, prepare func(*Server), lines ...string) []map[strin
 		t.Fatal(err)
 	}
 	var answers []map[string]any
-	for _, line := range strings.Split(strings.TrimSpace(out.String()), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(out.String()), "\n") {
 		if line == "" {
 			continue
 		}

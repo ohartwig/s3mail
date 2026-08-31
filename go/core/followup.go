@@ -100,7 +100,7 @@ func Conversation(msgs []Message, address string) []Message {
 		if m.Folder == Drafts {
 			continue
 		}
-		if m.FromAddr == address || contains(m.ToAddrs, address) {
+		if m.FromAddr == address || slices.Contains(m.ToAddrs, address) {
 			out = append(out, m)
 		}
 	}
