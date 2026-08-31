@@ -25,7 +25,7 @@ Die macOS-Pakete sind signiert und notarisiert – kein `xattr`, kein Rechtsklic
 Unter Linux und Windows liegt im ZIP die nackte Datei, dort genügt ein
 Doppelklick bzw. `./s3mail`.
 
-Wer selbst bauen will, braucht Go 1.25 oder neuer – siehe
+Wer selbst bauen will, braucht Go 1.27 oder neuer – siehe
 [Selbst bauen](#selbst-bauen).
 
 Dazu ein Browser. Nach außen gehen nur HTTPS-Verbindungen zu
