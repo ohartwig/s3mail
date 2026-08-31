@@ -80,7 +80,7 @@ func TestAFailingQueueDoesNotSpin(t *testing.T) {
 	srv := web.NewServer(nil, "t", "127.0.0.1", 0, nil)
 	q := &fakeQueue{}
 	q.mu.Lock()
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		q.answers = append(q.answers, answer{err: errors.New("AccessDenied")})
 	}
 	q.mu.Unlock()

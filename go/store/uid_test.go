@@ -92,7 +92,7 @@ func TestUIDSurvivesCompaction(t *testing.T) {
 		Mids: []string{"m1"}, Nums: []uint32{1}}); err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < store.CompactAfter+2; i++ {
+	for i := range store.CompactAfter + 2 {
 		if err := s.Mutate(ctx, core.Op{T: "flags", Mids: []string{"m1"},
 			Read: core.Ptr(i%2 == 0)}); err != nil {
 			t.Fatal(err)

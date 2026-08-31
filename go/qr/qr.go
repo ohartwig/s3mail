@@ -67,7 +67,7 @@ func Encode(text string) (*Code, error) {
 
 	best, bestScore := 0, -1
 	var bestModules []bool
-	for mask := 0; mask < 8; mask++ {
+	for mask := range 8 {
 		trial := make([]bool, len(c.m))
 		copy(trial, c.m)
 		applyMask(trial, reserved, c.Size, mask)
@@ -143,12 +143,12 @@ func interleave(data []byte, b block) []byte {
 	pieces := make([]piece, 0, b.n1+b.n2)
 
 	at := 0
-	for i := 0; i < b.n1; i++ {
+	for range b.n1 {
 		d := data[at : at+b.d1]
 		at += b.d1
 		pieces = append(pieces, piece{d, reedSolomon(d, b.ec)})
 	}
-	for i := 0; i < b.n2; i++ {
+	for range b.n2 {
 		d := data[at : at+b.d2]
 		at += b.d2
 		pieces = append(pieces, piece{d, reedSolomon(d, b.ec)})
@@ -159,14 +159,14 @@ func interleave(data []byte, b block) []byte {
 	if b.d2 > longest {
 		longest = b.d2
 	}
-	for i := 0; i < longest; i++ {
+	for i := range longest {
 		for _, p := range pieces {
 			if i < len(p.data) {
 				out = append(out, p.data[i])
 			}
 		}
 	}
-	for i := 0; i < b.ec; i++ {
+	for i := range b.ec {
 		for _, p := range pieces {
 			out = append(out, p.ec[i])
 		}
@@ -192,8 +192,8 @@ func (c *Code) SVG(pixelsPerModule int) string {
 	fmt.Fprintf(&b, `<rect width="%d" height="%d" fill="#fff"/>`,
 		c.Size+2*quiet, c.Size+2*quiet)
 	b.WriteString(`<path fill="#000" d="`)
-	for y := 0; y < c.Size; y++ {
-		for x := 0; x < c.Size; x++ {
+	for y := range c.Size {
+		for x := range c.Size {
 			if c.At(x, y) {
 				fmt.Fprintf(&b, "M%d %dh1v1h-1z", x+quiet, y+quiet)
 			}

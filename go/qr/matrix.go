@@ -76,7 +76,7 @@ func (c *Code) patterns() []bool {
 			mark(i, 8, false)
 		}
 	}
-	for i := 0; i < 8; i++ {
+	for i := range 8 {
 		mark(c.Size-1-i, 8, false)
 		mark(8, c.Size-1-i, false)
 	}
@@ -85,7 +85,7 @@ func (c *Code) patterns() []bool {
 	// version this is, so a reader need not measure.
 	if c.Version >= 7 {
 		v := versionBits(c.Version)
-		for i := 0; i < 18; i++ {
+		for i := range 18 {
 			dark := v&(1<<uint(i)) != 0
 			x, y := i/3, c.Size-11+i%3
 			mark(x, y, dark)
@@ -106,12 +106,12 @@ func (c *Code) place(codewords []byte, reserved []bool) {
 			// Column 6 is the timing pattern; the path steps over it entirely.
 			right--
 		}
-		for i := 0; i < c.Size; i++ {
+		for i := range c.Size {
 			y := i
 			if up {
 				y = c.Size - 1 - i
 			}
-			for dx := 0; dx < 2; dx++ {
+			for dx := range 2 {
 				x := right - dx
 				if reserved[y*c.Size+x] {
 					continue
@@ -131,8 +131,8 @@ func (c *Code) place(codewords []byte, reserved []bool) {
 // applyMask flips data modules according to one of the eight patterns. The
 // point is to break up large blank areas, which readers cope with badly.
 func applyMask(m []bool, reserved []bool, size, mask int) {
-	for y := 0; y < size; y++ {
-		for x := 0; x < size; x++ {
+	for y := range size {
+		for x := range size {
 			if reserved[y*size+x] {
 				continue
 			}
@@ -175,7 +175,7 @@ func (c *Code) formatInfo(mask int) {
 	}
 	bits = (data<<10 | bits) ^ 0b101010000010010
 
-	for i := 0; i < 15; i++ {
+	for i := range 15 {
 		dark := bits&(1<<uint(i)) != 0
 		// First copy, around the top left finder.
 		switch {
@@ -218,9 +218,9 @@ func penalty(c *Code) int {
 
 	// Rule 1: runs of five or more of the same colour, in both directions.
 	for _, byRow := range []bool{true, false} {
-		for a := 0; a < size; a++ {
+		for a := range size {
 			run, last := 0, false
-			for b := 0; b < size; b++ {
+			for b := range size {
 				var v bool
 				if byRow {
 					v = c.At(b, a)
@@ -244,8 +244,8 @@ func penalty(c *Code) int {
 	}
 
 	// Rule 2: every 2×2 block of one colour.
-	for y := 0; y < size-1; y++ {
-		for x := 0; x < size-1; x++ {
+	for y := range size - 1 {
+		for x := range size - 1 {
 			v := c.At(x, y)
 			if c.At(x+1, y) == v && c.At(x, y+1) == v && c.At(x+1, y+1) == v {
 				score += 3
@@ -266,14 +266,14 @@ func penalty(c *Code) int {
 		return true
 	}
 	for _, byRow := range []bool{true, false} {
-		for a := 0; a < size; a++ {
+		for a := range size {
 			get := func(b int) bool {
 				if byRow {
 					return c.At(b, a)
 				}
 				return c.At(a, b)
 			}
-			for b := 0; b < size; b++ {
+			for b := range size {
 				if !matches(get, b, size) {
 					continue
 				}

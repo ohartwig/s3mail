@@ -33,7 +33,7 @@ func loadOps(t *testing.T) ([]Op, *Data) {
 func run(ops []Op, repeats int) *Data {
 	d := NewData()
 	for _, op := range ops {
-		for i := 0; i < repeats; i++ {
+		for range repeats {
 			Apply(d, op)
 		}
 	}

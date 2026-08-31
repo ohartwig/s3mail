@@ -105,7 +105,7 @@ func TestZusammenfassen(t *testing.T) {
 	ctx := context.Background()
 	f := s3fake.New()
 	s := buildState(t, f)
-	for i := 0; i < store.CompactAfter+2; i++ {
+	for i := range store.CompactAfter + 2 {
 		if err := s.Mutate(ctx, core.Op{T: "tags", Mids: []string{"m1"},
 			Add: []string{fmt.Sprintf("t%02d", i)}}); err != nil {
 			t.Fatal(err)
@@ -158,7 +158,7 @@ func TestBatchWritesOnce(t *testing.T) {
 	s := buildState(t, f)
 
 	err := s.Batch(ctx, func() error {
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			if err := s.Mutate(ctx, core.Op{T: "tags", Mids: []string{fmt.Sprintf("m%d", i)},
 				Add: []string{"stapel"}}); err != nil {
 				return err
@@ -173,7 +173,7 @@ func TestBatchWritesOnce(t *testing.T) {
 		t.Errorf("%d op objects for one batch, expected 1", n)
 	}
 	fresh := buildState(t, f)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		if !has(fresh.Get(fmt.Sprintf("m%d", i)).Tags, "stapel") {
 			t.Fatalf("m%d missing after the batch", i)
 		}

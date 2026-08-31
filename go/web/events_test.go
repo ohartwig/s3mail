@@ -141,7 +141,7 @@ func TestAPageThatDoesNotReadDoesNotBlockTheOthers(t *testing.T) {
 
 	done := make(chan bool, 1)
 	go func() {
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			srv.Notify("post")
 		}
 		done <- true

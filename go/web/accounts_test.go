@@ -201,7 +201,7 @@ func TestSuggestionsComeOutOfTheIndex(t *testing.T) {
 	ctx := context.Background()
 	f := s3fake.New()
 	// Eleven from one sender, ten of them already filed into "werbung".
-	for i := 0; i < 11; i++ {
+	for i := range 11 {
 		key := "mail/n" + string(rune('a'+i))
 		if i < 10 {
 			key = "mail/werbung/n" + string(rune('a'+i))

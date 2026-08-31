@@ -239,7 +239,7 @@ func adapter(t *testing.T, srv *s3Server) (*awsx.S3, *httptest.Server) {
 func TestListPaginates(t *testing.T) {
 	srv := newS3Server()
 	srv.pageMax = 2 // erzwingt drei Seiten
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		srv.objs[fmt.Sprintf("mail/m%d", i)] = []byte("inhalt")
 	}
 	srv.objs["andere/x"] = []byte("nicht meins")

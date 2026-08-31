@@ -17,7 +17,7 @@ var (
 
 func init() {
 	x := 1
-	for i := 0; i < 255; i++ {
+	for i := range 255 {
 		expTable[i] = byte(x)
 		logTable[x] = byte(i)
 		x <<= 1
@@ -41,7 +41,7 @@ func mul(a, b byte) byte {
 // the divisor the message is divided by.
 func generator(n int) []byte {
 	g := []byte{1}
-	for i := 0; i < n; i++ {
+	for i := range n {
 		// Multiply by (x - alpha^i), which in this field is (x + alpha^i).
 		next := make([]byte, len(g)+1)
 		for j, c := range g {
@@ -60,7 +60,7 @@ func reedSolomon(data []byte, n int) []byte {
 	rest := make([]byte, len(data)+n)
 	copy(rest, data)
 
-	for i := 0; i < len(data); i++ {
+	for i := range len(data) {
 		lead := rest[i]
 		if lead == 0 {
 			continue

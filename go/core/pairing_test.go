@@ -111,7 +111,7 @@ func TestAPINHasSixDigits(t *testing.T) {
 // that land below 100000.
 func TestGeneratedPINsAreAlwaysSixDigits(t *testing.T) {
 	seen := map[string]bool{}
-	for i := 0; i < 200; i++ {
+	for range 200 {
 		pin, err := core.NewPIN()
 		if err != nil {
 			t.Fatal(err)

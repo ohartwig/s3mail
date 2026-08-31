@@ -153,7 +153,7 @@ func TestTwoMachinesNumberAlike(t *testing.T) {
 	ctx := context.Background()
 	f := s3fake.New()
 	base := time.Date(2026, 8, 1, 9, 0, 0, 0, time.UTC)
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		storeAt(f, fmt.Sprintf("mail/m%d", i), base.Add(time.Duration(i)*time.Minute))
 	}
 
@@ -172,7 +172,7 @@ func TestTwoMachinesNumberAlike(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		mid := fmt.Sprintf("m%d", i)
 		a, oka := first.UID("", mid)
 		b, okb := second.UID("", mid)

@@ -22,7 +22,7 @@ func filledMailbox(t *testing.T, n int) (*s3fake.Fake, *store.Mailbox, []string)
 	ctx := context.Background()
 	f := s3fake.New()
 	var keys []string
-	for i := 0; i < n; i++ {
+	for i := range n {
 		key := fmt.Sprintf("mail/m%02d", i)
 		f.Store(key, []byte(fmt.Sprintf(
 			"From: a@b.de\r\nTo: post@firma.de\r\nSubject: Nr %d\r\n"+

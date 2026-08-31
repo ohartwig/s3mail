@@ -219,7 +219,7 @@ func TestRecoveringTwiceFilesOneCopy(t *testing.T) {
 	if err := mb.MarkSent(ctx, key, "ses-0815"); err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		if _, err := mb.RecoverSends(ctx); err != nil {
 			t.Fatal(err)
 		}

@@ -143,7 +143,7 @@ func TestForwardAttachesTheMail(t *testing.T) {
 
 func TestMessageIDIsUnique(t *testing.T) {
 	seen := map[string]bool{}
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		n, err := Build(Draft{To: "a@b.de", Body: "x"}, "support@firma.de",
 			Original{}, now())
 		if err != nil {
