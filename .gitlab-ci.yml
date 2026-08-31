@@ -1,31 +1,22 @@
 # SPDX-FileCopyrightText: 2026 Kai Ole Hartwig <mail@ole-hartwig.eu>
 #
-# Pipeline für s3mail (Go).
+# Pipeline for s3mail (Go).
 #
-# Alle Jobs laufen untagged und landen damit auf `aws-spot-runner` – dem
-# einzigen Runner des Projekts, der untagged Jobs annimmt (Docker, Linux/arm64).
-# Die anderen verlangen ihre eigenen Tags und sind für Signing- und apk-Arbeit
-# reserviert.
+# Every job runs untagged and therefore lands on `aws-spot-runner`, the only
+# runner in this project that accepts untagged jobs (Docker, Linux/arm64). The
+# others demand their own tags and are reserved for signing and apk work.
 #
-# Dass der Runner arm64 ist, spielt keine Rolle: Go kompiliert von dort für alle
-# Zielplattformen, weil nichts in der Abhängigkeitskette CGO braucht. Genau
-# deshalb ist das Projekt von Python nach Go gewandert – PyInstaller konnte
-# grundsätzlich nur für die Plattform bauen, auf der es lief, und ein
-# Windows-Paket war damit gar nicht herstellbar.
+# That the runner is arm64 does not matter: Go cross-compiles from there for
+# every target, because nothing in the dependency chain needs CGO. That is
+# exactly why this project moved from Python to Go - PyInstaller could only ever
+# build for the platform it ran on, which made a Windows package impossible.
 #
-# Der Katalog unter devops/ci-cd-components ist PHP/TYPO3-seitig, für Go gibt es
-# dort nichts – deshalb hier von Hand.
+# The catalogue under devops/ci-cd-components used to be PHP/TYPO3 only, with
+# nothing for Go, so this pipeline was written by hand. That gap is closed:
+# composed-default-pipelines/go exists now, and this repository is why. What
+# remains written out below is only what this repository actually ships.
 
-# Die Signatur über das Manifest kommt aus dem Bestand und nicht von Hand.
-# devops/ci-cd-components/build-provenance/sign-artifact macht genau das:
-# abgelöste cosign-Signatur über eine Datei, Schlüssel in KMS, Rolle über OIDC,
-# und sie prüft die eigene Signatur nach, bevor sie den Job verlässt. Ein
-# zweiter Weg zum selben Schlüssel wäre ein zweiter Weg, ihn falsch zu benutzen.
 include:
-  # Voller Tag und nicht ~latest oder @2: build-provenance ist kein
-  # Katalog-Projekt, und dort loest GitLab nur einen vollstaendigen Tag auf.
-  # Renovate haelt ihn nach.
-  # renovate: datasource=gitlab-tags depName=devops/ci-cd-components/build-provenance
   # The estate's Go pipeline: gofmt, vet, tests and the automated review, plus
   # the language-neutral hygiene every repository here gets. Only what this
   # repository actually ships -- four platforms, notarisation, the release --
@@ -44,17 +35,26 @@ include:
       # Declaring the arguments here as well would leave two places claiming to
       # decide how the tests run.
 
+  # Signing the manifest comes from the estate, not from hand-written steps.
+  # devops/ci-cd-components/build-provenance/sign-artifact does exactly this: a
+  # detached cosign signature over one file, key in KMS, role over OIDC, and it
+  # verifies its own signature before leaving the job. A second route to the same
+  # key would be a second way to use it wrongly.
+  #
+  # A full tag rather than ~latest or @2: build-provenance is not a catalogue
+  # project, and GitLab only resolves a complete tag there. Renovate keeps it up.
+  # renovate: datasource=gitlab-tags depName=devops/ci-cd-components/build-provenance
   - component: ${CI_SERVER_HOST}/devops/ci-cd-components/build-provenance/sign-artifact@2.0.54
     inputs:
       stage: release
       artifact-file: SHA256SUMS
       needs-config:
         - job: manifest
-      # Muss zur Regel von manifest passen. Die Voreinstellung der Komponente
-      # legt den Job auch auf dem Standardzweig an - dort gibt es kein manifest,
-      # und ein needs auf einen Job, den die Pipeline nicht kennt, ist ein
-      # Konfigurationsfehler: die Pipeline entsteht ohne einen einzigen Job und
-      # gilt als gescheitert. Genau das ist nach dem Merge dreimal passiert.
+      # Must match manifest's own rule. The component's default also creates the
+      # job on the default branch, where there is no manifest - and a `needs` on
+      # a job the pipeline does not contain is a configuration error: the
+      # pipeline comes into being with no jobs at all and counts as failed. That
+      # happened three times after a merge before this was pinned down.
       rules-config:
         - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
 
@@ -79,26 +79,26 @@ stages:
 
 
 variables:
-  # GO_IMAGE aus einem eigenen goldenen Bild (devops/images/golang), nicht
-  # mehr aus dem Minimus-Spiegel: Minimus stellt am 2026-10-22 den Betrieb
-  # ein, und Go ist ein eigenständig gepflegtes Wolfi-Paket – kein Umweg
-  # über einen dritten Spiegel nötig. Internal-sichtbare devops/images/*-
-  # Projekte sind estate-weit ohne Allowlist-Eintrag ziehbar; die Job-Token-
-  # Allowlist unten gilt nur noch für CURL_IMAGE aus devops/ci-mirrors.
+  # GO_IMAGE from our own golden image (devops/images/golang), no longer from
+  # the Minimus mirror: Minimus shuts down on 2026-10-22, and Go is a Wolfi
+  # package maintained in its own right - no detour through a third mirror
+  # needed. Internal-visible devops/images/* projects are pullable estate-wide
+  # without an allowlist entry; the job-token allowlist now only covers
+  # CURL_IMAGE from devops/ci-mirrors.
   #
-  # Bei 1.27 geblieben, nicht auf 1.25 zurückgefallen: das Bild-Repository
-  # baut bewusst auf go-1.27, weil dieses Projekt hier schon einmal
-  # (Commit 3f87e3d, 2026-08-23) von 1.25 auf 1.27 gewechselt ist – eine
-  # bereits getroffene Entscheidung, die dieser Umbau fortsetzt, nicht
-  # rückgängig macht. `:1.27` ist der mitlaufende Tag mit der echten
-  # Go-Version, nicht die Release-Zählung des Bild-Repositories selbst (die
-  # steht zusätzlich als unveränderlicher Tag daneben).
+  # Stayed on 1.27 rather than falling back to 1.25: the image repository builds
+  # on go-1.27 deliberately, because this project already moved from 1.25 to
+  # 1.27 once (commit 3f87e3d, 2026-08-23). That is a decision already taken,
+  # which this continues rather than reverses. `:1.27` is the rolling tag
+  # carrying the real Go version, not the image repository's own release count
+  # (which sits beside it as an immutable tag).
   GO_IMAGE: "registry.ole-hartwig.eu/devops/images/golang:1.27"
-  # CURL_IMAGE ebenfalls aus einem eigenen goldenen Bild (devops/images/curl),
-  # nicht mehr aus dem Minimus-Spiegel - selbe Begründung wie bei GO_IMAGE.
-  # `:8.21` ist der mitlaufende Tag mit der echten curl-Version.
+  # CURL_IMAGE likewise from our own golden image (devops/images/curl) rather
+  # than the Minimus mirror - same reasoning as GO_IMAGE. `:8.21` is the rolling
+  # tag carrying the real curl version.
   CURL_IMAGE: "registry.ole-hartwig.eu/devops/images/curl:8.21"
-  # Nicht heimlich eine andere Go-Version ziehen: was im Image ist, gilt.
+  # Do not quietly pull a different Go version: what is in the image is what
+  # counts.
   GOTOOLCHAIN: "local"
   GOFLAGS: "-mod=readonly"
   GOPATH: "${CI_PROJECT_DIR}/.go"
@@ -106,10 +106,10 @@ variables:
 
 default:
   image: ${GO_IMAGE}
-  # Die Flotte besteht aus Spot-Instanzen: eine kann mitten im Job zurückgezogen
-  # werden, und der Job stirbt dann mit "instance no longer running". Das ist
-  # kein Fehler im Gebauten – beim ersten v0.2.1-Lauf traf es zwei von vier
-  # Build-Jobs, während die anderen beiden auf demselben Commit durchliefen.
+  # The fleet is spot instances: one can be reclaimed mid-job, and the job then
+  # dies with "instance no longer running". That is not a fault in what was
+  # built - on the first v0.2.1 run it hit two of four build jobs while the
+  # other two passed on the same commit.
   retry:
     max: 2
     when:
@@ -138,7 +138,7 @@ test:go:
     expire_in: 1 week
 
 # --------------------------------------------------------------------------- #
-# Bauen – vier Plattformen aus einem Lauf
+# Building - four platforms from one run
 # --------------------------------------------------------------------------- #
 .build:
   stage: build
@@ -159,30 +159,30 @@ test:go:
     paths:
       - .go/pkg/mod
   script:
-    # -trimpath nimmt die Pfade des Baurechners aus dem Binary, damit zwei Läufe
-    # dasselbe Ergebnis liefern.
+    # -trimpath takes the build machine's paths out of the binary, so two runs
+    # produce the same result.
     - VERSION="${CI_COMMIT_TAG:-$CI_COMMIT_SHORT_SHA}"
     - mkdir -p dist
-    # LDFLAGS trägt bei Windows zusätzlich -H windowsgui: sonst reißt der
-    # Doppelklick ein Konsolenfenster auf, dessen Schließen den Server killt.
+    # On Windows LDFLAGS also carries -H windowsgui: without it a double-click
+    # tears open a console window, and closing that window kills the server.
     - |
       CGO_ENABLED=0 GOOS="$TARGET_OS" GOARCH="$TARGET_ARCH" \
         go build -trimpath -ldflags="-s -w -X main.version=${VERSION} ${EXTRA_LDFLAGS:-}" \
         -o "dist/${BINARY}" ./cmd/s3mail
-    # macOS bekommt ein App-Bundle statt einer nackten Unix-Datei. Ein Bundle ist
-    # nur eine Verzeichnisstruktur mit einer Info.plist – das entsteht auch auf
-    # Linux, ohne Apple-Werkzeug und ohne den Mac, den die Portierung losgeworden ist.
-    # macOS hört hier auf: das Bundle geht als Artefakt an sign:macos, und erst
-    # nach der Signatur wird gezippt. Andersherum müsste das ZIP wieder geöffnet
-    # werden, und geheftet (`staple`) wird ohnehin das Bundle, nicht das Archiv.
+    # macOS gets an app bundle rather than a bare Unix file. A bundle is only a
+    # directory structure with an Info.plist - that can be produced on Linux
+    # too, with no Apple tooling and without the Mac the port got rid of.
+    # macOS stops here: the bundle goes to sign:macos as an artefact, and only
+    # after signing is it zipped. The other way round the zip would have to be
+    # opened again, and stapling applies to the bundle anyway, not the archive.
     - |
       if [ "$TARGET_OS" = "darwin" ]; then
-        # CFBundleVersion vertraegt nur Zahlen und Punkte. Was hier als VERSION
-        # ankommt, ist aber ein Tag wie v0.9.0 oder v0.9.0-rc1, bei Zweiglaeufen
-        # sogar eine Commit-Kurz-ID. Also zurechtschneiden: fuehrendes v weg,
-        # Vorab-Anhang weg, und was dann immer noch keine Versionsnummer ist,
-        # wird 0.0.0. Der volle Tag bleibt davon unberuehrt - der steckt ueber
-        # -X main.version im Programm und ist das, was der Nutzer zu sehen kriegt.
+        # CFBundleVersion only tolerates digits and dots. What arrives here as
+        # VERSION is a tag like v0.9.0 or v0.9.0-rc1, and on branch runs even a
+        # short commit id. So: trim it - leading v off, pre-release suffix off,
+        # and whatever is still not a version number becomes 0.0.0. The full tag
+        # is untouched by this; it sits in the program via -X main.version and
+        # is what the user actually sees.
         PLIST_VERSION=$(printf '%s' "${VERSION}" | sed 's/^v//; s/[-+].*$//')
         case "$PLIST_VERSION" in
           ''|*[!0-9.]*) PLIST_VERSION=0.0.0 ;;
@@ -194,11 +194,11 @@ test:go:
       fi
       go run tools/zip.go "dist/s3mail-${LABEL}.zip" "dist/${BINARY}"
       rm -rf "dist/${BINARY}"
-    # Als ZIP, damit Ausführungs-Bit und Bundle-Struktur den Download überstehen –
-    # eine roh heruntergeladene Datei kommt ohne +x an und startet nicht.
-    # Gepackt wird mit Go, nicht mit /usr/bin/zip: das golang-Image bringt es
-    # nicht mit, und ein apt-get dafür wäre ein zweiter Paketkanal in einer
-    # Pipeline, die sonst nur Go braucht.
+    # A zip, so the execute bit and the bundle structure survive the download -
+    # a file fetched raw arrives without +x and does not start. Packed with Go
+    # rather than /usr/bin/zip: the golang image does not carry it, and an
+    # apt-get for that would be a second package channel in a pipeline that
+    # otherwise needs only Go.
     - cd dist && sha256sum "s3mail-${LABEL}.zip" > "s3mail-${LABEL}.zip.sha256"
   artifacts:
     paths:
@@ -223,42 +223,42 @@ build:linux-amd64:
   variables: { TARGET_OS: linux, TARGET_ARCH: amd64, LABEL: linux-amd64, BINARY: s3mail }
 
 # --------------------------------------------------------------------------- #
-# Signieren – nur macOS
+# Signing - macOS only
 #
-# Ohne Signatur *blockiert* Gatekeeper das Programm beim ersten Start, und der
-# einzige Ausweg ist `xattr -dr com.apple.quarantine`. Das ist die Hürde, an der
-# jemand abspringt, der s3mail nicht selbst gebaut hat.
+# Without a signature Gatekeeper *blocks* the program on first start, and the
+# only way out is `xattr -dr com.apple.quarantine`. That is the hurdle where
+# somebody who did not build s3mail themselves gives up.
 #
-# Der Job läuft auf `az1a` und das ist keine Kosmetik: die allgemeine Flotte ist
-# IPv6-only, und Apples Notary- und Zeitstempeldienst sind von dort nicht
-# verlässlich erreichbar. Ohne den Tag scheitert die Notarisierung an etwas, das
-# wie ein Netzfehler aussieht und keiner ist.
+# The job runs on `az1a`, and that is not cosmetic: the general fleet is
+# IPv6-only, and Apple's notary and timestamp services are not reliably
+# reachable from there. Without the tag, notarisation fails on something that
+# looks like a network error and is not one.
 #
-# Auf einem Tag wird mit dem echten Developer-ID-Zertifikat signiert und bei
-# Apple notarisiert. Auf allen anderen Läufen mit einem Wegwerf-Zertifikat, ohne
-# Notarisierung – Gatekeeper lehnt das Ergebnis ab, aber die Mechanik ist
-# geprüft. Sonst fiele ein kaputter Signaturschritt erst auf, wenn ein Release
-# ansteht, und dann ist er teuer.
+# On a tag it signs with the real Developer ID certificate and notarises with
+# Apple. On every other run it uses a throwaway certificate and no notarisation
+# - Gatekeeper rejects the result, but the mechanism has been exercised.
+# Otherwise a broken signing step would only surface when a release is due, and
+# then it is expensive.
 #
-# Dass die Grenze der Tag ist und nicht der Zweig, steht nicht nur hier: die
-# Vertrauensrichtlinie der Rolle gitlab-ci-code-signing-role lässt
-# AssumeRoleWithWebIdentity nur für sub=...ref_type:tag:ref:v* zu. Ein Zweiglauf
-# kommt an die Secrets also gar nicht erst heran - er scheitert beim ersten
-# GetSecretValue mit UnrecognizedClientException, was wie ein kaputter Zugang
-# aussieht und keiner ist: die Rollenübernahme davor ist es, die nicht
-# stattfindet. Wer den Schalter hier aufmachte, müsste auch die Richtlinie
-# aufmachen - und damit wäre das Zertifikat über jeden Zweig erreichbar.
+# That the boundary is the tag and not the branch is not only written here: the
+# trust policy of the gitlab-ci-code-signing-role allows
+# AssumeRoleWithWebIdentity only for sub=...ref_type:tag:ref:v*. A branch run
+# therefore never reaches the secrets at all - it dies on the first
+# GetSecretValue with UnrecognizedClientException, which looks like a broken
+# credential and is not one: it is the role assumption before it that does not
+# happen. Opening the switch here would mean opening the policy too, and the
+# certificate would then be reachable from every branch.
 #
-# Für den Probelauf mit echtem Material gibt es deshalb den Vorab-Tag: ein
-# v0.9.0-rc1 wird signiert und notarisiert wie ein Release, veröffentlicht aber
-# keins. upload und release verlangen einen Tag der Form vX.Y.Z, siehe unten.
+# For a rehearsal with real material there is the pre-release tag: a v0.9.0-rc1
+# is signed and notarised exactly like a release but publishes none. upload and
+# release demand a tag of the form vX.Y.Z, see below.
 # --------------------------------------------------------------------------- #
 sign:macos:
   stage: build
-  # Das goldene Bild bringt rcodesign, die AWS-CLI, openssl und zip mit. Der
-  # eine Job im Bestand, der ein privates Signaturmaterial anfasst, installiert
-  # währenddessen nichts nach und lädt nichts aus dem Netz – vorher waren das
-  # ein `apk add` und ein Download von github.
+  # The golden image carries rcodesign, the AWS CLI, openssl and zip. The one
+  # job in the estate that touches private signing material installs nothing
+  # while it runs and downloads nothing from the network - before, that was an
+  # `apk add` and a download from github.
   # renovate: datasource=docker depName=registry.ole-hartwig.eu/devops/images/code-signing
   image: registry.ole-hartwig.eu/devops/images/code-signing:1.0.2@sha256:cd703414647ebf03b8409966cee78d49579e12f8f8a913289ec2aad5282a909f
   tags: [az1a]
@@ -269,43 +269,42 @@ sign:macos:
   id_tokens:
     GITLAB_OIDC_TOKEN:
       aud: https://git.ole-hartwig.eu
-  # KEINE Variable in diesem Job darf mit RCODESIGN_ anfangen. rcodesign liest
-  # seine Konfiguration aus Umgebungsvariablen mit genau diesem Präfix; der Rest
-  # des Namens wird zum Konfigurationsschlüssel, und unbekannte Schlüssel weist
-  # es zurück. Ein RCODESIGN_VERSION - das hier einmal stand - lässt jeden
-  # Aufruf vor der Arbeit sterben:
+  # NO variable in this job may start with RCODESIGN_. rcodesign reads its
+  # configuration from environment variables with exactly that prefix; the rest
+  # of the name becomes a configuration key, and it rejects unknown keys. An
+  # RCODESIGN_VERSION - which stood here once - kills every invocation before it
+  # does any work:
   #   configuration file error / problem key: version
   #   problem: UnknownField("version", ["sign", "remote-sign"])
-  # `rcodesign --version` antwortet dabei weiterhin, was die Suche verschleppt.
+  # `rcodesign --version` still answers while this happens, which drags the
+  # search out.
   variables:
     AWS_DEFAULT_REGION: eu-north-1
     AWS_ROLE_ARN: arn:aws:iam::714476370938:role/gitlab-ci-code-signing-role
     AWS_WEB_IDENTITY_TOKEN_FILE: /tmp/gitlab_oidc_token
   script:
     - echo "$GITLAB_OIDC_TOKEN" > /tmp/gitlab_oidc_token
-    # Statische Schluessel wegraeumen, bevor die CLI sie sieht.
+    # Clear static keys away before the CLI sees them.
     #
-    # Von irgendwoher - nicht aus diesem Projekt und nicht aus der Gruppe
-    # development - stehen AWS_ACCESS_KEY_ID und AWS_SECRET_ACCESS_KEY in der
-    # Job-Umgebung. In der Kette der AWS-CLI kommt die Umgebung vor der
-    # Rollenuebernahme ueber OIDC: mit gesetzten Schluesseln werden AWS_ROLE_ARN
-    # und das Token nie angesehen. Die Schluessel taugen nichts (sts
-    # get-caller-identity antwortet InvalidClientTokenId), und der Job scheiterte
-    # deshalb am ersten GetSecretValue mit UnrecognizedClientException - einer
-    # Meldung, die nach kaputtem Secret klingt und nichts damit zu tun hat.
+    # From somewhere - not this project and not the development group -
+    # AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are present in the job
+    # environment. In the AWS CLI's chain the environment comes before assuming
+    # a role over OIDC: with keys set, AWS_ROLE_ARN and the token are never
+    # looked at. The keys are worthless (sts get-caller-identity answers
+    # InvalidClientTokenId), so the job died on the first GetSecretValue with
+    # UnrecognizedClientException - a message that sounds like a broken secret
+    # and has nothing to do with one.
     #
-    # Hier weg damit. Dieser Job soll ausschliesslich mit der Rolle arbeiten, die
-    # ihm der Tag verschafft; alles andere waere ein zweiter Weg an dasselbe
-    # Signaturmaterial.
+    # Gone, here. This job is to work solely with the role the tag grants it;
+    # anything else would be a second route to the same signing material.
     - unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
-    # Auf einem Tag das echte Material, sonst ein Wegwerf-Zertifikat.
+    # Real material on a tag, a throwaway certificate otherwise.
     - |
       if [ -n "$CI_COMMIT_TAG" ]; then
-        # Haelt im Protokoll fest, als wer der Job arbeitet. Nur hier drin, nicht
-        # davor: auf einem Zweig gibt es keine Rolle zu uebernehmen - die
-        # Vertrauensrichtlinie laesst nur Tags zu -, und AWS verweigert dann
-        # voellig zu Recht. Eine Kontrollzeile, die den Job umbringt, waere eine
-        # schlechte Kontrollzeile.
+        # Records in the log who the job is working as. Only inside here, not
+        # before: on a branch there is no role to assume - the trust policy
+        # allows tags only - and AWS then refuses, entirely correctly. A check
+        # that kills the job would be a poor check.
         aws sts get-caller-identity
         aws secretsmanager get-secret-value --secret-id koh-code-signing/apple-developer-id-p12 \
           --query SecretString --output text | base64 -d > /tmp/id.p12
@@ -315,57 +314,57 @@ sign:macos:
           --query SecretString --output text > /tmp/notary.json
         REAL=yes
       else
-        # Mit openssl statt `rcodesign generate-self-signed-certificate`, und
-        # zwar absichtlich: dieselbe openssl-Zeile muss auch den echten
-        # Developer-ID-Behälter erzeugen, also wird hier der Weg geprüft, auf den
-        # es ankommt. Für --for-notarization taugt ein selbst erzeugtes
-        # Zertifikat ohnehin nicht - das verlangt ein echtes Developer ID.
+        # openssl rather than `rcodesign generate-self-signed-certificate`, and
+        # deliberately so: the same openssl line has to produce the real
+        # Developer ID container too, so what is exercised here is the path that
+        # matters. A self-made certificate is no good for --for-notarization
+        # anyway - that demands a real Developer ID.
         openssl req -x509 -newkey rsa:2048 -sha256 -days 1 -nodes \
           -keyout /tmp/wegwerf.key -out /tmp/wegwerf.crt \
           -subj "/CN=s3mail CI Wegwerf/C=DE" 2>/dev/null
-        # Die drei Schalter sind nicht Zierde: rcodesign liest PKCS#12 über die
-        # Kiste `p12`, die den alten Behälter mit SHA1/3DES kennt und nicht das,
-        # was OpenSSL 3 von sich aus schreibt (PBES2 mit AES-256-CBC). `-legacy`
-        # täte dasselbe, verlangt aber den Legacy-Provider im Bild; 3DES steckt
-        # im Standard-Provider und braucht ihn nicht.
+        # The three switches are not decoration: rcodesign reads PKCS#12 through
+        # the `p12` crate, which knows the old container with SHA1/3DES and not
+        # what OpenSSL 3 writes by default (PBES2 with AES-256-CBC). `-legacy`
+        # would do the same but demands the legacy provider in the image; 3DES
+        # sits in the default provider and does not need it.
         openssl pkcs12 -export -inkey /tmp/wegwerf.key -in /tmp/wegwerf.crt \
           -keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES -macalg sha1 \
           -out /tmp/id.p12 -passout pass:wegwerf
         printf 'wegwerf' > /tmp/id.pw
         REAL=no
       fi
-    # Absoluter Pfad, nicht `cd go/dist`: GitLab fuehrt alle script-Zeilen in
-    # derselben Shell aus, ein zweites relatives cd landet also in go/dist/go/dist.
+    # An absolute path rather than `cd go/dist`: GitLab runs every script line
+    # in the same shell, so a second relative cd lands in go/dist/go/dist.
     - |
       cd "$CI_PROJECT_DIR/go/dist"
       for LABEL in macos-arm64 macos-amd64; do
         APP="s3mail-${LABEL}.app"
         if [ "$REAL" = "yes" ]; then
-          # --for-notarization macht drei Dinge auf einmal: verlangt ein echtes
-          # Developer-ID-Zertifikat, erzwingt den Zeitstempel und setzt den
-          # Hardened Runtime - ohne den lehnt Apple die Notarisierung ab.
+          # --for-notarization does three things at once: demands a real
+          # Developer ID certificate, forces the timestamp, and sets the
+          # hardened runtime - without which Apple refuses to notarise.
           rcodesign sign --p12-file /tmp/id.p12 --p12-password-file /tmp/id.pw \
             --for-notarization "$APP"
           rcodesign notary-submit --api-key-file /tmp/notary.json --staple "$APP"
         else
-          # Ein selbst erzeugtes Zertifikat ist kein Developer ID, also geht
-          # --for-notarization nicht. Der Hardened Runtime wird trotzdem gesetzt,
-          # damit dieselbe Struktur entsteht wie im Ernstfall.
+          # A self-made certificate is not a Developer ID, so
+          # --for-notarization is out. The hardened runtime is set anyway, so
+          # the same structure comes out as in the real case.
           rcodesign sign --p12-file /tmp/id.p12 --p12-password-file /tmp/id.pw \
             --code-signature-flags runtime "$APP"
         fi
-        # Gezippt wird hier mit `zip` und nicht mit tools/zip.go: das Signaturbild
-        # führt kein Go, und eine Toolchain dafür nachzuinstallieren wäre genau
-        # das, wogegen das Bild gebaut wurde. Damit gibt es zwei Zipper im
-        # Projekt - deshalb prüft der Schritt darunter die Eigenschaft, um die es
-        # überhaupt geht, statt sich auf das Werkzeug zu verlassen.
+        # Zipped here with `zip` and not with tools/zip.go: the signing image
+        # carries no Go, and installing a toolchain for it would be exactly what
+        # the image was built against. That leaves two zippers in the project -
+        # which is why the step below checks the property that actually matters
+        # instead of trusting the tool.
         mv "$APP" s3mail.app
         zip -q -r -y "s3mail-${LABEL}.zip" s3mail.app
         rm -rf s3mail.app
         sha256sum "s3mail-${LABEL}.zip" > "s3mail-${LABEL}.zip.sha256"
       done
-    # Ein Paket, dessen Ausführungsbit den Weg nicht übersteht, startet auf dem
-    # Zielrechner nicht - und das merkt man erst dort. Also hier nachsehen.
+    # A package whose execute bit does not survive the journey will not start
+    # on the target machine - and that is only noticed there. So check here.
     - |
       cd "$CI_PROJECT_DIR/go/dist"
       for LABEL in macos-arm64 macos-amd64; do
@@ -384,15 +383,15 @@ sign:macos:
     expire_in: 1 month
 
 # --------------------------------------------------------------------------- #
-# Ein Manifest über alle Pakete, damit sich prüfen lässt, was man geladen hat
+# One manifest over all packages, so that what was downloaded can be checked
 #
-# Je Paket liegt schon eine .sha256 daneben. Die beantwortet "ist die Datei heil
-# angekommen" und nicht "kommt sie von uns": wer das Paket austauscht, tauscht
-# die Prüfsumme daneben mit aus. Erst die Signatur über das Manifest macht aus
-# der Prüfsumme eine Aussage - und zwar eine über alle vier Pakete auf einmal.
+# Every package already has a .sha256 beside it. That answers "did the file
+# arrive intact" and not "does it come from us": whoever swaps the package swaps
+# the checksum beside it too. Only the signature over the manifest turns the
+# checksum into a statement - and one about all four packages at once.
 #
-# macOS ist zusätzlich notarisiert; das Manifest ist der Weg für Windows und
-# Linux, wo es keine Signatur im Paket gibt.
+# macOS is notarised on top of that; the manifest is the route for Windows and
+# Linux, where there is no signature inside the package.
 # --------------------------------------------------------------------------- #
 manifest:
   stage: release
@@ -405,7 +404,7 @@ manifest:
   rules:
     - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
   script:
-    # Sortiert, damit zwei Läufe desselben Standes dasselbe Manifest ergeben.
+    # Sorted, so two runs of the same state produce the same manifest.
     - cd go/dist && sha256sum *.zip | sort -k2 > "$CI_PROJECT_DIR/SHA256SUMS"
     - cat "$CI_PROJECT_DIR/SHA256SUMS"
   artifacts:
@@ -417,42 +416,43 @@ upload:
   stage: release
   image: ${CURL_IMAGE}
   before_script: []
-  # Ausdrücklich benannt, damit die macOS-Pakete aus sign:macos kommen und nicht
-  # aus den Build-Jobs: die liefern seit der Signatur nur noch das nackte Bundle.
+  # Named explicitly, so the macOS packages come from sign:macos and not from
+  # the build jobs: since signing was added, those only produce the bare bundle.
   needs:
     - build:linux-amd64
     - build:windows-amd64
     - sign:macos
     - manifest
-    # Der Jobname der Komponente ist sign:artifact:<Datei> und nicht
-    # sign-artifact. Mit dem falschen Namen zieht GitLab das Artefakt nicht,
-    # der Job laeuft trotzdem gruen, und am Ende verlinkt die Release-Seite
-    # eine Signatur, die nirgends liegt. optional bleibt es, weil die Komponente
-    # den Job nur dort anlegt, wo Signieren ueberhaupt moeglich ist.
+    # The component's job name is sign:artifact:<file> and not sign-artifact.
+    # With the wrong name GitLab does not pull the artefact, the job still runs
+    # green, and the release page ends up linking a signature that is nowhere.
+    # It stays optional because the component only creates the job where signing
+    # is possible at all.
     - job: sign:artifact:SHA256SUMS
       optional: true
-  # Nur vollständige Versions-Tags veröffentlichen. Ein Vorab-Tag wie v0.9.0-rc1
-  # durchläuft damit Bauen und Signieren vollständig - mit echtem Zertifikat,
-  # denn IAM erlaubt jedes v* -, legt aber kein Paket ab und erzeugt kein
-  # Release. Das ist der Weg, den Signaturpfad zu prüfen, ohne dass jemand das
-  # Ergebnis herunterladen kann.
+  # Publish only complete version tags. A pre-release tag such as v0.9.0-rc1
+  # therefore goes through building and signing in full - with the real
+  # certificate, since IAM allows any v* - but stores no package and creates no
+  # release. That is how the signing path gets exercised without anybody being
+  # able to download the result.
   rules:
     - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
   script:
-    # Paketversion ist der Tag, wie er ist - dieselbe Zeichenkette, die unten in
-    # den Asset-Links steht. Ein hier abgeschnittenes "v" haette Links erzeugt,
-    # die ins Leere zeigen.
-    # Manifest und Signatur liegen im Projektverzeichnis, nicht in go/dist - sie
-    # gehören zum Release und nicht zu einem Bauziel.
+    # The package version is the tag as it stands - the same string that appears
+    # in the asset links below. Stripping the "v" here would have produced links
+    # pointing nowhere.
     #
-    # Das Manifest MUSS da sein; fehlt es, ist etwas grundsätzlich schief, und
-    # der Job soll das sagen statt still ein Release ohne Prüfsummen zu bauen.
+    # Manifest and signature live in the project directory, not in go/dist: they
+    # belong to the release and not to a build target.
+    #
+    # The manifest MUST be there; if it is missing something is fundamentally
+    # wrong, and the job should say so instead of quietly building a release
+    # with no checksums.
     - cp "$CI_PROJECT_DIR/SHA256SUMS" go/dist/
-    # Die Signatur darf fehlen - die Komponente legt ihren Job nur dort an, wo
-    # Signieren möglich ist. Ob sie da war, entscheidet unten, ob die
-    # Release-Seite einen Link darauf bekommt: ein Link auf eine Signatur, die
-    # nirgends liegt, ist schlimmer als kein Link. Genau das ist bei v1.0.0
-    # passiert.
+    # The signature may be absent - the component only creates its job where
+    # signing is possible. Whether it was there decides below whether the
+    # release page gets a link to it: a link to a signature that is nowhere is
+    # worse than no link. That is exactly what happened at v1.0.0.
     - |
       if cp "$CI_PROJECT_DIR/SHA256SUMS.sig" go/dist/ 2>/dev/null; then
         echo "SIGNIERT=ja" > "$CI_PROJECT_DIR/release.env"
@@ -472,43 +472,44 @@ upload:
       done
   artifacts:
     reports:
-      # Sagt dem release-Job, ob es eine Signatur zu verlinken gibt.
+      # Tells the release job whether there is a signature to link.
       dotenv: release.env
 
 release:
   stage: release
-  # Kein release-cli: dessen Image liegt in registry.gitlab.com, und die Runner
-  # erreichen den Host nicht – sie sind IPv6-only, die Registry ist IPv4-only.
-  # Genau dafür gibt es devops/ci-mirrors, aber ein weiteres Image dort zu
-  # spiegeln wäre der Umweg: die Releases-API tut dasselbe, und curl ist schon da.
+  # No release-cli: its image sits in registry.gitlab.com and the runners cannot
+  # reach that host - they are IPv6-only, the registry is IPv4-only.
+  # devops/ci-mirrors exists for exactly this, but mirroring another image there
+  # would be the detour: the releases API does the same thing, and curl is
+  # already here.
   image: ${CURL_IMAGE}
   before_script: []
   needs: [upload]
-  # Dieselbe Schranke wie bei upload: Vorab-Tags erzeugen kein Release.
+  # The same barrier as upload: pre-release tags produce no release.
   rules:
     - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
   script:
-    # Die Tag-Nachricht wird zur Release-Notiz.
+    # The tag message becomes the release note.
     #
-    # Frueher wurde das JSON von Hand zusammengesetzt und die Nachricht mit awk
-    # und sed hineinescaped. Das ist am 2026-08-26 bei v1.2.0 gescheitert -
-    # "Invalid JSON format", nachdem alles andere durchgelaufen war. Lokal baute
-    # dasselbe Skript ein gueltiges Dokument; hier laeuft es im curl-Bild mit
-    # busybox-awk und busybox-sed, deren Regex-Maschinen anders arbeiten.
+    # This used to assemble the JSON by hand and escape the message into it with
+    # awk and sed. That broke on 2026-08-26 at v1.2.0 - "Invalid JSON format",
+    # after everything else had already passed. Locally the same script produced
+    # a valid document; here it runs in the curl image with busybox-awk and
+    # busybox-sed, whose regex engines behave differently.
     #
-    # Statt das eine Zeichen zu suchen, ist die Fehlerklasse weg: die
-    # Releases-API nimmt auch formularkodierte Daten, und --data-urlencode
-    # laesst curl kodieren. Die Notiz kommt mit name@datei direkt aus einer
-    # Datei - keine Anfuehrungszeichen, keine Backslashes, keine Zeilenumbrueche,
-    # die jemand von Hand in \n verwandeln muss.
+    # Rather than hunt for the one character, the whole class of fault is gone:
+    # the releases API also accepts form-encoded data, and --data-urlencode lets
+    # curl do the encoding. The note comes straight from a file with name@file -
+    # no quotes, no backslashes, no newlines anybody has to turn into \n by
+    # hand.
     - |
-      # Der Signaturblock gehoert nicht auf eine Release-Seite. Bei einem
-      # signierten Tag liefert GitLab ihn als Teil der Nachricht mit, und er
-      # stuende sonst mitten in der Notiz.
+      # The signature block does not belong on a release page. For a signed tag
+      # GitLab delivers it as part of the message, and it would otherwise sit in
+      # the middle of the note.
       printf '%s\n' "${CI_COMMIT_TAG_MESSAGE:-}" \
         | sed '/-----BEGIN SSH SIGNATURE-----/,$d' > /tmp/notiz.md
-      # Der feste Teil, in einem zitierten Heredoc: darin wird nichts ersetzt,
-      # Backticks bleiben Backticks.
+      # The fixed part, in a quoted heredoc: nothing is substituted inside it,
+      # backticks stay backticks.
       cat >> /tmp/notiz.md <<'FUSS'
 
       ---
@@ -523,8 +524,8 @@ release:
       FUSS
       printf '\nGebaut aus %s.\n' "${CI_COMMIT_SHA}" >> /tmp/notiz.md
     - |
-      # Die Argumente sammeln, damit der signierte Anhang nur dann dazukommt,
-      # wenn er auch hochgeladen wurde - siehe upload.
+      # Collect the arguments, so the signed attachment is only added when it
+      # was actually uploaded - see upload.
       set -- \
         --data-urlencode "name=s3mail ${CI_COMMIT_TAG}" \
         --data-urlencode "tag_name=${CI_COMMIT_TAG}" \
