@@ -36,7 +36,7 @@ include:
   # See .gitlab/release-footer.md and its script.
   #
   # renovate: datasource=gitlab-tags depName=devops/ci-cd-components/release-tools
-  - component: ${CI_SERVER_HOST}/devops/ci-cd-components/release-tools/semantic-release@1.17.54
+  - component: ${CI_SERVER_HOST}/devops/ci-cd-components/release-tools/semantic-release@1.17.56
     inputs:
       stage: release
       config-preset: '@moselwal/semantic-release-config'
@@ -61,7 +61,7 @@ include:
   # pipeline being created at all.
   #
   # renovate: datasource=gitlab-tags depName=devops/ci-cd-components/composed-default-pipelines
-  - component: ${CI_SERVER_HOST}/devops/ci-cd-components/composed-default-pipelines/go@1.60.1
+  - component: ${CI_SERVER_HOST}/devops/ci-cd-components/composed-default-pipelines/go@1.62.4
     inputs:
       working-directory: go
       # No `test-args`: test:go is overridden below to keep this repository's
@@ -78,7 +78,7 @@ include:
   # A full tag rather than ~latest or @2: build-provenance is not a catalogue
   # project, and GitLab only resolves a complete tag there. Renovate keeps it up.
   # renovate: datasource=gitlab-tags depName=devops/ci-cd-components/build-provenance
-  - component: ${CI_SERVER_HOST}/devops/ci-cd-components/build-provenance/sign-artifact@2.0.54
+  - component: ${CI_SERVER_HOST}/devops/ci-cd-components/build-provenance/sign-artifact@2.0.93
     inputs:
       stage: release
       artifact-file: SHA256SUMS
