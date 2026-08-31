@@ -17,6 +17,40 @@
 # remains written out below is only what this repository actually ships.
 
 include:
+  # Cutting the tag is a mechanism, not a memory. Before this, nothing here
+  # created one: the release jobs below are gated on $CI_COMMIT_TAG and somebody
+  # had to push that tag by hand. On 2026-08-31 that had left 25 commits
+  # unreleased since v1.3.2 - among them three `feat:`, a CloudFormation
+  # template and the demo mailbox, waiting three days without anybody deciding
+  # they should wait. Exactly the shape of gap that also kept ios unbuilt.
+  #
+  # tag-format, because the shared preset defaults to a bare `${version}` while
+  # this repository has always used v-prefixed tags - and the release jobs match
+  # on /^v[0-9]+\.[0-9]+\.[0-9]+$/. Without the override the first automatic tag
+  # would be `1.4.0`, no release pipeline would fire, and it would look like
+  # nothing happened.
+  #
+  # additional-script-end puts the install notes back onto the release page.
+  # The preset publishes the release itself with the generated changelog as its
+  # description, which is right but says nothing about how to open the thing.
+  # See .gitlab/release-footer.md and its script.
+  #
+  # renovate: datasource=gitlab-tags depName=devops/ci-cd-components/release-tools
+  - component: ${CI_SERVER_HOST}/devops/ci-cd-components/release-tools/semantic-release@1.17.54
+    inputs:
+      stage: release
+      config-preset: '@moselwal/semantic-release-config'
+      config-preset-group-id: "175"
+      config-preset-scope: moselwal
+      tag-format: 'v${version}'
+      additional-script-end: |
+        TAG="$(git tag --points-at HEAD | head -1)"
+        if [ -z "$TAG" ]; then
+          echo "Kein Tag auf HEAD - semantic-release hat nichts geschnitten."
+        else
+          TAG="$TAG" node .gitlab/release-footer.mjs
+        fi
+
   # The estate's Go pipeline: gofmt, vet, tests and the automated review, plus
   # the language-neutral hygiene every repository here gets. Only what this
   # repository actually ships -- four platforms, notarisation, the release --
@@ -489,69 +523,42 @@ release:
   rules:
     - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
   script:
-    # The tag message becomes the release note.
+    # The release page already exists: semantic-release created it when it cut
+    # the tag, with the generated changelog as its description and the install
+    # notes appended on top. What is missing at that moment are the packages,
+    # because they are built by the tag pipeline this job belongs to - so this
+    # job adds the links and nothing else.
     #
-    # This used to assemble the JSON by hand and escape the message into it with
-    # awk and sed. That broke on 2026-08-26 at v1.2.0 - "Invalid JSON format",
-    # after everything else had already passed. Locally the same script produced
-    # a valid document; here it runs in the curl image with busybox-awk and
-    # busybox-sed, whose regex engines behave differently.
+    # It used to POST the whole release. That now returns 409, and hiding the
+    # conflict would be worse than the duplicate: two paths writing one release
+    # page is how v1.0.0 ended up linking a signature that was nowhere.
     #
-    # Rather than hunt for the one character, the whole class of fault is gone:
-    # the releases API also accepts form-encoded data, and --data-urlencode lets
-    # curl do the encoding. The note comes straight from a file with name@file -
-    # no quotes, no backslashes, no newlines anybody has to turn into \n by
-    # hand.
+    # Form-encoded, one call per link, and still no JSON assembled by hand. The
+    # curl image carries curl and ca-certificates and nothing else - no jq -
+    # which is the same constraint that shaped the old job.
     - |
-      # The signature block does not belong on a release page. For a signed tag
-      # GitLab delivers it as part of the message, and it would otherwise sit in
-      # the middle of the note.
-      printf '%s\n' "${CI_COMMIT_TAG_MESSAGE:-}" \
-        | sed '/-----BEGIN SSH SIGNATURE-----/,$d' > /tmp/notiz.md
-      # The fixed part, in a quoted heredoc: nothing is substituted inside it,
-      # backticks stay backticks.
-      cat >> /tmp/notiz.md <<'FUSS'
-
-      ---
-
-      **macOS:** ZIP entpacken, `s3mail.app` doppelklicken. Die Pakete sind mit einer Developer ID signiert und bei Apple notarisiert - kein `xattr`, kein Rechtsklick, keine Warnung.
-
-      **Windows und Linux:** ZIP entpacken und `s3mail` ausfuehren. Unter Windows meldet sich SmartScreen mit *Weitere Informationen -> Trotzdem ausfuehren* - dort ist nicht signiert.
-
-      Das Fenster geht von selbst auf. Die Adresse traegt ein Token, **ohne das der Server nicht antwortet**; sie steht im Terminal und in `adresse.txt` im Konfigurationsverzeichnis, falls das Fenster zugeht.
-
-      Zu jedem Paket liegt eine `.sha256`-Datei daneben.
-      FUSS
-      printf '\nGebaut aus %s.\n' "${CI_COMMIT_SHA}" >> /tmp/notiz.md
-    - |
-      # Collect the arguments, so the signed attachment is only added when it
-      # was actually uploaded - see upload.
-      set -- \
-        --data-urlencode "name=s3mail ${CI_COMMIT_TAG}" \
-        --data-urlencode "tag_name=${CI_COMMIT_TAG}" \
-        --data-urlencode "description@/tmp/notiz.md"
+      verlinke() {
+        curl --fail-with-body --silent --show-error \
+          --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
+          --data-urlencode "name=$1" \
+          --data-urlencode "url=${PACKAGE_URL}/${CI_COMMIT_TAG}/$1" \
+          --data-urlencode "link_type=$2" \
+          "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases/${CI_COMMIT_TAG}/assets/links"
+        echo
+      }
       for datei in s3mail-windows-amd64.zip:package \
                    s3mail-macos-arm64.zip:package \
                    s3mail-macos-amd64.zip:package \
                    s3mail-linux-amd64.zip:package \
                    SHA256SUMS:other; do
-        name=${datei%:*}; art=${datei#*:}
-        set -- "$@" \
-          --data-urlencode "assets[links][][name]=${name}" \
-          --data-urlencode "assets[links][][url]=${PACKAGE_URL}/${CI_COMMIT_TAG}/${name}" \
-          --data-urlencode "assets[links][][link_type]=${art}"
+        verlinke "${datei%:*}" "${datei#*:}"
       done
+      # The signature only gets a link when it was actually uploaded - see
+      # upload. A link to a signature that is nowhere is worse than no link;
+      # that is what went wrong at v1.0.0.
       if [ "${SIGNIERT:-nein}" = "ja" ]; then
-        set -- "$@" \
-          --data-urlencode "assets[links][][name]=SHA256SUMS.sig" \
-          --data-urlencode "assets[links][][url]=${PACKAGE_URL}/${CI_COMMIT_TAG}/SHA256SUMS.sig" \
-          --data-urlencode "assets[links][][link_type]=other"
+        verlinke SHA256SUMS.sig other
       fi
-      curl --fail-with-body --silent --show-error \
-        --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
-        "$@" \
-        "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases"
-      echo
 
 # --------------------------------------------------------------------------- #
 # Build the consumer when the core changes
