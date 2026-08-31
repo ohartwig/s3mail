@@ -291,7 +291,7 @@ type MoveResult struct {
 	Key     string `json:"key"`
 	NewKey  string `json:"new_key"`
 	Folder  string `json:"folder"`
-	Skipped bool   `json:"skipped,omitempty"`
+	Skipped bool   `json:"skipped,omitzero"`
 	// Err is set when this one message could not be moved. The others were
 	// still moved: a bulk action that reports one failure as total failure
 	// leaves somebody guessing which half happened.

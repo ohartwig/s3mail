@@ -35,7 +35,7 @@ type Unsubscribe struct {
 	Link string `json:"link,omitempty"`
 	// OneClick says the sender offers RFC 8058. Recorded so the interface can
 	// stay honest about what it is not doing, not because it is used.
-	OneClick bool `json:"one_click,omitempty"`
+	OneClick bool `json:"one_click,omitzero"`
 }
 
 func (u Unsubscribe) Any() bool { return u.Mail != "" || u.Link != "" }
