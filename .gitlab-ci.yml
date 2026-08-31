@@ -59,11 +59,23 @@ include:
         - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
 
 
+# MUST stay a superset of the composed template's stages. A consumer's list
+# REPLACES the composed one, so `quick` and `test` are not decoration here --
+# they belong to go@1.60.1, and `build` and `release` are this repository's own.
+#
+# The trap is that adding a stage to the template is a change over there that
+# breaks the pipeline over here, and it breaks it in the worst way: no YAML
+# error, no jobs, and a pipeline that counts as failed the instant it is
+# requested ("chosen stage X does not exist"). The estate has been bitten by
+# exactly this three times, which is why every template repeats the warning.
+#
+# So: when the pin above moves, read the template's `stages:` before merging.
+# Nothing checks this automatically.
 stages:
-  - quick
-  - test
-  - build
-  - release
+  - quick     # go@1.60.1
+  - test      # go@1.60.1
+  - build     # ours
+  - release   # ours
 
 
 variables:
