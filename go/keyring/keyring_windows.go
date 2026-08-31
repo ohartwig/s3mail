@@ -45,9 +45,14 @@ func newBlob(b []byte) dataBlob {
 	return dataBlob{cbData: uint32(len(b)), pbData: &b[0]}
 }
 
+// DPAPI is a Win32 API, and Go reaches a Win32 API through syscall: every
+// argument crosses as a uintptr, and building one means unsafe.Pointer. There
+// is no version of this file without it, which is why the findings below are
+// silenced individually rather than the rule switched off - a real unsafe block
+// somewhere else should still be caught.
 func (b dataBlob) bytes() []byte {
 	out := make([]byte, b.cbData)
-	copy(out, unsafe.Slice(b.pbData, b.cbData))
+	copy(out, unsafe.Slice(b.pbData, b.cbData)) //nosemgrep: go.lang.security.audit.unsafe.use-of-unsafe-block
 	return out
 }
 
@@ -62,26 +67,26 @@ func load() ([]byte, error) {
 		return nil, ErrUnavailable
 	}
 	in, out := newBlob(blob), dataBlob{}
-	ok, _, _ := procUnprotectData.Call(uintptr(unsafe.Pointer(&in)), 0, 0, 0, 0,
-		cryptUIForbidFlags, uintptr(unsafe.Pointer(&out)))
+	ok, _, _ := procUnprotectData.Call(uintptr(unsafe.Pointer(&in)), 0, 0, 0, 0, //nosemgrep: go.lang.security.audit.unsafe.use-of-unsafe-block
+		cryptUIForbidFlags, uintptr(unsafe.Pointer(&out))) //nosemgrep: go.lang.security.audit.unsafe.use-of-unsafe-block
 	if ok == 0 {
 		// The file is there but cannot be decrypted: another user, another
 		// machine, or a restored backup. Not an error to work around - the key
 		// is gone, and a new one means a new cache.
 		return nil, errNotFound
 	}
-	defer procLocalFree.Call(uintptr(unsafe.Pointer(out.pbData)))
+	defer procLocalFree.Call(uintptr(unsafe.Pointer(out.pbData))) //nosemgrep: go.lang.security.audit.unsafe.use-of-unsafe-block
 	return out.bytes(), nil
 }
 
 func store(key []byte) error {
 	in, out := newBlob(key), dataBlob{}
-	ok, _, _ := procProtectData.Call(uintptr(unsafe.Pointer(&in)), 0, 0, 0, 0,
-		cryptUIForbidFlags, uintptr(unsafe.Pointer(&out)))
+	ok, _, _ := procProtectData.Call(uintptr(unsafe.Pointer(&in)), 0, 0, 0, 0, //nosemgrep: go.lang.security.audit.unsafe.use-of-unsafe-block
+		cryptUIForbidFlags, uintptr(unsafe.Pointer(&out))) //nosemgrep: go.lang.security.audit.unsafe.use-of-unsafe-block
 	if ok == 0 {
 		return ErrUnavailable
 	}
-	defer procLocalFree.Call(uintptr(unsafe.Pointer(out.pbData)))
+	defer procLocalFree.Call(uintptr(unsafe.Pointer(out.pbData))) //nosemgrep: go.lang.security.audit.unsafe.use-of-unsafe-block
 	if err := os.MkdirAll(config.Dir(), 0o700); err != nil {
 		return ErrUnavailable
 	}
