@@ -292,7 +292,16 @@ func (s *Server) translate(w http.ResponseWriter, r *http.Request, err error) {
 // is what makes the download links for attachments and .eml work without a token
 // of their own.
 func (s *Server) writePage(w http.ResponseWriter, content string) {
-	http.SetCookie(w, &http.Cookie{Name: "s3mail", Value: s.Token, Path: "/",
+	// No Secure flag, and that is not an oversight: this server binds 127.0.0.1
+	// over plain HTTP and has no TLS to offer. Secure would tell the browser to
+	// withhold the cookie on exactly the one transport there is - and the token
+	// in it is what makes the download links work at all.
+	//
+	// What protects the cookie instead is written down in zugangPruefen: the
+	// host check against DNS rebinding, the origin check against CSRF, and the
+	// token itself against another reader on the same machine. SameSite=Strict
+	// keeps it off cross-site requests.
+	http.SetCookie(w, &http.Cookie{Name: "s3mail", Value: s.Token, Path: "/", // nosemgrep: go.lang.security.audit.net.cookie-missing-secure.cookie-missing-secure
 		HttpOnly: true, SameSite: http.SameSiteStrictMode})
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = w.Write([]byte(content))
@@ -405,7 +414,9 @@ func (s *Server) routes() {
 	// data. A form post would need the token in a hidden field on every page.
 	s.mux.HandleFunc("GET /language/{code}", func(w http.ResponseWriter, r *http.Request) {
 		code := i18n.Get(r.PathValue("code")).Code
-		http.SetCookie(w, &http.Cookie{Name: "s3mail_lang", Value: code, Path: "/",
+		// No Secure flag, for the reason writePage gives - and this one carries
+		// a language code, not a secret.
+		http.SetCookie(w, &http.Cookie{Name: "s3mail_lang", Value: code, Path: "/", // nosemgrep: go.lang.security.audit.net.cookie-missing-secure.cookie-missing-secure
 			HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: 60 * 60 * 24 * 365})
 		target := r.Header.Get("Referer")
 		if target == "" || !strings.HasPrefix(target, "http") {
