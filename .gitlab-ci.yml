@@ -107,14 +107,6 @@ default:
       # split into the more specific reasons, of which this is the one that
       # means the runner lost its dependency rather than the job failing.
       - runner_external_dependency_failure
-  before_script:
-    - cd go
-  cache:
-    key:
-      files:
-        - go/go.sum
-    paths:
-      - .go/pkg/mod
 
 # --------------------------------------------------------------------------- #
 # Test
@@ -139,6 +131,21 @@ test:go:
 .build:
   stage: build
   needs: [test:go]
+  # `cd go` and the module cache sit here, not in `default:`. In `default:` they
+  # reached the composed jobs as well, and those run at the repository root:
+  # verify:component-integrity looked for .gitlab-ci.yml inside go/ and reported
+  # it unreadable, and check:quick had trufflehog try to clone go/ as a git
+  # repository. Both went red on the first run of this pipeline for that reason
+  # alone. The component's own Go jobs bring their own `cd`, so nothing else
+  # needs this.
+  before_script:
+    - cd go
+  cache:
+    key:
+      files:
+        - go/go.sum
+    paths:
+      - .go/pkg/mod
   script:
     # -trimpath nimmt die Pfade des Baurechners aus dem Binary, damit zwei Läufe
     # dasselbe Ergebnis liefern.
