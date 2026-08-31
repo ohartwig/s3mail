@@ -311,6 +311,7 @@
   "side.filterName": "Nombre del filtro",
   "side.filterNeedsQuery": "Escribe algo en la búsqueda primero: el filtro recuerda lo que hay ahí",
   "side.folderName": "Nombre de la carpeta",
+  "side.folderTotal": "%d mensaje(s) en la carpeta",
   "side.folders": "Carpetas",
   "side.newFilter": "Guardar la búsqueda actual como filtro",
   "side.newFolder": "Carpeta nueva",

@@ -401,3 +401,35 @@ func TestPartialFetchesAreNotCached(t *testing.T) {
 		t.Error("a whole message came out of a fragment in the cache")
 	}
 }
+
+// TestTheFolderCarriesItsUnreadCount - Folders() hands out Count and Unread, and
+// since the sidebar badge shows only the second one, a wrong Unread would no
+// longer be visible next to a right Count. It was the untested half of the pair.
+func TestTheFolderCarriesItsUnreadCount(t *testing.T) {
+	ctx := t.Context()
+	_, m := buildMailbox(t)
+	if _, err := m.Refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	by := func() map[string]core.FolderInfo {
+		to := map[string]core.FolderInfo{}
+		for _, o := range m.Folders() {
+			to[o.Name] = o
+		}
+		return to
+	}
+	// Nothing read yet: a fresh mailbox has everything unread.
+	if f := by()[core.Inbox]; f.Count != 2 || f.Unread != 2 {
+		t.Errorf("fresh inbox: Count=%d Unread=%d, expected 2/2", f.Count, f.Unread)
+	}
+	if err := m.State.Mutate(ctx, core.Op{T: "flags", Mids: []string{"m1"}, Read: core.Ptr(true)}); err != nil {
+		t.Fatal(err)
+	}
+	if f := by()[core.Inbox]; f.Count != 2 || f.Unread != 1 {
+		t.Errorf("after reading m1: Count=%d Unread=%d, expected 2/1", f.Count, f.Unread)
+	}
+	// The other folder is untouched by that op.
+	if f := by()[core.Archive]; f.Unread != 1 {
+		t.Errorf("archive: Unread=%d, expected 1", f.Unread)
+	}
+}

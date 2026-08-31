@@ -311,6 +311,7 @@
   "side.filterName": "Filter name",
   "side.filterNeedsQuery": "Type something into the search first - the filter remembers what is there",
   "side.folderName": "Folder name",
+  "side.folderTotal": "%d message(s) in this folder",
   "side.folders": "Folders",
   "side.newFilter": "Save the current search as a filter",
   "side.newFolder": "New folder",

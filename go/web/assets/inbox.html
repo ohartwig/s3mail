@@ -532,9 +532,9 @@ function renderSide() {
     <div class="sec">${T["side.folders"]} <button class="ghost" id="addFolder" title="${T["side.newFolder"]}">+</button></div>
     <div id="folders">${over.folders.map(f => `
       <div class="nav${folder === f.name && !tagFilter ? " sel" : ""}${f.unread ? " unread" : ""}"
-           data-f="${esc(f.name)}">
+           data-f="${esc(f.name)}" title="${T["side.folderTotal"].replace("%d", f.count)}">
         ${ic(f.icon || "folder")}<span class="name">${esc(f.label)}</span>
-        <span class="cnt">${f.unread ? f.unread + "/" : ""}${f.count}</span>
+        <span class="cnt">${f.unread || ""}</span>
       </div>`).join("")}</div>
     <div class="side-in" id="newFolderBox" style="display:none">
       <input id="newFolderName" placeholder="${T["side.folderName"]}">
