@@ -1,0 +1,28 @@
+{
+  // markdownlint-cli2 config for this repository.
+  //
+  // Without this file the shared lint-markdown component falls back to its own
+  // default, which is `{ default: true, MD013: false, MD034: false, MD060: false }`.
+  // Those three stay switched off for the same reasons it gives; the two below
+  // are this repository's own decisions and are written down rather than left
+  // to be rediscovered.
+  "default": true,
+
+  // Line length, bare URLs, table pipe style - as the component's default.
+  "MD013": false,
+  "MD034": false,
+  "MD060": false,
+
+  // MD036 no-emphasis-as-heading. README.de.md leads its sections with bold
+  // lead-ins inside running prose ("**Lesen**", "**Sortieren**") on purpose:
+  // they are paragraph openers, not entries for the table of contents.
+  // Promoting nine of them to `###` would restructure a document that reads
+  // deliberately as prose, to satisfy a rule about structure it does not claim.
+  "MD036": false,
+
+  // MD041 first-line-heading. .gitlab/release-footer.md is a fragment appended
+  // to a release description, not a document: its first line is a horizontal
+  // rule because that is where it joins the changelog above it. A fragment
+  // cannot carry the page's h1.
+  "MD041": false
+}

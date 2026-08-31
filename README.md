@@ -116,7 +116,7 @@ s3mail's own configuration.
 `--prefix mail/` is the root. What sits directly under it is the inbox;
 subfolders are mail folders:
 
-```
+```text
 mail/                     ← the prefix from the SES receipt rule = inbox
 mail/archiv/              ← the prefix is the German word, and it is real
 mail/spam/
@@ -182,7 +182,7 @@ no network call and no API key.
 
 **Search.** Free words across From/To/Subject/preview/tags, plus filters:
 
-```
+```text
 invoice from:client@x.com subject:"Quote" after:2026-01-01 before:2026-08-01
 has:attachment has:spam is:unread is:starred tag:important in:archive
 ```

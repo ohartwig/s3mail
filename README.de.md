@@ -158,7 +158,7 @@ die IAM-Aktion dazu, die dafür nötig wäre.
 
 Beim Start schreibt s3mail eine Adresse ins Terminal, die ein **Token** enthält:
 
-```
+```text
 s3mail laeuft auf http://127.0.0.1:8765/?t=8Kd2...   (Strg+C zum Beenden)
 ```
 
@@ -256,7 +256,7 @@ keine abgelaufene Adresse liegen bleibt.
 `--prefix mail/` ist die **Wurzel**. Was direkt darunter liegt, ist der Posteingang;
 Unterordner sind Mailordner:
 
-```
+```text
 mail/                     ← Prefix aus der SES-Receipt-Rule   = Posteingang
 mail/archiv/              ← Archiv
 mail/spam/                ← Spam
@@ -438,7 +438,7 @@ Entscheidung), und alles, was eine bestehende Regel schon fängt.
 
 Freie Wörter suchen in Von/An/Betreff/Vorschau/Tags. Dazu Filter, kombinierbar:
 
-```
+```text
 rechnung from:kunde@x.de subject:"Angebot" after:2026-01-01 before:2026-08-01
 has:anhang has:spam is:ungelesen is:stern tag:wichtig in:archiv
 ```
@@ -666,7 +666,7 @@ Geschrieben wird aber nicht das ganze Dokument, sondern **die einzelne Änderung
 Jeder Schreibvorgang legt ein kleines Objekt unter `<prefix>.s3mail-state/` ab,
 auf dessen Schlüssel nur er selbst schreibt:
 
-```
+```text
 mail/.s3mail-state.json                          ← Snapshot, selten geschrieben
 mail/.s3mail-state/20260820T2131...-0001-a7f3.json   {"ops":[{"t":"flags",…}]}
 mail/.s3mail-state/20260820T2131...-0002-b1c9.json   {"ops":[{"t":"tags",…}]}

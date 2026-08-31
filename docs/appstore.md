@@ -13,12 +13,12 @@ under time pressure at the upload dialog. Character limits are Apple's.
 **Promotional text** (170, changeable without a review):
 
 > DE — Post, die Amazon SES in deinen S3-Bucket schreibt, endlich lesbar. Kein Server dazwischen, kein fremdes Postfach. Zum Ansehen ein Beispiel-Postfach ohne AWS-Konto.
-
+>
 > EN — Mail that Amazon SES writes into your S3 bucket, finally readable. No server in between, no mailbox on somebody else's machine. A sample mailbox to look at first.
 
 **Keywords** (100, comma-separated, no spaces):
 
-```
+```text
 DE  s3,ses,aws,mail,postfach,imap,bucket,selbstgehostet,datenschutz,mime,e-mail
 EN  s3,ses,aws,mail,mailbox,imap,bucket,self-hosted,privacy,mime,email,client
 ```
