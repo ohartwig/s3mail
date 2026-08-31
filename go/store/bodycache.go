@@ -4,11 +4,12 @@
 package store
 
 import (
+	"cmp"
 	"crypto/sha256"
 	"encoding/hex"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"sync"
 	"time"
 )
@@ -122,7 +123,7 @@ func (c *bodyCache) cleanup() {
 	if total <= CacheMax {
 		return
 	}
-	sort.Slice(all, func(i, j int) bool { return all[i].older < all[j].older })
+	slices.SortFunc(all, func(a, b file) int { return cmp.Compare(a.older, b.older) })
 	for _, d := range all {
 		if total <= CacheMax {
 			return

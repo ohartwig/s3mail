@@ -4,8 +4,9 @@
 package core
 
 import (
+	"cmp"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -153,6 +154,6 @@ func Search(index []Message, d *Data, query string, o SearchOpts) []Message {
 			hits = append(hits, m)
 		}
 	}
-	sort.SliceStable(hits, func(i, j int) bool { return hits[i].Date > hits[j].Date })
+	slices.SortStableFunc(hits, func(a, b Message) int { return cmp.Compare(b.Date, a.Date) })
 	return hits
 }

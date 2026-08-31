@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"testing"
 	"time"
 )
@@ -29,7 +29,7 @@ func TestAgainstPython(t *testing.T) {
 	for n := range want {
 		names = append(names, n)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 
 	for _, name := range names {
 		raw, err := os.ReadFile(filepath.Join("testdata", "corpus", name+".eml"))

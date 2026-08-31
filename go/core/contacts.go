@@ -4,7 +4,8 @@
 package core
 
 import (
-	"sort"
+	"cmp"
+	"slices"
 	"strings"
 )
 
@@ -95,14 +96,12 @@ func Addresses(msgs []Message, query string, limit int) []Contact {
 		out = append(out, Contact{Addr: addr, Name: a.name, Count: a.count, Last: a.last})
 	}
 
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Count != out[j].Count {
-			return out[i].Count > out[j].Count
-		}
-		if out[i].Last != out[j].Last {
-			return out[i].Last > out[j].Last
-		}
-		return out[i].Addr < out[j].Addr
+	slices.SortFunc(out, func(a, b Contact) int {
+		return cmp.Or(
+			cmp.Compare(b.Count, a.Count),
+			cmp.Compare(b.Last, a.Last),
+			cmp.Compare(a.Addr, b.Addr),
+		)
 	})
 	if len(out) > limit {
 		out = out[:limit]

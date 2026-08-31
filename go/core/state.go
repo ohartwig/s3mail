@@ -7,7 +7,10 @@
 // to one against the Python version.
 package core
 
-import "sort"
+import (
+	"maps"
+	"slices"
+)
 
 // TagColors are handed out in order as new tags appear.
 var TagColors = []string{
@@ -269,12 +272,7 @@ func MergeMissing(base, other *Data) *Data {
 
 // TagNames returns the tags in a stable order - Go maps have none.
 func (d *Data) TagNamen() []string {
-	out := make([]string, 0, len(d.Tags))
-	for t := range d.Tags {
-		out = append(out, t)
-	}
-	sort.Strings(out)
-	return out
+	return slices.Sorted(maps.Keys(d.Tags))
 }
 
 func contains(list []string, s string) bool {

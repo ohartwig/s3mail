@@ -7,9 +7,10 @@
 package s3fake
 
 import (
+	"cmp"
 	"context"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -69,7 +70,7 @@ func (f *Fake) List(_ context.Context, _, prefix string) ([]store.ObjectInfo, er
 				LastModified: f.modified(k)})
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
+	slices.SortFunc(out, func(a, b store.ObjectInfo) int { return cmp.Compare(a.Key, b.Key) })
 	return out, nil
 }
 
@@ -178,7 +179,7 @@ func (f *Fake) Keys(prefix string) []string {
 			out = append(out, k)
 		}
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 

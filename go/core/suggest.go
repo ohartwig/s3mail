@@ -4,7 +4,8 @@
 package core
 
 import (
-	"sort"
+	"cmp"
+	"slices"
 	"strings"
 )
 
@@ -100,20 +101,18 @@ func Suggest(msgs []Message, existing []Rule) []Suggestion {
 				s.Tags = append(s.Tags, tag)
 			}
 		}
-		sort.Strings(s.Tags)
+		slices.Sort(s.Tags)
 		out = append(out, s)
 	}
 
 	// The best evidence first: how many messages agree, then how many there
 	// were. Stable by sender so the list does not reshuffle between two calls.
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Agree != out[j].Agree {
-			return out[i].Agree > out[j].Agree
-		}
-		if out[i].Count != out[j].Count {
-			return out[i].Count > out[j].Count
-		}
-		return out[i].Contains < out[j].Contains
+	slices.SortFunc(out, func(a, b Suggestion) int {
+		return cmp.Or(
+			cmp.Compare(b.Agree, a.Agree),
+			cmp.Compare(b.Count, a.Count),
+			cmp.Compare(a.Contains, b.Contains),
+		)
 	})
 	return out
 }

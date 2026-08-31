@@ -4,6 +4,7 @@
 package store
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -11,7 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -95,7 +96,7 @@ func (m *Mailbox) Index() []core.Message {
 	for _, v := range m.index {
 		out = append(out, v)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
+	slices.SortFunc(out, func(a, b core.Message) int { return cmp.Compare(a.Key, b.Key) })
 	return out
 }
 
@@ -210,7 +211,7 @@ func (m *Mailbox) Refresh(ctx context.Context) (RefreshResult, error) {
 		}
 	}
 	m.mu.Unlock()
-	sort.Slice(todo, func(i, j int) bool { return todo[i].Key < todo[j].Key })
+	slices.SortFunc(todo, func(a, b ObjectInfo) int { return cmp.Compare(a.Key, b.Key) })
 
 	sem := make(chan struct{}, m.Workers)
 	var wg sync.WaitGroup

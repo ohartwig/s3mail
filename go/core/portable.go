@@ -3,7 +3,7 @@
 
 package core
 
-import "sort"
+import "slices"
 
 // Rules and tags as a file, so that a second mailbox does not start empty.
 //
@@ -72,7 +72,7 @@ func Merge(d *Data, in Portable) (rules []Rule, tags []string, rep ImportReport)
 		}
 		tags = append(tags, name)
 	}
-	sort.Strings(tags)
+	slices.Sort(tags)
 	rep.TagsAdded = tags
 	return rules, tags, rep
 }
@@ -85,7 +85,7 @@ func ruleKey(r Rule) string {
 		folder = *r.Folder
 	}
 	tags := append([]string{}, r.Tags...)
-	sort.Strings(tags)
+	slices.Sort(tags)
 	key := r.Field + "\x00" + r.Contains + "\x00" + folder
 	for _, t := range tags {
 		key += "\x00" + t

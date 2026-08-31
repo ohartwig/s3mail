@@ -13,11 +13,13 @@
 package i18n
 
 import (
+	"cmp"
 	"embed"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -107,12 +109,9 @@ func Get(code string) Catalog {
 
 // Available lists the shipped languages, for the picker in the interface.
 func Available() []Catalog {
-	out := make([]Catalog, 0, len(catalogs))
-	for _, c := range catalogs {
-		out = append(out, c)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Code < out[j].Code })
-	return out
+	return slices.SortedFunc(maps.Values(catalogs), func(a, b Catalog) int {
+		return cmp.Compare(a.Code, b.Code)
+	})
 }
 
 // FromHeader picks a language from an Accept-Language header.
@@ -146,7 +145,7 @@ func FromHeader(header string) string {
 		wishes = append(wishes, wish{code, q})
 	}
 
-	sort.SliceStable(wishes, func(i, j int) bool { return wishes[i].q > wishes[j].q })
+	slices.SortStableFunc(wishes, func(a, b wish) int { return cmp.Compare(b.q, a.q) })
 	for _, w := range wishes {
 		if _, ok := catalogs[w.code]; ok {
 			return w.code

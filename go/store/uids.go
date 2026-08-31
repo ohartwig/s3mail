@@ -4,8 +4,10 @@
 package store
 
 import (
+	"cmp"
 	"context"
-	"sort"
+	"maps"
+	"slices"
 
 	"git.ole-hartwig.eu/development/s3mail/s3mail/core"
 )
@@ -67,11 +69,8 @@ func (m *Mailbox) assignUIDs(ctx context.Context, only *string) error {
 	}
 	m.mu.RUnlock()
 
-	folders := make([]string, 0, len(byFolder))
-	for name := range byFolder {
-		folders = append(folders, name)
-	}
-	sort.Strings(folders) // stable order, so two machines write the same ops
+	// Stable order, so two machines write the same ops.
+	folders := slices.Sorted(maps.Keys(byFolder))
 
 	var ops []core.Op
 	d := m.State.Data()
@@ -81,11 +80,11 @@ func (m *Mailbox) assignUIDs(ctx context.Context, only *string) error {
 		// comes from LastModified and is RFC 3339 in UTC, so string order is
 		// time order; the key breaks a tie, and it does so the same way on
 		// every machine.
-		sort.Slice(msgs, func(i, j int) bool {
-			if msgs[i].Date != msgs[j].Date {
-				return msgs[i].Date < msgs[j].Date
-			}
-			return msgs[i].Key < msgs[j].Key
+		slices.SortFunc(msgs, func(a, b core.Message) int {
+			return cmp.Or(
+				cmp.Compare(a.Date, b.Date),
+				cmp.Compare(a.Key, b.Key),
+			)
 		})
 		mids := make([]string, 0, len(msgs))
 		for _, msg := range msgs {

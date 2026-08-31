@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -189,7 +189,7 @@ func Folders(index []Message, d *Data) []FolderInfo {
 			own = append(own, name)
 		}
 	}
-	sort.Strings(own)
+	slices.Sort(own)
 	for _, name := range own {
 		c := counts[name]
 		out = append(out, FolderInfo{name, name, "\U0001F4C1", false, c.count, c.unread})

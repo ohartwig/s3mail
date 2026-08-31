@@ -12,7 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -101,7 +101,7 @@ func (s *s3Server) handleList(w http.ResponseWriter, r *http.Request) {
 			keys = append(keys, k)
 		}
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	if tok := r.URL.Query().Get("continuation-token"); tok != "" {
 		for i, k := range keys {
 			if k == tok {
@@ -439,7 +439,7 @@ func key(s *s3Server) []string {
 	for k := range s.objs {
 		out = append(out, k)
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 
