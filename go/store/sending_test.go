@@ -4,7 +4,6 @@
 package store_test
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -25,14 +24,14 @@ const draftRaw = "From: post@firma.de\r\nTo: kunde@x.de\r\n" +
 func mailboxFor(t *testing.T) (*s3fake.Fake, *store.Mailbox) {
 	t.Helper()
 	f := s3fake.New()
-	mb := store.NewMailbox(context.Background(), f, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, true)
+	mb := store.NewMailbox(t.Context(), f, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, true)
 	return f, mb
 }
 
 // storeDraft puts a draft into the bucket the way the compose dialog does.
 func storeDraft(t *testing.T, mb *store.Mailbox) string {
 	t.Helper()
-	key, err := mb.Put(context.Background(), core.Drafts, "<r7@firma.de>", []byte(draftRaw))
+	key, err := mb.Put(t.Context(), core.Drafts, "<r7@firma.de>", []byte(draftRaw))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +54,7 @@ func keysContaining(f *s3fake.Fake, part string) []string {
 }
 
 func TestMarkerSitsNextToTheDraft(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f, mb := mailboxFor(t)
 	draft := storeDraft(t, mb)
 
@@ -78,7 +77,7 @@ func TestMarkerSitsNextToTheDraft(t *testing.T) {
 // Nobody may be asked about this - the answer is known - and the copy has to
 // appear without anyone doing anything.
 func TestCrashAfterSESIsFinishedQuietly(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f, mb := mailboxFor(t)
 	draft := storeDraft(t, mb)
 
@@ -113,7 +112,7 @@ func TestCrashAfterSESIsFinishedQuietly(t *testing.T) {
 // The other state: the program died between writing the marker and hearing back
 // from SES. The bucket cannot know, so it must not guess - in either direction.
 func TestCrashBeforeTheAnswerAsks(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f, mb := mailboxFor(t)
 	draft := storeDraft(t, mb)
 
@@ -142,7 +141,7 @@ func TestCrashBeforeTheAnswerAsks(t *testing.T) {
 }
 
 func TestAnsweringYesFilesTheCopy(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f, mb := mailboxFor(t)
 	draft := storeDraft(t, mb)
 	key, err := mb.BeginSend(ctx, sendingFor(draft))
@@ -163,7 +162,7 @@ func TestAnsweringYesFilesTheCopy(t *testing.T) {
 // "It did not go out" has to leave the draft alone - that is what somebody
 // sends again afterwards.
 func TestAnsweringNoKeepsTheDraft(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f, mb := mailboxFor(t)
 	draft := storeDraft(t, mb)
 	key, err := mb.BeginSend(ctx, sendingFor(draft))
@@ -187,7 +186,7 @@ func TestAnsweringNoKeepsTheDraft(t *testing.T) {
 // SES refused: nothing went out, so the marker has to go rather than turn into
 // a question with no content.
 func TestRefusedLeavesNoQuestion(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f, mb := mailboxFor(t)
 	draft := storeDraft(t, mb)
 	key, err := mb.BeginSend(ctx, sendingFor(draft))
@@ -212,7 +211,7 @@ func TestRefusedLeavesNoQuestion(t *testing.T) {
 // Recovery runs at every start. Running it twice must not produce a second
 // copy - that would be the very thing this is built to prevent.
 func TestRecoveringTwiceFilesOneCopy(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f, mb := mailboxFor(t)
 	draft := storeDraft(t, mb)
 	key, _ := mb.BeginSend(ctx, sendingFor(draft))
@@ -234,7 +233,7 @@ func TestRecoveringTwiceFilesOneCopy(t *testing.T) {
 // leaves a marker whose draft is already gone. The copy still has to be
 // possible.
 func TestCopyWorksWithoutTheDraft(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f, mb := mailboxFor(t)
 	draft := storeDraft(t, mb)
 	key, _ := mb.BeginSend(ctx, sendingFor(draft))
@@ -254,7 +253,7 @@ func TestCopyWorksWithoutTheDraft(t *testing.T) {
 
 // A marker is not a message. It must not show up in the mailbox as one.
 func TestMarkerIsNotAMessage(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f, mb := mailboxFor(t)
 	draft := storeDraft(t, mb)
 	if _, err := mb.BeginSend(ctx, sendingFor(draft)); err != nil {
@@ -274,7 +273,7 @@ func TestMarkerIsNotAMessage(t *testing.T) {
 // AbandonSend takes a key from outside. It must not become a way to delete
 // something that is not a marker.
 func TestAbandonDeletesOnlyMarkers(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f, mb := mailboxFor(t)
 	draft := storeDraft(t, mb)
 	if err := mb.AbandonSend(ctx, draft); err == nil {

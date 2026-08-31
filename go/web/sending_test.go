@@ -4,7 +4,6 @@
 package web
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http/httptest"
@@ -20,7 +19,7 @@ import (
 
 func serverWith(t *testing.T, f *s3fake.Fake) (*httptest.Server, *Server, *store.Mailbox) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, true)
 	accounts := one(mb)
 	accounts[0].Sender = &fakeSender{}
@@ -95,7 +94,7 @@ func TestSendWorksEvenIfTheMarkerCannotBeWritten(t *testing.T) {
 // An unfinished send reaches the page through the overview, so the banner is
 // there on the first paint rather than after a second request.
 func TestTheOpenQuestionReachesThePage(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f := s3fake.New()
 	ts, srv, mb := serverWith(t, f)
 
@@ -122,7 +121,7 @@ func TestTheOpenQuestionReachesThePage(t *testing.T) {
 
 // Answering takes the question off the list and does what the answer implies.
 func TestAnsweringClearsTheQuestion(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f := s3fake.New()
 	ts, srv, mb := serverWith(t, f)
 

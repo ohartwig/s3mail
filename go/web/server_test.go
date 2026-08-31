@@ -4,7 +4,6 @@
 package web
 
 import (
-	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -28,7 +27,7 @@ func one(mb *store.Mailbox) []Account {
 
 func buildServer(t *testing.T) (*httptest.Server, *store.Mailbox) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	f := s3fake.New()
 	f.Store("mail/m1", rawMail("Anna <anna@kunde.de>", "Rechnung 1", "Anbei die Rechnung.",
 		"Mon, 03 Aug 2026 09:00:00 +0000"))
@@ -174,7 +173,7 @@ func TestErrorCodes(t *testing.T) {
 }
 
 func TestReadMailAndAttachment(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f := s3fake.New()
 	f.Store("mail/m1", []byte("From: a@b.de\r\nTo: c@d.de\r\nSubject: Mit Anhang\r\n"+
 		"Date: Mon, 03 Aug 2026 09:00:00 +0000\r\nMIME-Version: 1.0\r\n"+
@@ -345,7 +344,7 @@ func TestWithoutMailbox(t *testing.T) {
 // TestAutoRefreshIsShipped - the interval comes from the configuration;
 // without it the page would stand still and nobody would see the refresh exists.
 func TestAutoRefreshIsShipped(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f := s3fake.New()
 	f.Store("mail/m1", rawMail("a@b.de", "x", "y", "Mon, 03 Aug 2026 09:00:00 +0000"))
 	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, true)

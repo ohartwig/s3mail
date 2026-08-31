@@ -4,7 +4,6 @@
 package store_test
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -39,7 +38,7 @@ func storeAt(f *s3fake.Fake, key string, when time.Time) {
 }
 
 func TestRefreshNumbersWhatArrived(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f := s3fake.New()
 	base := time.Date(2026, 8, 1, 9, 0, 0, 0, time.UTC)
 	storeAt(f, "mail/zweite", base.Add(time.Hour))
@@ -67,7 +66,7 @@ func TestRefreshNumbersWhatArrived(t *testing.T) {
 // A second pass must not renumber anything - a UID is stable forever, and a
 // client that cached one has to keep finding the same message under it.
 func TestASecondRefreshChangesNothing(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f := s3fake.New()
 	base := time.Date(2026, 8, 1, 9, 0, 0, 0, time.UTC)
 	storeAt(f, "mail/a", base)
@@ -104,7 +103,7 @@ func TestASecondRefreshChangesNothing(t *testing.T) {
 // Moving takes the number out of the source folder and gives a fresh one in the
 // target. The old number stays spent: IMAP never hands one out twice.
 func TestMovingRetiresTheOldNumber(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f := s3fake.New()
 	base := time.Date(2026, 8, 1, 9, 0, 0, 0, time.UTC)
 	storeAt(f, "mail/a", base)
@@ -150,7 +149,7 @@ func TestMovingRetiresTheOldNumber(t *testing.T) {
 // have to arrive at the same numbering, or a client that talks to both sees a
 // message change its UID.
 func TestTwoMachinesNumberAlike(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f := s3fake.New()
 	base := time.Date(2026, 8, 1, 9, 0, 0, 0, time.UTC)
 	for i := range 6 {
@@ -188,7 +187,7 @@ func TestTwoMachinesNumberAlike(t *testing.T) {
 // Folders number independently - inbox 1 and archive 1 are different messages,
 // and that is what IMAP expects.
 func TestFoldersCountSeparately(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f := s3fake.New()
 	base := time.Date(2026, 8, 1, 9, 0, 0, 0, time.UTC)
 	storeAt(f, "mail/a", base)
@@ -213,7 +212,7 @@ func TestFoldersCountSeparately(t *testing.T) {
 // kilobytes of pure numbering. A mailbox whose owner never touches IMAP must not
 // pay that.
 func TestARefreshAloneNumbersNothing(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f := s3fake.New()
 	storeAt(f, "mail/a", time.Date(2026, 8, 1, 9, 0, 0, 0, time.UTC))
 
@@ -240,7 +239,7 @@ func TestARefreshAloneNumbersNothing(t *testing.T) {
 // Asking for one folder must not number the others - that would give away the
 // saving again.
 func TestEnsureTouchesOnlyTheFolderAsked(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f := s3fake.New()
 	base := time.Date(2026, 8, 1, 9, 0, 0, 0, time.UTC)
 	storeAt(f, "mail/a", base)

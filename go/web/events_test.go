@@ -20,7 +20,7 @@ import (
 func serverForEvents(t *testing.T) (*httptest.Server, *Server) {
 	t.Helper()
 	f := s3fake.New()
-	mb := store.NewMailbox(context.Background(), f, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, true)
+	mb := store.NewMailbox(t.Context(), f, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, true)
 	srv := NewServer(one(mb), testToken, "127.0.0.1", 0, nil)
 	ts := httptest.NewServer(srv)
 	t.Cleanup(ts.Close)
@@ -31,7 +31,7 @@ func serverForEvents(t *testing.T) (*httptest.Server, *Server) {
 // openStream hangs on /api/events and returns the lines as they arrive.
 func openStream(t *testing.T, ts *httptest.Server, srv *Server) (<-chan string, func()) {
 	t.Helper()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	req, _ := http.NewRequestWithContext(ctx, "GET", ts.URL+"/api/events", nil)
 	req.Header.Set("X-S3mail-Token", testToken)
 	resp, err := ts.Client().Do(req)

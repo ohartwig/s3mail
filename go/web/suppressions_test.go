@@ -19,7 +19,7 @@ import (
 // /api/ route answers 503 ("not set up yet"), these here included.
 func serverWithSuppressions(t *testing.T, l SuppressionList) (*httptest.Server, *Server) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	f := s3fake.New()
 	mb := store.NewMailbox(ctx, f, nil, "test-bucket", "mail/", t.TempDir(), testCacheKey, true)
 	accounts := one(mb)

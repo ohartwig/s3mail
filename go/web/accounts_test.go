@@ -4,7 +4,6 @@
 package web
 
 import (
-	"context"
 	"encoding/json"
 	"net/http/httptest"
 	"strings"
@@ -19,7 +18,7 @@ import (
 // side by side, each with its own prefix and its own sender.
 func twoMailboxes(t *testing.T) (*httptest.Server, []Account) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	f := s3fake.New()
 	f.Store("mail/info/a", rawMail("Anna <anna@kunde.de>", "Anfrage", "Text.",
 		"Mon, 03 Aug 2026 09:00:00 +0000"))
@@ -198,7 +197,7 @@ func TestQuittingWorksWithoutAMailbox(t *testing.T) {
 // TestSuggestionsComeOutOfTheIndex - the route reads what somebody already did
 // by hand. It changes nothing; the reader decides.
 func TestSuggestionsComeOutOfTheIndex(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f := s3fake.New()
 	// Eleven from one sender, ten of them already filed into "werbung".
 	for i := range 11 {
@@ -292,7 +291,7 @@ func TestTheWaitingWindowIsBounded(t *testing.T) {
 
 // TestTheConversationFindsBothDirections through the route, not only in core.
 func TestTheConversationFindsBothDirections(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	f := s3fake.New()
 	f.Store("mail/in1", rawMail("Anna <anna@kunde.de>", "Anfrage", "Text.",
 		"Mon, 03 Aug 2026 09:00:00 +0000"))

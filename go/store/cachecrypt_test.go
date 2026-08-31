@@ -4,7 +4,6 @@
 package store_test
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,7 +17,7 @@ const vertraulich = "Die Bankverbindung lautet DE12 3456 7890"
 
 func mailboxWithKey(t *testing.T, dir string, key []byte) (*s3fake.Fake, *store.Mailbox) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	f := s3fake.New()
 	f.Store("mail/m1", []byte("From: kunde@x.de\r\nTo: post@firma.de\r\n"+
 		"Subject: Kontodaten\r\nDate: Mon, 03 Aug 2026 09:00:00 +0000\r\n"+
@@ -84,7 +83,7 @@ func TestWithoutAKeyItIsReadable(t *testing.T) {
 // A cache from another machine, or from before the key changed: it is a cache,
 // it gets rebuilt. Nothing may fall over, and nothing may come back wrong.
 func TestAForeignCacheIsIgnored(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	dir := t.TempDir()
 	f, _ := mailboxWithKey(t, dir, testCacheKey)
 
@@ -109,7 +108,7 @@ func TestAForeignCacheIsIgnored(t *testing.T) {
 // The index survives a restart with the same key - otherwise encryption would
 // cost a full pass over the headers at every start.
 func TestTheCacheStillWorks(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	dir := t.TempDir()
 	f, _ := mailboxWithKey(t, dir, testCacheKey)
 
@@ -130,7 +129,7 @@ func TestTheCacheStillWorks(t *testing.T) {
 // A file somebody edited must not be handed to the parser as if it were ours.
 // GCM and not a stream cipher is the reason this test can exist.
 func TestATamperedCacheIsRefused(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	dir := t.TempDir()
 	f, mb := mailboxWithKey(t, dir, testCacheKey)
 	_ = f

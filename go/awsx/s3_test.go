@@ -4,7 +4,6 @@
 package awsx_test
 
 import (
-	"context"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -245,7 +244,7 @@ func TestListPaginates(t *testing.T) {
 	srv.objs["andere/x"] = []byte("nicht meins")
 	a, _ := adapter(t, srv)
 
-	objs, err := a.List(context.Background(), "test-bucket", "mail/")
+	objs, err := a.List(t.Context(), "test-bucket", "mail/")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -278,14 +277,14 @@ func TestRangeIsSent(t *testing.T) {
 	srv.objs["mail/m1"] = []byte("0123456789abcdefghij")
 	a, _ := adapter(t, srv)
 
-	obj, err := a.Get(context.Background(), "test-bucket", "mail/m1", "bytes=0-4")
+	obj, err := a.Get(t.Context(), "test-bucket", "mail/m1", "bytes=0-4")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if string(obj.Body) != "01234" {
 		t.Errorf("Teilstueck: %q", obj.Body)
 	}
-	obj, err = a.Get(context.Background(), "test-bucket", "mail/m1", "")
+	obj, err = a.Get(t.Context(), "test-bucket", "mail/m1", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -304,7 +303,7 @@ func TestMetadataArrives(t *testing.T) {
 		"x-amz-cek-alg": "AES/GCM/NoPadding", "x-amz-matdesc": `{"a":"b"}`}
 	a, _ := adapter(t, srv)
 
-	obj, err := a.Get(context.Background(), "test-bucket", "mail/enc", "")
+	obj, err := a.Get(t.Context(), "test-bucket", "mail/enc", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -314,7 +313,7 @@ func TestMetadataArrives(t *testing.T) {
 	if store.LowerMeta(obj.Meta)["x-amz-matdesc"] != `{"a":"b"}` {
 		t.Errorf("Encryption Context verloren: %v", obj.Meta)
 	}
-	h, err := a.Head(context.Background(), "test-bucket", "mail/enc")
+	h, err := a.Head(t.Context(), "test-bucket", "mail/enc")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -330,7 +329,7 @@ func TestCopyCarriesEncryption(t *testing.T) {
 	srv.objs["mail/m1"] = []byte("inhalt")
 	a, _ := adapter(t, srv)
 
-	err := a.Copy(context.Background(), "test-bucket", "mail/m1", "mail/archiv/m1",
+	err := a.Copy(t.Context(), "test-bucket", "mail/m1", "mail/archiv/m1",
 		store.CopyOpts{ServerSideEncryption: "aws:kms",
 			SSEKMSKeyID:      "arn:aws:kms:eu-central-1:1:key/abc",
 			BucketKeyEnabled: true, StorageClass: "STANDARD_IA"})
@@ -357,7 +356,7 @@ func TestCopyWithSpecialCharacters(t *testing.T) {
 	srv.objs["mail/Rechnung Übersicht.eml"] = []byte("inhalt")
 	a, _ := adapter(t, srv)
 
-	if err := a.Copy(context.Background(), "test-bucket",
+	if err := a.Copy(t.Context(), "test-bucket",
 		"mail/Rechnung Übersicht.eml", "mail/archiv/Rechnung Übersicht.eml",
 		store.CopyOpts{}); err != nil {
 		t.Fatal(err)
@@ -370,11 +369,11 @@ func TestCopyWithSpecialCharacters(t *testing.T) {
 func TestMissingObject(t *testing.T) {
 	srv := newS3Server()
 	a, _ := adapter(t, srv)
-	_, err := a.Get(context.Background(), "test-bucket", "mail/gibtsnicht", "")
+	_, err := a.Get(t.Context(), "test-bucket", "mail/gibtsnicht", "")
 	if !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("NoSuchKey not translated: %v", err)
 	}
-	_, err = a.Head(context.Background(), "test-bucket", "mail/gibtsnicht")
+	_, err = a.Head(t.Context(), "test-bucket", "mail/gibtsnicht")
 	if !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("NotFound not translated: %v", err)
 	}
@@ -383,7 +382,7 @@ func TestMissingObject(t *testing.T) {
 func TestPutAndDelete(t *testing.T) {
 	srv := newS3Server()
 	a, _ := adapter(t, srv)
-	ctx := context.Background()
+	ctx := t.Context()
 	if err := a.Put(ctx, "test-bucket", "mail/.s3mail-state/x.json",
 		[]byte(`{"ops":[]}`), "application/json"); err != nil {
 		t.Fatal(err)
@@ -402,7 +401,7 @@ func TestPutAndDelete(t *testing.T) {
 // TestWholeMailboxThroughTheAdapter runs the layer above against the S3
 // server: index, move, write the state and read it back.
 func TestWholeMailboxThroughTheAdapter(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	srv := newS3Server()
 	srv.objs["mail/m1"] = []byte("From: Anna <anna@kunde.de>\r\nTo: post@firma.de\r\n" +
 		"Subject: Rechnung\r\nDate: Mon, 03 Aug 2026 09:00:00 +0000\r\n" +
@@ -468,7 +467,7 @@ func TestBucketsWithoutPermissionYieldEmptyList(t *testing.T) {
 		Credentials: credentials.NewStaticCredentialsProvider("AKIATEST", "geheim", "")}
 	a := awsx.NewS3(cfg, ts.URL)
 
-	buckets, err := a.Buckets(context.Background())
+	buckets, err := a.Buckets(t.Context())
 	if err != nil {
 		t.Fatalf("AccessDenied should not be an error: %v", err)
 	}
