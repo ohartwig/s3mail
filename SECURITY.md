@@ -1,93 +1,83 @@
-# Sicherheit
+# Security Policy
 
-## Eine Lücke melden
+## Reporting a vulnerability
 
-**security@ole-hartwig.eu.** Bitte nicht als GitLab-Issue — ein offenes Ticket
-ist die Veröffentlichung.
+Please **do not** open public GitLab issues or merge requests for security
+problems. Instead, send a report to:
 
-Was hilft: was du getan hast, was passiert ist, was du erwartet hättest. Eine
-Beispielmail oder ein Bucket-Layout, an dem es sich nachstellen lässt, ist mehr
-wert als eine Einschätzung des Schweregrads.
+- **Email**: <security@ole-hartwig.eu>
+- **PGP**: download the security key from
+  <https://ole-hartwig.eu/.well-known/openpgpkey> (RFC 9580) and encrypt
+  attachments
+- **Signal**: on request
 
-Ich antworte innerhalb von fünf Werktagen. Es gibt kein Bug-Bounty-Programm und
-keine Belohnung; wer möchte, wird im Release-Text genannt.
+We commit to:
 
-Gepflegt wird die jeweils letzte Version. Für ältere gibt es keine Rückportierung
-— es ist ein einzelnes Programm, das Aktualisieren kostet einen Download.
+| Stage                                 | SLA                                 |
+| ------------------------------------- | ----------------------------------- |
+| First acknowledgement                 | within **72 hours** (business days) |
+| Vulnerability triage                  | within **7 days**                   |
+| Fix plan for Critical                 | within **14 days**                  |
+| Coordinated disclosure window default | **90 days** after first response    |
 
-## Was s3mail ist
+If you don't hear back within the first acknowledgement window, please
+escalate via <support@ole-hartwig.eu>.
 
-Ein Programm auf dem eigenen Rechner, das einen Webserver an `127.0.0.1` bindet
-und ein Postfach im Browser zeigt. Kein Dienst, keine Benutzerverwaltung, keine
-Mandanten. Die Mail liegt in einem S3-Bucket, verschickt wird über SES.
+## Coordinated disclosure
 
-Daraus folgt der ganze Rest dieses Dokuments: **die Vertrauensgrenze ist der
-Rechner**, nicht der Prozess.
+We follow the [CVD principles](https://en.wikipedia.org/wiki/Coordinated_vulnerability_disclosure):
+findings stay embargoed until a patch is available, then we publish a
+GitLab Security Advisory + (if applicable) a CVE via our CNA. The reporter
+is credited unless they ask to remain anonymous.
 
-## Annahmen
+Public Security Advisories live at
+<https://git.ole-hartwig.eu/groups/devops/-/security/advisories>.
 
-Ohne diese drei ist das Modell darunter gegenstandslos:
+## Scope
 
-1. **Der Rechner ist nicht kompromittiert.** Wer dort Code ausführt, hat das
-   Postfach — das kann kein Server auf `127.0.0.1` verhindern, und s3mail
-   versucht es auch nicht.
-2. **Der AWS-Zugang ist so eng wie der Assistent ihn vorschlägt.** Eine
-   Bucket-Policy, die mehr erlaubt, liegt außerhalb von s3mail.
-3. **S3 und SES tun, was AWS zusagt.** Dass ein Objekt mit `0600`-Rechten im
-   Bucket liegt, prüft s3mail nicht nach.
+In scope:
 
-## Angreifer und was dagegen steht
+- All repositories under `devops/**` and `development/**` on git.ole-hartwig.eu
+- All container images under `registry.ole-hartwig.eu/devops/images/**` and
+  `registry.ole-hartwig.eu/development/**`
+- Production sites operated by Kai Ole Hartwig
 
-| Angreifer | Weg | Abwehr | Was bleibt |
-|---|---|---|---|
-| Absender einer Mail | HTML und JavaScript in der Mail | `sandbox=""`-iframe, CSP, externe Bilder blockiert | Nur so gut wie der Browser. Ein alter Browser ist das Risiko, nicht die Mail |
-| Absender | Tracking-Pixel | standardmäßig blockiert, Nachladen ist ein Klick | Wer klickt, verrät sich selbst — bewusst, aber er verrät sich |
-| Absender | Gefälschte Absenderadresse | SPF/DKIM/DMARC aus `Authentication-Results`; geglaubt wird nur der oberste Kopf, der `amazonses.com` nennt | Sagt der Kopf nichts, steht nichts da. Eine Mail von vor der Einrichtung ist ungeprüft, nicht schlecht |
-| Absender | Prompt-Injection über den MCP-Server | Kein `send`. `move` lehnt Papierkorb und Spam ab. Vor jeder gelesenen Mail steht, dass ihr Inhalt Daten sind | `move` in gewöhnliche Ordner, `tag` und `draft` bleiben steuerbar: eine injizierte Mail kann Post einsortieren, wo sie nicht hingehört, und Entwürfe mit fremdem Text anlegen. Beides ist sichtbar und umkehrbar |
-| Absender | Bösartiger Anhang | Keine. Herunterladen ist Herunterladen | Kein Virenscan. Das SES-Virus-Verdict ist ein Hinweis, keine Prüfung |
-| Fremde Website im selben Browser | CSRF, DNS-Rebinding | `Origin`-Prüfung, `Host`-Prüfung bei jeder Anfrage | — |
-| Anderer Prozess auf dem Rechner | Ruft `127.0.0.1` auf | Token in der Startadresse, danach `SameSite=Strict`-Cookie. `adresse.txt` hat `0600` und wird beim Beenden gelöscht; in der Prozessliste steht das Token nicht (es liegt nicht in `argv`) | Ein Prozess **desselben Benutzers** liest `adresse.txt` und kommt damit ins Postfach. Dagegen hilft nichts auf dieser Ebene — siehe Annahme 1 |
-| Anderer Benutzer desselben Rechners | Konfiguration und Cache lesen | `0600` auf Konfiguration, Index, Mailtexte und Zustandsdatei, `0700` auf die Verzeichnisse; dazu ist der Cache verschlüsselt und der Schlüssel an das Benutzerkonto gebunden | Nichts |
-| Wer an ein Backup kommt | Time Machine, Ordnersync, Platte ohne FileVault | Index und Mailtexte sind mit AES-256-GCM verschlüsselt; der Schlüssel liegt im Schlüsselbund des Systems und damit **nicht** im kopierten Heimatverzeichnis | Wer `--cache-plaintext` wählt, hebt das auf — dann gilt wieder, was bis v1.0.0 galt. Der macOS-Schlüsselbund ist zwar im Backup, aber mit dem Anmeldekennwort verschlüsselt |
-| Zweiter Rechner am selben Bucket | Zustand kaputtschreiben | Op-Log, ein Schlüssel je Vorgang, alle Ops idempotent | Kein Schutz gegen absichtlich falsche Ops. Das ist dieselbe Vertrauensstufe wie Schreibrecht auf den Bucket |
-| Wer einen AWS-Schlüssel hat | Alles | Keine, und das ist richtig so | Außerhalb von s3mail. Empfehlung: SSO mit kurzen Sitzungen statt Langzeitschlüssel |
-| Lieferkette | Gefälschtes Programm | macOS: Developer ID signiert und bei Apple notarisiert. Alle Plattformen: `SHA256SUMS` über alle Pakete, mit abgelöster cosign-Signatur (`SHA256SUMS.sig`, Schlüssel in AWS KMS) | Das Paket selbst trägt unter Windows und Linux keine Signatur — wer das Manifest nicht prüft, prüft nichts. Die einzelne `.sha256` neben einem Paket ist keine Herkunftsaussage |
-| Netzwerk | Mitlesen auf dem Weg zu AWS | TLS über das AWS-SDK | — |
+Out of scope:
 
-## Was ausdrücklich nicht abgedeckt ist
+- Findings that require physical access to a device operated by Kai Ole Hartwig
+- Denial-of-service via volumetric attacks
+- Social engineering, phishing, or attacks against Kai Ole Hartwig or engaged contractors
+- Third-party services we use (please report directly to the vendor)
 
-- **Kein Virenscan von Anhängen.** Ein Anhang wird heruntergeladen, nicht
-  geprüft.
-- **Kein Schutz bei kompromittiertem Rechner.** Siehe Annahme 1.
-- **Kein Mehrbenutzerbetrieb.** s3mail kennt keine Benutzer und keine Rollen.
-  Wer es ins Netz stellt, stellt ein Postfach ohne Anmeldung ins Netz — wenn,
-  dann hinter einen Reverse-Proxy mit eigener Authentifizierung.
-- **Keine Sperre gegen einen Menschen mit Zugriff.** Wer den Rechner benutzt,
-  benutzt das Postfach.
+## Machine-readable advisories (CSAF 2.0)
 
-## Der MCP-Server im Besonderen
+In addition to this human-readable policy, Kai Ole Hartwig publishes
+machine-readable security advisories per **BSI TR-03191 / OASIS CSAF 2.0**:
 
-Der Zuschnitt ist die Sicherheitsentscheidung, nicht eine Bequemlichkeit:
+- **Provider metadata**: <https://ole-hartwig.eu/.well-known/csaf/provider-metadata.json>
+- **Signing key**: <https://ole-hartwig.eu/.well-known/csaf/openpgp-key.asc>
 
-- **Kein `send`.** Eine eingehende Mail ist fremder Text im Kontext des Modells,
-  und „schick das an…" passt in eine Mail. Das Modell legt einen Entwurf ab, ein
-  Mensch drückt Senden. Die Freigabestelle ist nicht eine Regel, an die sich
-  jemand erinnern muss, sondern der einzige Weg, der existiert.
-- **Kein Verschieben in Papierkorb oder Spam.** Der Assistent bietet eine
-  Lifecycle-Regel an, die den Papierkorb nach 7, 30 oder 90 Tagen leert; ein
-  Verschieben dorthin wäre ein Löschen mit Verzögerung. Das war bis
-  August 2026 offen und ist geschlossen.
-- **`--mcp-readonly`** für alle, die gar keine Änderung wollen: dann gibt es nur
-  `search`, `read` und `folders`.
+The key fingerprint is not repeated here. The provider metadata carries it as
+the single source of truth, and it is still `TBD-PRE-FIRST-ADVISORY` there — a
+fingerprint written down in every repository of the fleet before that is a
+claim nobody can check.
 
-Was bleibt: `move` in gewöhnliche Ordner, `tag` und `draft`. Eine injizierte Mail
-kann damit Post umsortieren und Entwürfe mit fremdem Text anlegen. Beides ist im
-Postfach sichtbar, und beides ist umkehrbar — das ist die Grenze, die hier
-gezogen wurde, und sie steht hier, damit sie nicht überrascht.
+Tooling that consumes CSAF feeds (vulnerability scanners, SBOM diff tools, etc.)
+can discover the feed via the well-known URL and verify the OpenPGP signature
+on each advisory. The role declared in `provider-metadata.json` is
+`csaf_publisher`.
 
-## Was s3mail selbst nicht sendet
+## Vulnerability handling process
 
-Keine Telemetrie, keine Absturzberichte, keine Aktualisierungsprüfung. Nach außen
-gehen nur HTTPS-Verbindungen zu `s3.<region>.amazonaws.com`,
-`email.<region>.amazonaws.com`, bei Verschlüsselung `kms.<region>.amazonaws.com`
-und bei eingerichtetem Push `sqs.<region>.amazonaws.com`.
+1. Report received → automatic acknowledgement
+2. Maintainer assigned within 72h → triage
+3. CVSS scored + severity confirmed → tracking issue created (confidential)
+4. Fix developed in a private branch + tested
+5. Embargo end approaches → coordinated release: tag + security advisory
+6. CVE published, reporter credited
+
+This file is the canonical source of truth for the vulnerability
+disclosure policy of Kai Ole Hartwig and is mirrored at every repository
+under my control.
+For corrections to the policy itself, open an MR against
+`devops/repo-templates/SECURITY.md`.
