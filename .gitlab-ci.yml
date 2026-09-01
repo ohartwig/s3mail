@@ -106,8 +106,8 @@ include:
 # So: when the pin above moves, read the template's `stages:` before merging.
 # Nothing checks this automatically.
 stages:
-  - quick     # go@1.60.1
-  - test      # go@1.60.1
+  - quick     # from the go template
+  - test      # from the go template
   - build     # ours
   - release   # ours
 
