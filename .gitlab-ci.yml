@@ -153,6 +153,19 @@ default:
       # split into the more specific reasons, of which this is the one that
       # means the runner lost its dependency rather than the job failing.
       - runner_external_dependency_failure
+      # A failed image pull lands here, and in this repository it is the single
+      # most common way a job dies: 48 of the last 100 failed jobs, ahead of
+      # script_failure (22). Across five different images - ci-tools,
+      # franken-php, code-signing, golang - which is what says it is the pull
+      # path and not a wrong name anywhere.
+      #
+      # The reason reads like a configuration mistake, and sometimes it is one.
+      # That case survives this: a genuinely wrong image fails all three
+      # attempts in seconds, at the pull, and is as visible afterwards as
+      # before. What changes is the other case, where a human had to press
+      # retry on a registry that had already recovered - four times on
+      # 2026-08-31 alone, once on a pipeline that was cutting a release.
+      - runner_configuration_error
 
 # --------------------------------------------------------------------------- #
 # Test
