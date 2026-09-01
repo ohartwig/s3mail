@@ -153,6 +153,29 @@ default:
       # split into the more specific reasons, of which this is the one that
       # means the runner lost its dependency rather than the job failing.
       - runner_external_dependency_failure
+      # A failed image pull lands here, and in this repository it is the single
+      # most common way a job dies: 48 of the last 100 failed jobs, ahead of
+      # script_failure (22). Across five different images - ci-tools,
+      # franken-php, code-signing, golang - which is what says it is the pull
+      # path and not a wrong name anywhere.
+      #
+      # The reason reads like a configuration mistake, and sometimes it is one.
+      # It was one here, in part: this project was missing from the CI/CD
+      # job-token allowlist of devops/images/ci-tools and
+      # devops/images/franken-php/ci, while it was present on those of
+      # devops/images/golang and devops/images/code-signing. The three jobs
+      # pulling the first two account for 33 of the 48 failures. Both entries
+      # were added on 2026-09-01; whether the rate drops is the measurement
+      # that decides how much of this was configuration and how much was the
+      # registry.
+      #
+      # Retrying does not hide such a cause. A wrong image reference or a
+      # missing permission fails all three attempts in seconds, at the pull,
+      # and is as visible in the job log afterwards as before - the job is
+      # still red, only later. What changes is the case where a person had to
+      # press retry on a registry that had already recovered: four times on
+      # 2026-08-31 alone, once on a pipeline that was cutting a release.
+      - runner_configuration_error
 
 # --------------------------------------------------------------------------- #
 # Test
