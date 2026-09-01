@@ -1,3 +1,23 @@
+## [1.4.1](https://git.ole-hartwig.eu/development/s3mail/s3mail/compare/v1.4.0...v1.4.1) (2026-09-01)
+
+### :bug: Fixes
+
+* **ci:** Abrufaussetzer wiederholen statt von Hand nachstarten ([21c151c](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/21c151cb1e967540587c4ccf7561c6b0de2ab117))
+
+### :memo: Documentation
+
+* **ci:** der gefundene Konfigurationsfehler gehoert an den retry ([4d4b4c4](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/4d4b4c4d3ec9f86e772bd80c1a1ae060b8a549c0))
+* **ci:** der stages-Kommentar nennt die Herkunft, nicht die Version ([566b664](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/566b6647ecf682caf5ed806effc304d7aa26562b))
+
+### :repeat: Chores
+
+* **deps:** update ci components ([85a6d9c](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/85a6d9c43a2759476f80d6b3cbeca5df01d6ad9b))
+* **deps:** update ci components ([4249889](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/4249889ee853a7f3d7908fab6e03076099df9793))
+* **deps:** update registry.ole-hartwig.eu/devops/images/code-signing docker tag to v1.0.39 ([9cfddd6](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/9cfddd6840ae2023029273d7f11333ec1c22ca06))
+* **deps:** update registry.ole-hartwig.eu/devops/images/code-signing docker tag to v1.0.50 ([056ea62](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/056ea62c6503cb3c252c5f2b0a9f0b5f01adbec9))
+* **repo-templates:** den Sync auf die korrigierte Vorlage nachziehen ([e22c08f](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/e22c08f611c3ededb045b9c3a563b3925a958acd))
+* **repo-templates:** sync ([ec0e482](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/ec0e482ac385b5dc727165300b26e903dd1d7958))
+
 ## [1.4.0](https://git.ole-hartwig.eu/development/s3mail/s3mail/compare/v1.3.2...v1.4.0) (2026-08-31)
 
 ### :sparkles: Features
