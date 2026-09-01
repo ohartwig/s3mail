@@ -160,10 +160,20 @@ default:
       # path and not a wrong name anywhere.
       #
       # The reason reads like a configuration mistake, and sometimes it is one.
-      # That case survives this: a genuinely wrong image fails all three
-      # attempts in seconds, at the pull, and is as visible afterwards as
-      # before. What changes is the other case, where a human had to press
-      # retry on a registry that had already recovered - four times on
+      # It was one here, in part: this project was missing from the CI/CD
+      # job-token allowlist of devops/images/ci-tools and
+      # devops/images/franken-php/ci, while it was present on those of
+      # devops/images/golang and devops/images/code-signing. The three jobs
+      # pulling the first two account for 33 of the 48 failures. Both entries
+      # were added on 2026-09-01; whether the rate drops is the measurement
+      # that decides how much of this was configuration and how much was the
+      # registry.
+      #
+      # Retrying does not hide such a cause. A wrong image reference or a
+      # missing permission fails all three attempts in seconds, at the pull,
+      # and is as visible in the job log afterwards as before - the job is
+      # still red, only later. What changes is the case where a person had to
+      # press retry on a registry that had already recovered: four times on
       # 2026-08-31 alone, once on a pipeline that was cutting a release.
       - runner_configuration_error
 
