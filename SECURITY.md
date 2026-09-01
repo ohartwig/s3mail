@@ -37,10 +37,9 @@ Public Security Advisories live at
 
 In scope:
 
-- All repositories under `devops/**` and `development/moselwal/**` on
-  git.ole-hartwig.eu
+- All repositories under `devops/**` and `development/**` on git.ole-hartwig.eu
 - All container images under `registry.ole-hartwig.eu/devops/images/**` and
-  `registry.ole-hartwig.eu/development/moselwal/**`
+  `registry.ole-hartwig.eu/development/**`
 - Production sites operated by Kai Ole Hartwig
 
 Out of scope:
