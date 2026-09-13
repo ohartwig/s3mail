@@ -36,40 +36,20 @@ include:
   # See .gitlab/release-footer.md and its script.
   #
   # renovate: datasource=gitlab-tags depName=devops/ci-cd-components/release-tools
-  - component: ${CI_SERVER_HOST}/devops/ci-cd-components/release-tools/semantic-release@1.17.59
+  # release-tools/yasrt cuts the release on this same pipeline: `version`
+  # decides in .pre, the binaries are built, signed, listed and uploaded with
+  # RELEASE_TAG, and only then does `release` create the git tag -- with the
+  # job token, so no tag pipeline follows. What used to run on the tag
+  # pipeline runs here, gated on RELEASE_STATUS in the script.
+  - component: ${CI_SERVER_HOST}/devops/ci-cd-components/release-tools/yasrt@1
     inputs:
-      stage: release
-      config-preset: '@moselwal/semantic-release-config'
-      config-preset-group-id: "175"
-      config-preset-scope: moselwal
-      tag-format: 'v${version}'
-      additional-script-end: |
-        TAG="$(git tag --points-at HEAD | head -1)"
-        if [ -z "$TAG" ]; then
-          echo "Kein Tag auf HEAD - semantic-release hat nichts geschnitten."
-        else
-          TAG="$TAG" node .gitlab/release-footer.mjs
-        fi
-  # Shadow of the successor: decides as yasrt would, before this pipeline
-  # releases anything, and compares afterwards. Observes only (allow_failure,
-  # no writes, .pre/.post). Migration to release-tools/yasrt is planned for
-  # 2026-09-14; the verdicts collected until then are the evidence.
-  - component: ${CI_SERVER_HOST}/devops/ci-cd-components/release-tools/yasrt-shadow@1
-    inputs:
+      stage-version: .pre
+      stage-release: .post
       product: custom
-      tag-format: "'v${version}'"
-      non-release-paths: ['.gitlab-ci.yml', '.pre-commit-config.yaml']
-
-  # The estate's Go pipeline: gofmt, vet, tests and the automated review, plus
-  # the language-neutral hygiene every repository here gets. Only what this
-  # repository actually ships -- four platforms, notarisation, the release --
-  # stays written out below, which is the split the template draws on purpose.
-  #
-  # `stages:` below therefore has to name `quick` as well: a consumer's own list
-  # REPLACES the composed one, and a job in a stage nobody declared stops the
-  # pipeline being created at all.
-  #
-  # renovate: datasource=gitlab-tags depName=devops/ci-cd-components/composed-default-pipelines
+      tag-format: 'v${version}'
+      rules-config:
+        - if: $CI_COMMIT_REF_PROTECTED == "true" && $CI_COMMIT_TAG == null && $CI_PIPELINE_SOURCE == "push"
+        - when: never
   - component: ${CI_SERVER_HOST}/devops/ci-cd-components/composed-default-pipelines/go@2.1.9
     inputs:
       working-directory: go
@@ -100,6 +80,7 @@ include:
       # happened three times after a merge before this was pinned down.
       rules-config:
         - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
+        - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
 
 
 # MUST stay a superset of the composed template's stages. A consumer's list
@@ -208,7 +189,11 @@ test:go:
 # --------------------------------------------------------------------------- #
 .build:
   stage: build
-  needs: [test:go]
+  needs:
+    - test:go
+    - job: version
+      artifacts: true
+      optional: true
   # `cd go` and the module cache sit here, not in `default:`. In `default:` they
   # reached the composed jobs as well, and those run at the repository root:
   # verify:component-integrity looked for .gitlab-ci.yml inside go/ and reported
@@ -227,7 +212,7 @@ test:go:
   script:
     # -trimpath takes the build machine's paths out of the binary, so two runs
     # produce the same result.
-    - VERSION="${CI_COMMIT_TAG:-$CI_COMMIT_SHORT_SHA}"
+    - VERSION="${CI_COMMIT_TAG:-${RELEASE_TAG:-$CI_COMMIT_SHORT_SHA}}"
     - mkdir -p dist
     # On Windows LDFLAGS also carries -H windowsgui: without it a double-click
     # tears open a console window, and closing that window kills the server.
@@ -331,6 +316,9 @@ sign:macos:
   needs:
     - build:macos-arm64
     - build:macos-amd64
+    - job: version
+      artifacts: true
+      optional: true
   before_script: []
   id_tokens:
     GITLAB_OIDC_TOKEN:
@@ -366,7 +354,7 @@ sign:macos:
     - unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
     # Real material on a tag, a throwaway certificate otherwise.
     - |
-      if [ -n "$CI_COMMIT_TAG" ]; then
+      if [ -n "${CI_COMMIT_TAG:-}" ] || [ "${RELEASE_STATUS:-}" = "release" ]; then
         # Records in the log who the job is working as. Only inside here, not
         # before: on a branch there is no role to assume - the trust policy
         # allows tags only - and AWS then refuses, entirely correctly. A check
@@ -469,6 +457,7 @@ manifest:
     - sign:macos
   rules:
     - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
   script:
     # Sorted, so two runs of the same state produce the same manifest.
     - cd go/dist && sha256sum *.zip | sort -k2 > "$CI_PROJECT_DIR/SHA256SUMS"
@@ -496,6 +485,9 @@ upload:
     # is possible at all.
     - job: sign:artifact:SHA256SUMS
       optional: true
+    - job: version
+      artifacts: true
+      optional: true
   # Publish only complete version tags. A pre-release tag such as v0.9.0-rc1
   # therefore goes through building and signing in full - with the real
   # certificate, since IAM allows any v* - but stores no package and creates no
@@ -503,7 +495,9 @@ upload:
   # able to download the result.
   rules:
     - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
   script:
+    - 'RELEASE_REF="${CI_COMMIT_TAG:-${RELEASE_TAG:-}}"; [ -n "$RELEASE_REF" ] || { echo "no release decided: ${RELEASE_STATUS:-unknown}"; exit 0; }'
     # The package version is the tag as it stands - the same string that appears
     # in the asset links below. Stripping the "v" here would have produced links
     # pointing nowhere.
@@ -533,7 +527,7 @@ upload:
         echo "lade hoch: $f"
         curl --fail-with-body --silent --show-error \
           --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
-          --upload-file "$f" "${PACKAGE_URL}/${CI_COMMIT_TAG}/${f}"
+          --upload-file "$f" "${PACKAGE_URL}/${RELEASE_REF}/${f}"
         echo
       done
   artifacts:
@@ -541,8 +535,10 @@ upload:
       # Tells the release job whether there is a signature to link.
       dotenv: release.env
 
-release:
-  stage: release
+# Links on the release page. After `release`, which is where the release
+# object now comes from; `release` itself belongs to release-tools/yasrt.
+release:links:
+  stage: .post
   # No release-cli: its image sits in registry.gitlab.com and the runners cannot
   # reach that host - they are IPv6-only, the registry is IPv4-only.
   # devops/ci-mirrors exists for exactly this, but mirroring another image there
@@ -550,11 +546,21 @@ release:
   # already here.
   image: ${CURL_IMAGE}
   before_script: []
-  needs: [upload]
+  needs:
+    - job: upload
+      artifacts: true
+    - job: version
+      artifacts: true
+      optional: true
+    - job: release
+      optional: true
+      artifacts: false
   # The same barrier as upload: pre-release tags produce no release.
   rules:
     - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
   script:
+    - 'RELEASE_REF="${CI_COMMIT_TAG:-${RELEASE_TAG:-}}"; [ -n "$RELEASE_REF" ] || { echo "no release decided: ${RELEASE_STATUS:-unknown}"; exit 0; }'
     # The release page already exists: semantic-release created it when it cut
     # the tag, with the generated changelog as its description and the install
     # notes appended on top. What is missing at that moment are the packages,
@@ -573,9 +579,9 @@ release:
         curl --fail-with-body --silent --show-error \
           --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
           --data-urlencode "name=$1" \
-          --data-urlencode "url=${PACKAGE_URL}/${CI_COMMIT_TAG}/$1" \
+          --data-urlencode "url=${PACKAGE_URL}/${RELEASE_REF}/$1" \
           --data-urlencode "link_type=$2" \
-          "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases/${CI_COMMIT_TAG}/assets/links"
+          "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases/${RELEASE_REF}/assets/links"
         echo
       }
       for datei in s3mail-windows-amd64.zip:package \
@@ -591,6 +597,26 @@ release:
       if [ "${SIGNIERT:-nein}" = "ja" ]; then
         verlinke SHA256SUMS.sig other
       fi
+
+# The install notes semantic-release's job used to append; a job of its own
+# now, in the node image the script needs, after the release object exists.
+release:footer:
+  stage: .post
+  image: registry.ole-hartwig.eu/devops/images/node:24
+  before_script: []
+  needs:
+    - job: version
+      artifacts: true
+      optional: true
+    - job: release
+      optional: true
+      artifacts: false
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+  script:
+    - 'TAG="${CI_COMMIT_TAG:-${RELEASE_TAG:-}}"; [ -n "$TAG" ] || { echo "no release decided: ${RELEASE_STATUS:-unknown}"; exit 0; }'
+    - TAG="$TAG" node .gitlab/release-footer.mjs
 
 # --------------------------------------------------------------------------- #
 # Build the consumer when the core changes
