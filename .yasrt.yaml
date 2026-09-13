@@ -1,0 +1,6 @@
+# Release configuration for yasrt; the shared defaults come from the CI
+# component. Only what this repository does differently is stated here.
+product: custom
+tag_format: "v${version}"
+deliverability:
+  non_release_paths: [".gitlab-ci.yml", ".pre-commit-config.yaml"]
