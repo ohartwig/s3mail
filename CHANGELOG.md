@@ -1,3 +1,15 @@
+## [1.4.2](https://git.ole-hartwig.eu/development/s3mail/s3mail/compare/v1.4.1...v1.4.2) (2026-09-13)
+
+### :repeat: Continuous Integrations
+
+* keep the tag pipeline for signing, manifest, upload and links ([2d9e8a1](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/2d9e8a13fa8d1649e74a8cd55cf9d93564af92c2))
+* release with yasrt, on the pipeline that built the binaries ([88222b0](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/88222b023241c3f3ed4870d241bba75736437ce7))
+* run the yasrt shadow beside semantic-release ([bf24494](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/bf2449494559ab82d2eefbac6f2bdcada0125a1f))
+
+### :wrench: Chores
+
+* **deps:** update dependency devops/ci-cd-components/composed-default-pipelines to v2 ([774daa3](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/774daa319db08d0a8d3976db27882fcf39e3d2fa))
+
 ## [1.4.1](https://git.ole-hartwig.eu/development/s3mail/s3mail/compare/v1.4.0...v1.4.1) (2026-09-01)
 
 ### :bug: Fixes
