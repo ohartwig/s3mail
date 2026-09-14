@@ -28,6 +28,9 @@ func TestTheDebugLogCannotCarryMail(t *testing.T) {
 	// away from excluding something else.
 	forbidden := []string{"LogRequest" + "WithBody", "LogResponse" + "WithBody"}
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err == nil && info.IsDir() && path != root && foreign(info.Name()) {
+			return filepath.SkipDir
+		}
 		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".go") {
 			return err
 		}

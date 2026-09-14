@@ -30,3 +30,6 @@ s3mail-cache/
 /s3mail
 /s3mail.exe
 /dist/
+
+# Der Modul-Cache der Pipeline (GOPATH=${CI_PROJECT_DIR}/.go)
+/.go/

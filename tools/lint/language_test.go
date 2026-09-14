@@ -36,6 +36,9 @@ func TestCommentsAreEnglish(t *testing.T) {
 	var found []string
 
 	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err == nil && d.IsDir() && path != root && foreign(d.Name()) {
+			return filepath.SkipDir
+		}
 		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".go") {
 			return err
 		}
@@ -99,6 +102,14 @@ func itoa(n int) string {
 
 // moduleRoot walks up until it finds go.mod, so the test does not depend on
 // where it was started from.
+// foreign says whether a directory holds something other than this module's
+// source: a dot-directory - .git, and the module cache the pipeline keeps in
+// .go under the project directory since the tree moved to the root - or a
+// vendor tree. The walkers skip it; otherwise every AWS SDK file is "ours".
+func foreign(name string) bool {
+	return name != "." && (strings.HasPrefix(name, ".") || name == "vendor")
+}
+
 func moduleRoot(t *testing.T) string {
 	t.Helper()
 	dir, err := os.Getwd()
@@ -141,6 +152,9 @@ func TestIdentifiersAreEnglish(t *testing.T) {
 	field := regexp.MustCompile(`^\t([A-Z][A-Za-z0-9_]*)\s+[\[\]*A-Za-z]`)
 
 	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err == nil && d.IsDir() && path != root && foreign(d.Name()) {
+			return filepath.SkipDir
+		}
 		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".go") {
 			return err
 		}
