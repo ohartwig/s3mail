@@ -18,8 +18,8 @@ import (
 	"sync"
 	"time"
 
-	"git.ole-hartwig.eu/development/s3mail/s3mail/core"
-	"git.ole-hartwig.eu/development/s3mail/s3mail/mimeparse"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/core"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/mimeparse"
 )
 
 // HeaderChunk is how much is fetched per message for the index - enough for the

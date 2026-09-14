@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	"git.ole-hartwig.eu/development/s3mail/s3mail/store"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/store"
 )
 
 // Fake mimics as much of S3 as s3mail uses - prefix listing, ETags, metadata,

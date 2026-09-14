@@ -172,7 +172,12 @@ dazugehört:
 Zwei Repositories und nicht eines, weil die Werkzeugketten nichts teilen: hier
 Xcode und Swift, dort Linux, Docker und Kreuzbauen. Und weil der Go-Kern für die
 App eine **Bibliothek** ist — das ist die ehrliche Beziehung, und sie hat einen
-Namen: `git.ole-hartwig.eu/development/s3mail/s3mail`. Vorher hieß das Modul
+Namen: `git.ole-hartwig.eu/development/s3mail/s3mail/go` — das `/go` am Ende,
+weil das Modul im Verzeichnis `go/` liegt, Go ein Untermodul nach seinem
+Verzeichnis benennt und es unter `go/v1.5.0` neben `v1.5.0` versioniert. Die App
+bindet es darum per `require` mit Version ein, nicht per `replace` auf ein
+Schwester-Checkout (so war es bis 2026-09-14, und jedes `go mod tidy` außerhalb
+genau dieser Verzeichnisstruktur scheiterte daran). Davor hieß das Modul
 schlicht `s3mail` und war von außen gar nicht einbindbar; ohne diesen Umzug
 bliebe nur der Weg über ein gebautes XCFramework als Artefakt, und das ist genau
 der Auslieferungssprung, der still fehlschlägt.

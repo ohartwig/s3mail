@@ -8,12 +8,12 @@ import (
 	"strings"
 	"testing"
 
-	"git.ole-hartwig.eu/development/s3mail/s3mail/i18n"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/i18n"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/smithy-go"
 
-	"git.ole-hartwig.eu/development/s3mail/s3mail/awsx"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/awsx"
 )
 
 func apiError(code string) error {

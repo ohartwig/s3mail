@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"git.ole-hartwig.eu/development/s3mail/s3mail/core"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/core"
 )
 
 const secret = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"

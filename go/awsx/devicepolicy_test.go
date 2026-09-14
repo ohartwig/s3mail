@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"git.ole-hartwig.eu/development/s3mail/s3mail/awsx"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/awsx"
 )
 
 func policy(t *testing.T, o awsx.DevicePolicyOpts) map[string]any {

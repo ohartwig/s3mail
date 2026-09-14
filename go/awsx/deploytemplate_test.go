@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"git.ole-hartwig.eu/development/s3mail/s3mail/deploy"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/deploy"
 )
 
 // The clamp between two ways of building the same thing.

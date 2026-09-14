@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"git.ole-hartwig.eu/development/s3mail/s3mail/store"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/store"
 )
 
 type fakeKMS struct {

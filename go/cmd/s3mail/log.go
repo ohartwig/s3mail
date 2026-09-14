@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"git.ole-hartwig.eu/development/s3mail/s3mail/config"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/config"
 )
 
 // startLog opens the file the start is recorded in.

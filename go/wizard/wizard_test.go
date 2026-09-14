@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"git.ole-hartwig.eu/development/s3mail/s3mail/config"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/config"
 )
 
 // TestNeverNullToTheInterface pins down the bug that made v0.2.x unusable for

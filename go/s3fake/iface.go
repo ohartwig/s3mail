@@ -3,6 +3,6 @@
 
 package s3fake
 
-import "git.ole-hartwig.eu/development/s3mail/s3mail/store"
+import "git.ole-hartwig.eu/development/s3mail/s3mail/go/store"
 
 var _ store.S3 = (*Fake)(nil)

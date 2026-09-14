@@ -11,9 +11,9 @@ import (
 	"context"
 	"strings"
 
-	"git.ole-hartwig.eu/development/s3mail/s3mail/i18n"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/i18n"
 
-	"git.ole-hartwig.eu/development/s3mail/s3mail/store"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/store"
 )
 
 // Item is one entry of the checklist.

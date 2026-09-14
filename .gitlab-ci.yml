@@ -443,6 +443,30 @@ sign:macos:
 # macOS is notarised on top of that; the manifest is the route for Windows and
 # Linux, where there is no signature inside the package.
 # --------------------------------------------------------------------------- #
+# The Go module lives under go/ and is named for it - git.ole-hartwig.eu/
+# development/s3mail/s3mail/go - which is how another module (the iOS
+# app's) requires it by version instead of by a relative replace to a
+# sibling checkout. Go finds the version of a module in a subdirectory
+# under a tag prefixed with that directory: go/v1.5.0 beside v1.5.0. The
+# tag pipeline adds it, pointing at the same commit, with the job token
+# (a push that starts no pipeline). Idempotent: an existing tag is left.
+release:go-tag:
+  stage: release
+  image: ${GO_IMAGE}
+  before_script: []
+  needs: []
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
+  script:
+    - |
+      set -eu
+      if git ls-remote --tags origin "refs/tags/go/${CI_COMMIT_TAG}" | grep -q .; then
+        echo "go/${CI_COMMIT_TAG} exists"; exit 0
+      fi
+      git tag "go/${CI_COMMIT_TAG}" "${CI_COMMIT_SHA}"
+      git push "https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" "refs/tags/go/${CI_COMMIT_TAG}"
+      echo "go/${CI_COMMIT_TAG} -> ${CI_COMMIT_SHORT_SHA}"
+
 manifest:
   stage: release
   image: ${GO_IMAGE}

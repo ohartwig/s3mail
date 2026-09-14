@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"git.ole-hartwig.eu/development/s3mail/s3mail/core"
-	"git.ole-hartwig.eu/development/s3mail/s3mail/mailer"
-	"git.ole-hartwig.eu/development/s3mail/s3mail/store"
-	"git.ole-hartwig.eu/development/s3mail/s3mail/wizard"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/core"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/mailer"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/store"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/wizard"
 )
 
 // Sender is the slice of SES the server needs.

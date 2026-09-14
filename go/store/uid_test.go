@@ -3,9 +3,9 @@ package store_test
 import (
 	"testing"
 
-	"git.ole-hartwig.eu/development/s3mail/s3mail/core"
-	"git.ole-hartwig.eu/development/s3mail/s3mail/s3fake"
-	"git.ole-hartwig.eu/development/s3mail/s3mail/store"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/core"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/s3fake"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/store"
 )
 
 // The UID design of IMAP.md, run through the real op log rather than over a

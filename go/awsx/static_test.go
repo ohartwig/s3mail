@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"git.ole-hartwig.eu/development/s3mail/s3mail/awsx"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/awsx"
 )
 
 // Static exists for the case where there is no ~/.aws to read: a phone. So the
