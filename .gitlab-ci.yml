@@ -56,7 +56,7 @@ include:
         - when: never
   - component: ${CI_SERVER_HOST}/devops/ci-cd-components/composed-default-pipelines/go@2.13.4
     inputs:
-      working-directory: go
+      working-directory: .
       # No `test-args`: test:go is overridden below to keep this repository's
       # coverage reporting, and that override replaces the script anyway.
       # Declaring the arguments here as well would leave two places claiming to
@@ -83,6 +83,64 @@ include:
       # pipeline comes into being with no jobs at all and counts as failed. That
       # happened three times after a merge before this was pinned down.
       rules-config:
+        - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
+
+  # The public mirror and the GitHub release, from the estate's component
+  # rather than a copy of the job: yasrt, pinup and this repository each had
+  # one, and the copies drifted.
+  #
+  # mirror:github rewrites the history without CLAUDE.md, .claude/ and
+  # .gitlab/ (git filter-repo, deterministic, so the ids on GitHub stay put),
+  # keeps main and the v-tags, and force-pushes with --prune. It runs in two
+  # pipelines: on a push to main, after the release stage, so the tag yasrt
+  # has just cut is mirrored in the same pipeline; and on the tag pipeline,
+  # before release:github, because a release needs its tag on GitHub first.
+  # Both push the same rewritten history.
+  #
+  # release:github hangs onto the GitHub release the very files release:links
+  # links here: the packages, the per-package checksums, SHA256SUMS and its
+  # signature. Nothing is built twice - a macOS package built on GitHub would
+  # be an unsigned one under the same name.
+  #
+  # GITHUB_MIRROR_TOKEN is a fine-grained token with contents:write on the
+  # mirror repository, the one stored secret about publishing this project.
+  # renovate: datasource=gitlab-tags depName=devops/ci-cd-components/extension-clean-export
+  - component: ${CI_SERVER_HOST}/devops/ci-cd-components/extension-clean-export/github-mirror@1.4.0
+    inputs:
+      stage: .post
+      mirror-target: 'ohartwig/s3mail'
+      mirror-token-var: 'GITHUB_MIRROR_TOKEN'
+      strip-paths: ['CLAUDE.md', '.claude', '.gitlab']
+      keep-tags: 'v*'
+      prune: 'true'
+      rules-config:
+        - if: $GITHUB_MIRROR_TOKEN == null
+          when: never
+        - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+        - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
+  # renovate: datasource=gitlab-tags depName=devops/ci-cd-components/extension-clean-export
+  - component: ${CI_SERVER_HOST}/devops/ci-cd-components/extension-clean-export/github-release@1.4.0
+    inputs:
+      stage: .post
+      release-target: 'ohartwig/s3mail'
+      release-token-var: 'GITHUB_MIRROR_TOKEN'
+      assets: ['dist/*.zip', 'dist/*.sha256', 'SHA256SUMS', 'SHA256SUMS.sig']
+      # The same install paragraph release:footer appends here.
+      notes-footer-file: '.gitlab/release-footer.md'
+      needs-config:
+        - mirror:github
+        # The same producers as upload: the packages from the build jobs and
+        # sign:macos, the manifest, and its signature where the component
+        # made one.
+        - build:linux-amd64
+        - build:windows-amd64
+        - sign:macos
+        - manifest
+        - job: sign:artifact:SHA256SUMS
+          optional: true
+      rules-config:
+        - if: $GITHUB_MIRROR_TOKEN == null
+          when: never
         - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
 
 
@@ -184,7 +242,7 @@ test:go:
   coverage: '/total:\s+\(statements\)\s+(\d+\.\d+)%/'
   artifacts:
     paths:
-      - go/coverage.out
+      - coverage.out
     expire_in: 1 week
 
 # --------------------------------------------------------------------------- #
@@ -193,19 +251,12 @@ test:go:
 .build:
   stage: build
   needs: [test:go]
-  # `cd go` and the module cache sit here, not in `default:`. In `default:` they
-  # reached the composed jobs as well, and those run at the repository root:
-  # verify:component-integrity looked for .gitlab-ci.yml inside go/ and reported
-  # it unreadable, and check:quick had trufflehog try to clone go/ as a git
-  # repository. Both went red on the first run of this pipeline for that reason
-  # alone. The component's own Go jobs bring their own `cd`, so nothing else
-  # needs this.
-  before_script:
-    - cd go
+  # The module cache sits here, not in `default:`: in `default:` it reached
+  # the composed jobs as well, which do not build.
   cache:
     key:
       files:
-        - go/go.sum
+        - go.sum
     paths:
       - .go/pkg/mod
   script:
@@ -252,7 +303,7 @@ test:go:
     - cd dist && sha256sum "s3mail-${LABEL}.zip" > "s3mail-${LABEL}.zip.sha256"
   artifacts:
     paths:
-      - go/dist/
+      - dist/
     expire_in: 1 month
 
 build:windows-amd64:
@@ -383,10 +434,10 @@ sign:macos:
         printf 'wegwerf' > /tmp/id.pw
         REAL=no
       fi
-    # An absolute path rather than `cd go/dist`: GitLab runs every script line
-    # in the same shell, so a second relative cd lands in go/dist/go/dist.
+    # An absolute path rather than `cd dist`: GitLab runs every script line
+    # in the same shell, so a second relative cd lands in dist/dist.
     - |
-      cd "$CI_PROJECT_DIR/go/dist"
+      cd "$CI_PROJECT_DIR/dist"
       for LABEL in macos-arm64 macos-amd64; do
         APP="s3mail-${LABEL}.app"
         if [ "$REAL" = "yes" ]; then
@@ -416,7 +467,7 @@ sign:macos:
     # A package whose execute bit does not survive the journey will not start
     # on the target machine - and that is only noticed there. So check here.
     - |
-      cd "$CI_PROJECT_DIR/go/dist"
+      cd "$CI_PROJECT_DIR/dist"
       for LABEL in macos-arm64 macos-amd64; do
         rm -rf pruef && mkdir pruef && unzip -q "s3mail-${LABEL}.zip" -d pruef
         BIN=pruef/s3mail.app/Contents/MacOS/s3mail
@@ -429,7 +480,7 @@ sign:macos:
     - rm -f /tmp/id.p12 /tmp/id.pw /tmp/notary.json /tmp/wegwerf.key /tmp/wegwerf.crt
   artifacts:
     paths:
-      - go/dist/
+      - dist/
     expire_in: 1 month
 
 # --------------------------------------------------------------------------- #
@@ -443,30 +494,6 @@ sign:macos:
 # macOS is notarised on top of that; the manifest is the route for Windows and
 # Linux, where there is no signature inside the package.
 # --------------------------------------------------------------------------- #
-# The Go module lives under go/ and is named for it - git.ole-hartwig.eu/
-# development/s3mail/s3mail/go - which is how another module (the iOS
-# app's) requires it by version instead of by a relative replace to a
-# sibling checkout. Go finds the version of a module in a subdirectory
-# under a tag prefixed with that directory: go/v1.5.0 beside v1.5.0. The
-# tag pipeline adds it, pointing at the same commit, with the job token
-# (a push that starts no pipeline). Idempotent: an existing tag is left.
-release:go-tag:
-  stage: release
-  image: ${GO_IMAGE}
-  before_script: []
-  needs: []
-  rules:
-    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
-  script:
-    - |
-      set -eu
-      if git ls-remote --tags origin "refs/tags/go/${CI_COMMIT_TAG}" | grep -q .; then
-        echo "go/${CI_COMMIT_TAG} exists"; exit 0
-      fi
-      git tag "go/${CI_COMMIT_TAG}" "${CI_COMMIT_SHA}"
-      git push "https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" "refs/tags/go/${CI_COMMIT_TAG}"
-      echo "go/${CI_COMMIT_TAG} -> ${CI_COMMIT_SHORT_SHA}"
-
 manifest:
   stage: release
   image: ${GO_IMAGE}
@@ -479,7 +506,7 @@ manifest:
     - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
   script:
     # Sorted, so two runs of the same state produce the same manifest.
-    - cd go/dist && sha256sum *.zip | sort -k2 > "$CI_PROJECT_DIR/SHA256SUMS"
+    - cd dist && sha256sum *.zip | sort -k2 > "$CI_PROJECT_DIR/SHA256SUMS"
     - cat "$CI_PROJECT_DIR/SHA256SUMS"
   artifacts:
     paths:
@@ -516,25 +543,25 @@ upload:
     # in the asset links below. Stripping the "v" here would have produced links
     # pointing nowhere.
     #
-    # Manifest and signature live in the project directory, not in go/dist: they
+    # Manifest and signature live in the project directory, not in dist: they
     # belong to the release and not to a build target.
     #
     # The manifest MUST be there; if it is missing something is fundamentally
     # wrong, and the job should say so instead of quietly building a release
     # with no checksums.
-    - cp "$CI_PROJECT_DIR/SHA256SUMS" go/dist/
+    - cp "$CI_PROJECT_DIR/SHA256SUMS" dist/
     # The signature may be absent - the component only creates its job where
     # signing is possible. Whether it was there decides below whether the
     # release page gets a link to it: a link to a signature that is nowhere is
     # worse than no link. That is exactly what happened at v1.0.0.
     - |
-      if cp "$CI_PROJECT_DIR/SHA256SUMS.sig" go/dist/ 2>/dev/null; then
+      if cp "$CI_PROJECT_DIR/SHA256SUMS.sig" dist/ 2>/dev/null; then
         echo "SIGNIERT=ja" > "$CI_PROJECT_DIR/release.env"
       else
         echo "SIGNIERT=nein" > "$CI_PROJECT_DIR/release.env"
         echo "Hinweis: keine Signatur zum Manifest - das Release verlinkt keine"
       fi
-    - cd go/dist
+    - cd dist
     - |
       for f in *.zip *.sha256 SHA256SUMS SHA256SUMS.sig; do
         [ -f "$f" ] || continue
@@ -620,8 +647,8 @@ release:footer:
 # every push to main, because ios built its gomobile bridge against a checkout
 # of this repository's main and nothing else would have caught a break here
 # (!57 raising go.mod cost three days that way). Since ios requires the Go
-# module by version (go/v1.5.0, ios!26), a change here reaches it as a
-# dependency update with a pipeline of its own; building ios against every
+# module by version (github.com/ohartwig/s3mail, ios!26), a change here
+# reaches it as a dependency update with a pipeline of its own; building ios against every
 # push to main would test a combination nobody ships, at the price of a Mac
 # build per push. ios's workflow still accepts a triggered pipeline, so a
 # trigger by hand remains possible when somebody wants to see one.

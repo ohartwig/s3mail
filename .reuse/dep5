@@ -1,0 +1,8 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: s3mail
+Upstream-Contact: Kai Ole Hartwig <mail@ole-hartwig.eu>
+Source: https://github.com/ohartwig/s3mail
+
+Files: *
+Copyright: 2026 Kai Ole Hartwig
+License: Apache-2.0
