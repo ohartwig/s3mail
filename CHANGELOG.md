@@ -1,3 +1,18 @@
+## [1.6.0](https://git.ole-hartwig.eu/development/s3mail/s3mail/compare/v1.5.0...v1.6.0) (2026-09-14)
+
+### :sparkles: Features
+
+* go install findet das Modul, und das Repository ist öffentlich ([61c9729](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/61c97292f2468a87ea1356c3418048b2a49a0ad0))
+
+### :bug: Fixes
+
+* **lint:** die Prüfungen laufen nicht in den Modul-Cache ([f9cc804](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/f9cc804fcc993bc8ab88c188f8525f78a7994e05))
+
+### :repeat: Continuous Integrations
+
+* **deps:** update ci components ([11f9fc1](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/11f9fc1eb1cc90ab178df3f99996c56f577ebd0b))
+* stop building ios on every push to main - it requires the module by version now ([694b95e](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/694b95e42bdae2028de35fba31fdbad5c1b0344f))
+
 ## [1.5.0](https://git.ole-hartwig.eu/development/s3mail/s3mail/compare/v1.4.3...v1.5.0) (2026-09-14)
 
 ### :sparkles: Features
