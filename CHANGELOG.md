@@ -1,3 +1,15 @@
+## [1.4.3](https://git.ole-hartwig.eu/development/s3mail/s3mail/compare/v1.4.2...v1.4.3) (2026-09-14)
+
+### :repeat: Continuous Integrations
+
+* release-tools/yasrt@2 ([f5b6f6d](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/f5b6f6d4401cc6c0bea494b83a1b700ee3ab05bf))
+* the release tells merge requests and issues they shipped, as before ([6effe2d](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/6effe2d4c648d3ceb20512eb6b9ba36c246eb816))
+
+### :repeat: Chores
+
+* **deps:** update ci components ([fde5419](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/fde5419a892704f3fb194132e29897d6324f1f17))
+* **deps:** update registry.ole-hartwig.eu/devops/images/code-signing docker tag to v1.3.18 ([8368a80](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/8368a80fe338a39aa09148016be59f4f7d74603b))
+
 ## [1.4.2](https://git.ole-hartwig.eu/development/s3mail/s3mail/compare/v1.4.1...v1.4.2) (2026-09-13)
 
 ### :repeat: Continuous Integrations
