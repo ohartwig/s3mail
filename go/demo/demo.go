@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	"git.ole-hartwig.eu/development/s3mail/s3mail/core"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/core"
 )
 
 // Sample mail as files rather than as string constants in Go: the code here is

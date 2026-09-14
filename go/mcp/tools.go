@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"git.ole-hartwig.eu/development/s3mail/s3mail/core"
-	"git.ole-hartwig.eu/development/s3mail/s3mail/mailer"
-	"git.ole-hartwig.eu/development/s3mail/s3mail/mimeparse"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/core"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/mailer"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/mimeparse"
 )
 
 // The tool surface is deliberately lopsided.

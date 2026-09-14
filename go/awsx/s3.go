@@ -16,7 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
 
-	"git.ole-hartwig.eu/development/s3mail/s3mail/store"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/store"
 )
 
 // S3 maps store.S3 onto the AWS SDK.

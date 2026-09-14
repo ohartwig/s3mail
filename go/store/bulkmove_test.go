@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"testing"
 
-	"git.ole-hartwig.eu/development/s3mail/s3mail/s3fake"
-	"git.ole-hartwig.eu/development/s3mail/s3mail/store"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/s3fake"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/store"
 )
 
 // Moving a whole search result is the normal case, not the exception. What

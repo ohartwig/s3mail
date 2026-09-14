@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"git.ole-hartwig.eu/development/s3mail/s3mail/core"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/core"
 )
 
 func TestAHalfFilledRowFallsOutQuietly(t *testing.T) {

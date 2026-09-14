@@ -10,11 +10,11 @@ import (
 	"slices"
 	"strings"
 
-	"git.ole-hartwig.eu/development/s3mail/s3mail/awsx"
-	"git.ole-hartwig.eu/development/s3mail/s3mail/config"
-	"git.ole-hartwig.eu/development/s3mail/s3mail/core"
-	"git.ole-hartwig.eu/development/s3mail/s3mail/i18n"
-	"git.ole-hartwig.eu/development/s3mail/s3mail/qr"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/awsx"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/config"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/core"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/i18n"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/qr"
 )
 
 // Letting a second device into the mailbox - a phone, in practice.

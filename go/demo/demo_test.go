@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"git.ole-hartwig.eu/development/s3mail/s3mail/core"
-	"git.ole-hartwig.eu/development/s3mail/s3mail/demo"
-	"git.ole-hartwig.eu/development/s3mail/s3mail/mimeparse"
-	"git.ole-hartwig.eu/development/s3mail/s3mail/s3fake"
-	"git.ole-hartwig.eu/development/s3mail/s3mail/store"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/core"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/demo"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/mimeparse"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/s3fake"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/store"
 )
 
 var when = time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)

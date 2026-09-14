@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"git.ole-hartwig.eu/development/s3mail/s3mail/web"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/web"
 )
 
 // fakeQueue stands in for SQS: it hands out what the test wants and counts how

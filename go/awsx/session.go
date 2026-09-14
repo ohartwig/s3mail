@@ -9,7 +9,7 @@ package awsx
 import (
 	"context"
 	"errors"
-	"git.ole-hartwig.eu/development/s3mail/s3mail/i18n"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/i18n"
 	"path/filepath"
 	"strings"
 

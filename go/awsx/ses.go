@@ -10,7 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ses"
 	"github.com/aws/aws-sdk-go-v2/service/ses/types"
 
-	"git.ole-hartwig.eu/development/s3mail/s3mail/mailer"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/mailer"
 )
 
 // SES sends replies and forwards.

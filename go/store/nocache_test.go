@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"git.ole-hartwig.eu/development/s3mail/s3mail/s3fake"
-	"git.ole-hartwig.eu/development/s3mail/s3mail/store"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/s3fake"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/store"
 )
 
 // --no-cache hands an empty directory down. Nothing may then reach the disk:

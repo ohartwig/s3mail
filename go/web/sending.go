@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"sync"
 
-	"git.ole-hartwig.eu/development/s3mail/s3mail/store"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/store"
 )
 
 // Unfinished sends, and the one question the bucket cannot answer itself.

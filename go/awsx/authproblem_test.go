@@ -7,7 +7,7 @@ import (
 	"errors"
 	"testing"
 
-	"git.ole-hartwig.eu/development/s3mail/s3mail/awsx"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/awsx"
 )
 
 // IsAuthProblem decides whether the interface puts up a banner that stays or a

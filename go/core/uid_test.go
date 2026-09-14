@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"git.ole-hartwig.eu/development/s3mail/s3mail/core"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/core"
 )
 
 // replay runs ops over a fresh document in the given order - that is what a

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"git.ole-hartwig.eu/development/s3mail/s3mail/s3fake"
-	"git.ole-hartwig.eu/development/s3mail/s3mail/store"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/s3fake"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/store"
 )
 
 // The UID rules were proved in core. Here they meet the bucket: does a refresh

@@ -7,7 +7,7 @@ import (
 	"context"
 	"time"
 
-	"git.ole-hartwig.eu/development/s3mail/s3mail/web"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/web"
 )
 
 // queue is the ear the watcher hangs on. An interface, so the loop below can be

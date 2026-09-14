@@ -9,7 +9,7 @@ import (
 	"io"
 	"time"
 
-	"git.ole-hartwig.eu/development/s3mail/s3mail/store"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/store"
 )
 
 // What --debug writes down, and what it must never write down.

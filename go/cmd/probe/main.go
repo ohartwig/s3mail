@@ -11,7 +11,7 @@ import (
 	"os"
 	"time"
 
-	"git.ole-hartwig.eu/development/s3mail/s3mail/mimeparse"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/mimeparse"
 )
 
 func main() {

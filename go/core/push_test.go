@@ -6,7 +6,7 @@ package core_test
 import (
 	"testing"
 
-	"git.ole-hartwig.eu/development/s3mail/s3mail/core"
+	"git.ole-hartwig.eu/development/s3mail/s3mail/go/core"
 )
 
 func TestANewDeviceRegisters(t *testing.T) {

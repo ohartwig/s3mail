@@ -1,4 +1,4 @@
-module git.ole-hartwig.eu/development/s3mail/s3mail
+module git.ole-hartwig.eu/development/s3mail/s3mail/go
 
 go 1.27.0
 
