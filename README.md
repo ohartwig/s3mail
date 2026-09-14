@@ -19,13 +19,15 @@ user and a key of its own.
 ### On the machine that runs s3mail
 
 Nothing. No web server, no database, no Docker, no runtime. Download the package
-for your platform — macOS (Apple Silicon and Intel), Linux, Windows — and run it.
+for your platform — macOS (Apple Silicon and Intel), Linux, Windows — from the
+[releases](https://github.com/ohartwig/s3mail/releases) and run it.
 
 The macOS packages are signed and notarised, so no `xattr` and no right-click
 dance. Windows packages are not signed; SmartScreen will say so. Every platform
 ships `SHA256SUMS` with a cosign signature.
 
 Building it yourself needs Go 1.27 or newer. Nothing else — CGO is off.
+`go install github.com/ohartwig/s3mail/cmd/s3mail@latest` works as well.
 
 Outbound, s3mail talks to `s3.<region>.amazonaws.com`,
 `email.<region>.amazonaws.com` and, for encrypted mail,
@@ -54,7 +56,7 @@ rule are what a CloudFormation template creates:
 ```bash
 aws cloudformation create-stack \
   --stack-name s3mail \
-  --template-body file://go/deploy/s3mail.json \
+  --template-body file://deploy/s3mail.json \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameters \
       ParameterKey=MailDomain,ParameterValue=example.org \
@@ -72,7 +74,7 @@ aws ses set-active-receipt-rule-set --rule-set-name s3mail-you
 aws iam create-access-key --user-name s3mail-you
 ```
 
-See [`go/deploy/README.md`](go/deploy/README.md) for what each resource is there
+See [`deploy/README.md`](deploy/README.md) for what each resource is there
 to do. Setting the same thing up by hand in the console is written out step by
 step in [`README.de.md`](README.de.md).
 
@@ -274,6 +276,10 @@ not access.
 
 Losing a phone is a single revocation, not a rotation everywhere.
 
+The app lives in its own repository,
+<https://github.com/ohartwig/s3mail-ios>; the reasoning behind it is in
+[`IOS.md`](IOS.md).
+
 ## Limits
 
 - **No IMAP.** A normal mail program cannot open the mailbox. Sending would work
@@ -302,7 +308,6 @@ Losing a phone is a single revocation, not a rotation everywhere.
 ## Building
 
 ```bash
-cd go
 go build ./cmd/s3mail        # one file, about 15 MB
 GOOS=windows GOARCH=amd64 go build ./cmd/s3mail
 ```
@@ -312,7 +317,7 @@ Cross compiling works because CGO is off.
 ## Tests
 
 ```bash
-cd go && go test ./...
+go test ./...
 ```
 
 Sixteen packages, no AWS access: `s3fake` reproduces S3 with ETags, prefix
@@ -328,16 +333,29 @@ One group on its own:
 go test ./store/ -run TestMoveCarriesTheState -v
 ```
 
+## Contributing
+
+Bugs and ideas go to the [issues](https://github.com/ohartwig/s3mail/issues),
+changes as pull requests. [`CONTRIBUTING.md`](CONTRIBUTING.md) says what a
+change needs to bring with it.
+
 ## Security
 
-The reporting path, the assumptions and the threat model — including what is
-**not** covered — are in [`SECURITY.md`](SECURITY.md). Short version:
-vulnerabilities to <security@ole-hartwig.eu>, not as an issue.
+The reporting path and what is in scope are in [`SECURITY.md`](SECURITY.md).
+Short version: vulnerabilities to <security@ole-hartwig.eu>, not as an issue.
+
+## Where this lives
+
+The canonical public home is <https://github.com/ohartwig/s3mail>; that is
+where tags, releases and issues appear. Development and the release pipeline
+run on the author's GitLab, which mirrors here — pull requests are read on
+GitHub and land through the mirror, so a merge may take a day.
 
 ## Licence
 
 Apache-2.0. The full text is in [`LICENSE`](LICENSE), attribution in
-[`NOTICE`](NOTICE), and every source file carries the SPDX identifier.
+[`NOTICE`](NOTICE), and every source file carries the SPDX identifier; the
+repository is [REUSE](https://reuse.software/) compliant.
 
 The patent clause in section 3 is the reason for Apache-2.0 over MIT: it grants
 every user the patent rights to what is in here, and takes them away again from

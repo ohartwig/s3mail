@@ -13,7 +13,7 @@ s3mail ist ein einzelnes Programm, bringt seinen eigenen Server mit und bindet
 ihn an 127.0.0.1.
 
 Das passende Paket aus den
-[Releases](https://git.ole-hartwig.eu/development/s3mail/s3mail/-/releases) laden –
+[Releases](https://github.com/ohartwig/s3mail/releases) laden –
 macOS (Apple Silicon und Intel), Linux und Windows, jeweils amd64/arm64:
 
 ```bash
@@ -51,12 +51,12 @@ Nicht gebraucht werden Lambda, EC2, VPC oder eine WorkMail-Organisation.
 
 Bucket, Bucket-Policy, IAM-Benutzer samt Policy, die Geräte-Boundary und die
 SES-Empfangsregel legt eine Vorlage an – siehe
-[`go/deploy/README.md`](go/deploy/README.md):
+[`deploy/README.md`](deploy/README.md):
 
 ```bash
 aws cloudformation create-stack \
   --stack-name s3mail \
-  --template-body file://go/deploy/s3mail.json \
+  --template-body file://deploy/s3mail.json \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameters \
       ParameterKey=MailDomain,ParameterValue=firma.de \
@@ -554,12 +554,11 @@ sondern macht sich für eines erreichbar.
 ## Selbst bauen
 
 Fertige Pakete für macOS (Apple Silicon und Intel), Linux und Windows liegen
-unter [Releases](https://git.ole-hartwig.eu/development/s3mail/s3mail/-/releases). Wer
+unter [Releases](https://github.com/ohartwig/s3mail/releases). Wer
 selbst bauen will, braucht nur Go – s3mail kommt ohne C-Bibliotheken aus, also
 baut ein Rechner für alle:
 
 ```bash
-cd go
 go build ./cmd/s3mail                                  # für dieses System
 GOOS=windows GOARCH=amd64 go build ./cmd/s3mail        # für ein anderes
 ```
@@ -897,7 +896,7 @@ wieder weg, der deswegen klagt.
 ## Tests
 
 ```bash
-cd go && go test ./...
+go test ./...
 ```
 
 Sechzehn Pakete, kein AWS-Zugriff: `s3fake` bildet S3 mit

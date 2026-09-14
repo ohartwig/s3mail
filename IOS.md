@@ -3,7 +3,7 @@
 Aufgeschrieben, damit die Überlegung nicht zweimal gemacht werden muss.
 
 **Stand 2026-08-25: Schritte 1 bis 4 sind gebaut**, im eigenen Repo
-[`development/s3mail/ios`](https://git.ole-hartwig.eu/development/s3mail/ios).
+[`ohartwig/s3mail-ios`](https://github.com/ohartwig/s3mail-ios).
 Offen sind Push (5) und Verteilung (6) — beide hängen am Mac-Runner und an
 Apple, nicht am Code. Was unten steht, gilt weiter; die Begründungen sind der
 Grund, warum es so gebaut wurde.
@@ -165,19 +165,20 @@ Arbeit**. Was bleibt, ist der Aufwand — und der ist echt.
 Seit dem 2026-08-25 sammelt die Untergruppe **`development/s3mail`** alles, was
 dazugehört:
 
-    development/s3mail/
-      s3mail    Go-Programm, MCP-Server und der Kern
-      ios       diese App
+    github.com/ohartwig/
+      s3mail        Go-Programm, MCP-Server und der Kern
+      s3mail-ios    diese App
 
 Zwei Repositories und nicht eines, weil die Werkzeugketten nichts teilen: hier
 Xcode und Swift, dort Linux, Docker und Kreuzbauen. Und weil der Go-Kern für die
 App eine **Bibliothek** ist — das ist die ehrliche Beziehung, und sie hat einen
-Namen: `git.ole-hartwig.eu/development/s3mail/s3mail/go` — das `/go` am Ende,
-weil das Modul im Verzeichnis `go/` liegt, Go ein Untermodul nach seinem
-Verzeichnis benennt und es unter `go/v1.5.0` neben `v1.5.0` versioniert. Die App
-bindet es darum per `require` mit Version ein, nicht per `replace` auf ein
-Schwester-Checkout (so war es bis 2026-09-14, und jedes `go mod tidy` außerhalb
-genau dieser Verzeichnisstruktur scheiterte daran). Davor hieß das Modul
+Namen: `github.com/ohartwig/s3mail`. Die `go.mod` liegt im Wurzelverzeichnis,
+damit ein Tag `v1.6.0` die Version des Moduls ist — bis 2026-09-14 lag sie unter
+`go/`, und ein Modul in einem Unterverzeichnis versioniert Go nur über Tags mit
+dem Verzeichnis als Präfix (`go/v1.5.0`). Die App bindet den Kern per `require`
+mit Version ein, nicht per `replace` auf ein Schwester-Checkout (so war es bis
+2026-09-14, und jedes `go mod tidy` außerhalb genau dieser Verzeichnisstruktur
+scheiterte daran). Davor hieß das Modul
 schlicht `s3mail` und war von außen gar nicht einbindbar; ohne diesen Umzug
 bliebe nur der Weg über ein gebautes XCFramework als Artefakt, und das ist genau
 der Auslieferungssprung, der still fehlschlägt.
