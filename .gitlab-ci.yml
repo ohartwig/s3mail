@@ -614,35 +614,15 @@ release:footer:
     - TAG="$CI_COMMIT_TAG" node .gitlab/release-footer.mjs
 
 # --------------------------------------------------------------------------- #
-# Build the consumer when the core changes
+# The consumer is no longer built from here
 #
-# s3mail-ios clones this repository with CORE_REF: main and builds its gomobile
-# bridge against whatever is there. Nothing built it when this side changed, and
-# on 2026-08-31 that cost three days: raising go.mod from 1.25 to 1.27 (!57)
-# broke the iOS build the same morning, and nobody saw it because ios only
-# builds when somebody pushes to ios. It surfaced by accident, during unrelated
-# work on that repository's pipeline.
-#
-# `strategy: depend` rather than fire-and-forget, and that is the whole point. A
-# triggered pipeline nobody watches would have failed just as silently: ios
-# carries no notifier of its own. Depending on it turns a broken consumer into a
-# red pipeline on this side, and this side does have notify:ntfy through the
-# composed template. The cost is that a push to main waits for a Mac build.
-#
-# Default branch only. A tag already implies a main pipeline before it, so
-# triggering twice would queue two Mac builds behind one resource_group for the
-# same tree.
-#
-# ios accepts this because its own workflow carries
-# `- if: $CI_PIPELINE_SOURCE == "pipeline"`, and because development/s3mail/s3mail
-# was added to its CI/CD job-token allowlist on 2026-08-31. Without that entry
-# the trigger is rejected, and the rejection reads like a missing project.
+# Until 2026-09-14 a job in this position triggered development/s3mail/ios on
+# every push to main, because ios built its gomobile bridge against a checkout
+# of this repository's main and nothing else would have caught a break here
+# (!57 raising go.mod cost three days that way). Since ios requires the Go
+# module by version (go/v1.5.0, ios!26), a change here reaches it as a
+# dependency update with a pipeline of its own; building ios against every
+# push to main would test a combination nobody ships, at the price of a Mac
+# build per push. ios's workflow still accepts a triggered pipeline, so a
+# trigger by hand remains possible when somebody wants to see one.
 # --------------------------------------------------------------------------- #
-ios:
-  stage: .post
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-  trigger:
-    project: development/s3mail/ios
-    branch: main
-    strategy: depend
