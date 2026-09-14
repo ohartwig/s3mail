@@ -1,3 +1,9 @@
+## [1.5.0](https://git.ole-hartwig.eu/development/s3mail/s3mail/compare/v1.4.3...v1.5.0) (2026-09-14)
+
+### :sparkles: Features
+
+* **go:** name the module for its directory so another module can require it by version ([f1ed899](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/f1ed89948e880c384450606081c9d462fe8efae4))
+
 ## [1.4.3](https://git.ole-hartwig.eu/development/s3mail/s3mail/compare/v1.4.2...v1.4.3) (2026-09-14)
 
 ### :repeat: Continuous Integrations
