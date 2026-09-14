@@ -40,7 +40,7 @@ include:
   # Only on a push to a protected branch without a tag: the tag pipeline is a
   # triggered one and must not decide anything, and a pipeline started by
   # hand may still force a run.
-  - component: ${CI_SERVER_HOST}/devops/ci-cd-components/release-tools/yasrt@1
+  - component: ${CI_SERVER_HOST}/devops/ci-cd-components/release-tools/yasrt@2
     inputs:
       stage-version: .pre
       stage-release: release
