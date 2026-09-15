@@ -52,6 +52,10 @@ include:
       mr-comments: 'true'
       rules-config:
         - if: $CI_COMMIT_REF_PROTECTED == "true" && $CI_COMMIT_TAG == null && $CI_PIPELINE_SOURCE == "web"
+        # And api, for the same reason: a run started with `glab ci run` is a
+        # run started by hand. A withdrawn release (the tag pipeline failed
+        # on a transient AWS error, 2026-09-15) is cut again by such a run.
+        - if: $CI_COMMIT_REF_PROTECTED == "true" && $CI_COMMIT_TAG == null && $CI_PIPELINE_SOURCE == "api"
         - if: $CI_COMMIT_REF_PROTECTED == "true" && $CI_COMMIT_TAG == null && $CI_PIPELINE_SOURCE == "push"
         - when: never
   - component: ${CI_SERVER_HOST}/devops/ci-cd-components/composed-default-pipelines/go@2.14.1
@@ -118,7 +122,7 @@ include:
           when: never
         # push, and web: a run started by hand on main mirrors too - the
         # first fill of the repository on GitHub was exactly that.
-        - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && ($CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "web")
+        - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && ($CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "web" || $CI_PIPELINE_SOURCE == "api")
         - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
   # renovate: datasource=gitlab-tags depName=devops/ci-cd-components/extension-clean-export
   - component: ${CI_SERVER_HOST}/devops/ci-cd-components/extension-clean-export/github-release@1.4.1
