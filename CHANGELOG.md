@@ -1,3 +1,19 @@
+## [1.6.1](https://git.ole-hartwig.eu/development/s3mail/s3mail/compare/v1.6.0...v1.6.1) (2026-09-15)
+
+### :bug: Fixes
+
+* **ci:** release:links ist idempotent - ein zweiter Tag-Lauf scheitert nicht an vorhandenen Links ([96c228d](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/96c228d444eac982c3a17a4e5362cbc4cd5274bd))
+
+### :repeat: Continuous Integrations
+
+* der Spiegel läuft auch bei einem von Hand gestarteten Lauf auf main ([022195d](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/022195da0bcad3f6a8a32825e050b95b5321940e))
+* **deps:** update dependency devops/ci-cd-components/composed-default-pipelines to v2.14.1 ([e665992](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/e665992492bf73ad757fa51aa8623b45a35af3f8))
+* **deps:** update dependency devops/ci-cd-components/composed-default-pipelines to v2.14.0 ([b39f905](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/b39f905b7f2d1a50c3541b359ec7d5d3c660d03b))
+* **deps:** update dependency devops/ci-cd-components/composed-default-pipelines to v2.13.7 ([1ec16c4](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/1ec16c490665c706fbabfa385ad8d0aaa31adf87))
+* **deps:** update dependency devops/ci-cd-components/composed-default-pipelines to v2.13.6 ([855050e](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/855050e0f438a88fb5489bb045a9584a52889a23))
+* **deps:** update dependency devops/ci-cd-components/composed-default-pipelines to v2.13.5 ([4e227be](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/4e227be90de30af33f6ac5808668658aecea0953))
+* extension-clean-export 1.4.1 - der Spiegel exportiert sein Token ([3066582](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/30665823704d6386940e57a7da5fa2de7ccfd73d))
+
 ## [1.6.0](https://git.ole-hartwig.eu/development/s3mail/s3mail/compare/v1.5.0...v1.6.0) (2026-09-14)
 
 ### :sparkles: Features
