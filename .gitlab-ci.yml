@@ -562,16 +562,16 @@ upload:
     # worse than no link. That is exactly what happened at v1.0.0.
     - |
       if cp "$CI_PROJECT_DIR/SHA256SUMS.sig" dist/ 2>/dev/null; then
-        echo "SIGNIERT=ja" > "$CI_PROJECT_DIR/release.env"
+        echo "SIGNED=yes" > "$CI_PROJECT_DIR/release.env"
       else
-        echo "SIGNIERT=nein" > "$CI_PROJECT_DIR/release.env"
-        echo "Hinweis: keine Signatur zum Manifest - das Release verlinkt keine"
+        echo "SIGNED=no" > "$CI_PROJECT_DIR/release.env"
+        echo "note: no signature for the manifest - the release links none"
       fi
     - cd dist
     - |
       for f in *.zip *.sha256 SHA256SUMS SHA256SUMS.sig; do
         [ -f "$f" ] || continue
-        echo "lade hoch: $f"
+        echo "uploading: $f"
         curl --fail-with-body --silent --show-error \
           --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
           --upload-file "$f" "${PACKAGE_URL}/${CI_COMMIT_TAG}/${f}"
@@ -614,11 +614,11 @@ release:links:
       # pipeline run a second time - to publish on GitHub after the token
       # arrived, 2026-09-15 - otherwise fails here with "Name has already
       # been taken", and the .post jobs behind it never run.
-      vorhanden="$(curl --fail-with-body --silent --show-error \
+      existing="$(curl --fail-with-body --silent --show-error \
         --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
         "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases/${CI_COMMIT_TAG}/assets/links")"
-      verlinke() {
-        if printf '%s' "$vorhanden" | grep -q "\"name\":\"$1\""; then
+      link() {
+        if printf '%s' "$existing" | grep -q "\"name\":\"$1\""; then
           echo "already linked: $1"; return 0
         fi
         curl --fail-with-body --silent --show-error \
@@ -629,18 +629,18 @@ release:links:
           "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases/${CI_COMMIT_TAG}/assets/links"
         echo
       }
-      for datei in s3mail-windows-amd64.zip:package \
+      for file in s3mail-windows-amd64.zip:package \
                    s3mail-macos-arm64.zip:package \
                    s3mail-macos-amd64.zip:package \
                    s3mail-linux-amd64.zip:package \
                    SHA256SUMS:other; do
-        verlinke "${datei%:*}" "${datei#*:}"
+        link "${file%:*}" "${file#*:}"
       done
       # The signature only gets a link when it was actually uploaded - see
       # upload. A link to a signature that is nowhere is worse than no link;
       # that is what went wrong at v1.0.0.
-      if [ "${SIGNIERT:-nein}" = "ja" ]; then
-        verlinke SHA256SUMS.sig other
+      if [ "${SIGNED:-no}" = "yes" ]; then
+        link SHA256SUMS.sig other
       fi
 
 # The install notes under the release: semantic-release appended them from
