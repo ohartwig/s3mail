@@ -54,7 +54,7 @@ include:
         - if: $CI_COMMIT_REF_PROTECTED == "true" && $CI_COMMIT_TAG == null && $CI_PIPELINE_SOURCE == "web"
         - if: $CI_COMMIT_REF_PROTECTED == "true" && $CI_COMMIT_TAG == null && $CI_PIPELINE_SOURCE == "push"
         - when: never
-  - component: ${CI_SERVER_HOST}/devops/ci-cd-components/composed-default-pipelines/go@2.13.7
+  - component: ${CI_SERVER_HOST}/devops/ci-cd-components/composed-default-pipelines/go@2.14.0
     inputs:
       working-directory: .
       # No `test-args`: test:go is overridden below to keep this repository's
