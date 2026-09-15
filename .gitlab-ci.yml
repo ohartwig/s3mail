@@ -619,7 +619,7 @@ release:links:
         "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases/${CI_COMMIT_TAG}/assets/links")"
       verlinke() {
         if printf '%s' "$vorhanden" | grep -q "\"name\":\"$1\""; then
-          echo "schon verlinkt: $1"; return 0
+          echo "already linked: $1"; return 0
         fi
         curl --fail-with-body --silent --show-error \
           --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
