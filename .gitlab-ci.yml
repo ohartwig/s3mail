@@ -606,7 +606,17 @@ release:links:
     # curl image carries curl and ca-certificates and nothing else - no jq -
     # which is the same constraint that shaped the old job.
     - |
+      # Idempotent: a link that is already there is left alone. A tag
+      # pipeline run a second time - to publish on GitHub after the token
+      # arrived, 2026-09-15 - otherwise fails here with "Name has already
+      # been taken", and the .post jobs behind it never run.
+      vorhanden="$(curl --fail-with-body --silent --show-error \
+        --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
+        "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases/${CI_COMMIT_TAG}/assets/links")"
       verlinke() {
+        if printf '%s' "$vorhanden" | grep -q "\"name\":\"$1\""; then
+          echo "schon verlinkt: $1"; return 0
+        fi
         curl --fail-with-body --silent --show-error \
           --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
           --data-urlencode "name=$1" \
