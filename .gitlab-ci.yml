@@ -109,7 +109,7 @@ include:
   # GITHUB_MIRROR_TOKEN is a fine-grained token with contents:write on the
   # mirror repository, the one stored secret about publishing this project.
   # renovate: datasource=gitlab-tags depName=devops/ci-cd-components/extension-clean-export
-  - component: ${CI_SERVER_HOST}/devops/ci-cd-components/extension-clean-export/github-mirror@1.4.2
+  - component: ${CI_SERVER_HOST}/devops/ci-cd-components/extension-clean-export/github-mirror@1.5.0
     inputs:
       stage: .post
       mirror-target: 'ohartwig/s3mail'
@@ -125,7 +125,7 @@ include:
         - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && ($CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "web" || $CI_PIPELINE_SOURCE == "api")
         - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
   # renovate: datasource=gitlab-tags depName=devops/ci-cd-components/extension-clean-export
-  - component: ${CI_SERVER_HOST}/devops/ci-cd-components/extension-clean-export/github-release@1.4.2
+  - component: ${CI_SERVER_HOST}/devops/ci-cd-components/extension-clean-export/github-release@1.5.0
     inputs:
       stage: .post
       release-target: 'ohartwig/s3mail'
