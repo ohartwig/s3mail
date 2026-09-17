@@ -1,3 +1,43 @@
+## [1.6.2](https://git.ole-hartwig.eu/development/s3mail/s3mail/compare/v1.6.1...v1.6.2) (2026-09-17)
+
+### :memo: Documentation
+
+* CLAUDE.md, the release footer and the pipeline's log lines in English ([f9a667c](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/f9a667c38fa5d1a0600b41e2fec30cb270fab8f6))
+* commit messages and job output are English from now on ([883fad4](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/883fad4a47538a959d581389ea5383b82550017c))
+
+### :repeat: Continuous Integrations
+
+* **deps:** update ci components ([4104d94](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/4104d944c85540c63d61c85c1e7dfc5f425e71df))
+* **deps:** update dependency devops/ci-cd-components/composed-default-pipelines to v2.14.29 ([85dafb0](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/85dafb055b43cf56752b9dfb54b8ac7298b0d145))
+* **deps:** update registry.ole-hartwig.eu/devops/images/code-signing docker tag to v1.3.24 ([dea650b](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/dea650b703e887ae16a1ba66890b3ac5ba1b8ed7))
+* **deps:** update dependency devops/ci-cd-components/composed-default-pipelines to v2.14.27 ([c72cf1b](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/c72cf1bdbd3f5abf593f851b5140b11b054d6859))
+* **deps:** update dependency devops/ci-cd-components/composed-default-pipelines to v2.14.26 ([e01b533](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/e01b533952f59c9676769eca464f0c92de0ba38d))
+* **deps:** update registry.ole-hartwig.eu/devops/images/code-signing docker tag to v1.3.23 ([a6a5613](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/a6a5613680e21881ba62f3632532bd787d530211))
+* **deps:** update dependency devops/ci-cd-components/composed-default-pipelines to v2.14.25 ([abac756](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/abac756098b0026432026cd26716ecd94671cd56))
+* **deps:** update dependency devops/ci-cd-components/composed-default-pipelines to v2.14.24 ([7c11449](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/7c114492d9b73506938170f7b1aaca29981e26ed))
+* **deps:** update dependency devops/ci-cd-components/composed-default-pipelines to v2.14.21 ([b841cc9](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/b841cc984d8974589223868025af28573a202767))
+* **deps:** update dependency devops/ci-cd-components/composed-default-pipelines to v2.14.20 ([2a15b77](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/2a15b77a6ff9a5a68af3beadd675182f5759effe))
+* **deps:** update ci components ([c97041a](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/c97041a5d48cea2bd9dfb054e4e65ea1615b4421))
+* **deps:** update registry.ole-hartwig.eu/devops/images/code-signing docker tag to v1.3.22 ([34f0c5b](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/34f0c5bedceb621c1da19c59d9688dc5c47dae5a))
+* **deps:** update dependency devops/ci-cd-components/extension-clean-export to v1.5.0 ([9388625](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/9388625ba917efbeb8b3fb0beb167543add4c8f9))
+* **deps:** update dependency devops/ci-cd-components/composed-default-pipelines to v2.14.18 ([9b22d9e](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/9b22d9eaca7430edfd5211bc9b99fcf98aba19b6))
+* **deps:** update dependency devops/ci-cd-components/composed-default-pipelines to v2.14.16 ([e7d7e52](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/e7d7e524e7a2296aaeee98581caedac6d5fd99a7))
+* **deps:** update dependency devops/ci-cd-components/composed-default-pipelines to v2.14.15 ([2865ee3](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/2865ee3a410227527f3c5f10a5f245d2cf547a91))
+* **deps:** update registry.ole-hartwig.eu/devops/images/code-signing docker tag to v1.3.21 ([054674d](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/054674d14f9d8d68aeb790b63002580ae26bb1b3))
+* **deps:** update dependency devops/ci-cd-components/composed-default-pipelines to v2.14.13 ([149df13](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/149df133d65e09aac0ebd972de94492d24fbf34d))
+* **deps:** update dependency devops/ci-cd-components/composed-default-pipelines to v2.14.12 ([6e22fe2](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/6e22fe2d36669a3b7f9ad1d14ead417d3e6a35e3))
+* **deps:** update dependency devops/ci-cd-components/composed-default-pipelines to v2.14.11 ([b8a9e31](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/b8a9e311dcd29d765b1b011733cc433aa0c56b39))
+* **deps:** update ci components ([ffb8e3a](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/ffb8e3a540afc8e3560bcf3a271c48cc4b92a15c))
+* **deps:** update ci components ([fa21f87](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/fa21f875e0821c294b754187fdea879a90785366))
+* **deps:** update registry.ole-hartwig.eu/devops/images/code-signing docker tag to v1.3.20 ([46df45c](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/46df45c3df16801b92b18a74a396efa867cac5ed))
+* **deps:** update ci components ([627ec61](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/627ec61b081d8f84b7b12347b1519bc87c3fa788))
+* **deps:** update registry.ole-hartwig.eu/devops/images/code-signing docker tag to v1.3.19 ([7f1215c](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/7f1215cd0983b60c388392500f94eec59e96d715))
+* **deps:** update ci components ([72c7af0](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/72c7af09c1a7d712e95ebed0d6f174ef30571761))
+
+### :repeat: Chores
+
+* **repo-templates:** sync ([ceb33d2](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/ceb33d224865b078db29724c5fea1ebeb0a35dfe))
+
 ## [1.6.1](https://git.ole-hartwig.eu/development/s3mail/s3mail/compare/v1.6.0...v1.6.1) (2026-09-15)
 
 ### :bug: Fixes
