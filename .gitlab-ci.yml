@@ -75,7 +75,7 @@ include:
   # A full tag rather than ~latest or @2: build-provenance is not a catalogue
   # project, and GitLab only resolves a complete tag there. Renovate keeps it up.
   # renovate: datasource=gitlab-tags depName=devops/ci-cd-components/build-provenance
-  - component: ${CI_SERVER_HOST}/devops/ci-cd-components/build-provenance/sign-artifact@2.0.160
+  - component: ${CI_SERVER_HOST}/devops/ci-cd-components/build-provenance/sign-artifact@2.0.161
     inputs:
       stage: release
       artifact-file: SHA256SUMS
