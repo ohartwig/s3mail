@@ -58,7 +58,7 @@ include:
         - if: $CI_COMMIT_REF_PROTECTED == "true" && $CI_COMMIT_TAG == null && $CI_PIPELINE_SOURCE == "api"
         - if: $CI_COMMIT_REF_PROTECTED == "true" && $CI_COMMIT_TAG == null && $CI_PIPELINE_SOURCE == "push"
         - when: never
-  - component: ${CI_SERVER_HOST}/devops/ci-cd-components/composed-default-pipelines/go@2.14.63
+  - component: ${CI_SERVER_HOST}/devops/ci-cd-components/composed-default-pipelines/go@2
     inputs:
       working-directory: .
       # No `test-args`: test:go is overridden below to keep this repository's
@@ -74,8 +74,7 @@ include:
   #
   # A full tag rather than ~latest or @2: build-provenance is not a catalogue
   # project, and GitLab only resolves a complete tag there. Renovate keeps it up.
-  # renovate: datasource=gitlab-tags depName=devops/ci-cd-components/build-provenance
-  - component: ${CI_SERVER_HOST}/devops/ci-cd-components/build-provenance/sign-artifact@2.0.164
+  - component: ${CI_SERVER_HOST}/devops/ci-cd-components/build-provenance/sign-artifact@2
     inputs:
       stage: release
       artifact-file: SHA256SUMS
@@ -108,8 +107,7 @@ include:
   #
   # GITHUB_MIRROR_TOKEN is a fine-grained token with contents:write on the
   # mirror repository, the one stored secret about publishing this project.
-  # renovate: datasource=gitlab-tags depName=devops/ci-cd-components/extension-clean-export
-  - component: ${CI_SERVER_HOST}/devops/ci-cd-components/extension-clean-export/github-mirror@1.5.0
+  - component: ${CI_SERVER_HOST}/devops/ci-cd-components/extension-clean-export/github-mirror@1
     inputs:
       stage: .post
       mirror-target: 'ohartwig/s3mail'
@@ -124,8 +122,7 @@ include:
         # first fill of the repository on GitHub was exactly that.
         - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && ($CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "web" || $CI_PIPELINE_SOURCE == "api")
         - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
-  # renovate: datasource=gitlab-tags depName=devops/ci-cd-components/extension-clean-export
-  - component: ${CI_SERVER_HOST}/devops/ci-cd-components/extension-clean-export/github-release@1.5.0
+  - component: ${CI_SERVER_HOST}/devops/ci-cd-components/extension-clean-export/github-release@1
     inputs:
       stage: .post
       release-target: 'ohartwig/s3mail'
