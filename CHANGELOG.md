@@ -1,3 +1,13 @@
+## [1.6.5](https://git.ole-hartwig.eu/development/s3mail/s3mail/compare/v1.6.4...v1.6.5) (2026-09-28)
+
+### :repeat: Continuous Integrations
+
+* **deps:** update dependency devops/ci-cd-components/composed-default-pipelines to v2.21.2 ([0b79452](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/0b79452f0ed731dd7837a96dc0e5dd39ccd672e4))
+
+### :repeat: Chores
+
+* **repo-templates:** sync ([70b2c45](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/70b2c450e474c413f5e4833c8064127cb21a9a4c))
+
 ## [1.6.4](https://git.ole-hartwig.eu/development/s3mail/s3mail/compare/v1.6.3...v1.6.4) (2026-09-28)
 
 ### :repeat: Continuous Integrations
