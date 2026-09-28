@@ -1,3 +1,15 @@
+## [1.6.4](https://git.ole-hartwig.eu/development/s3mail/s3mail/compare/v1.6.3...v1.6.4) (2026-09-28)
+
+### :repeat: Continuous Integrations
+
+* **deps:** update dependency devops/ci-cd-components/extension-clean-export to v1.5.5 ([d0a7382](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/d0a73825788c2c485457004e440ccc860a7c6519))
+* **deps:** update ci components ([204a2c0](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/204a2c0bae9907e20ebb2aaa59452e935528a0c2))
+* **deps:** update dependency devops/ci-cd-components/build-provenance to v2.0.180 ([c7d9872](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/c7d987243836de4012d903a88f34e87c109b38e1))
+
+### :repeat: Chores
+
+* **repo-templates:** sync ([0c85e26](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/0c85e26abdf87f6ef67830305034c42e57e1cc86))
+
 ## [1.6.3](https://git.ole-hartwig.eu/development/s3mail/s3mail/compare/v1.6.2...v1.6.3) (2026-09-26)
 
 ### :repeat: Continuous Integrations
