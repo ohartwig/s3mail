@@ -1,3 +1,14 @@
+## [1.6.6](https://git.ole-hartwig.eu/development/s3mail/s3mail/compare/v1.6.5...v1.6.6) (2026-09-28)
+
+### :repeat: Continuous Integrations
+
+* **deps:** update registry.ole-hartwig.eu/devops/images/code-signing docker tag to v1.3.37 ([5b96e74](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/5b96e74989f7fbfc6e46589ff68f55a6ae3d4024))
+* **deps:** update ci components ([69d2548](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/69d2548befa5aaf53c91536ba6298446f87563bd))
+
+### :repeat: Chores
+
+* **repo-templates:** sync ([ecf5f63](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/ecf5f638d57447f85c7f352b3c0a7ab4689c334f))
+
 ## [1.6.5](https://git.ole-hartwig.eu/development/s3mail/s3mail/compare/v1.6.4...v1.6.5) (2026-09-28)
 
 ### :repeat: Continuous Integrations
