@@ -1,3 +1,42 @@
+## [1.6.7](https://git.ole-hartwig.eu/development/s3mail/s3mail/compare/v1.6.6...v1.6.7) (2026-10-04)
+
+### :repeat: Continuous Integrations
+
+* **deps:** update registry.ole-hartwig.eu/devops/images/code-signing docker tag to v1.3.51 ([9c0bbf7](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/9c0bbf7bb28b219976a75474df24b03dccfb3681))
+* **deps:** update registry.ole-hartwig.eu/devops/images/code-signing docker tag to v1.3.50 ([4e2d7e9](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/4e2d7e990663ff0ad20b955159e685a8388c4142))
+* **deps:** update registry.ole-hartwig.eu/devops/images/code-signing docker tag to v1.3.49 ([a1d6142](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/a1d61422bd1b15859ea1484ec306bbc3f14e2eec))
+* **deps:** update registry.ole-hartwig.eu/devops/images/code-signing docker tag to v1.3.48 ([6b9a8e0](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/6b9a8e0486be7a89ba3f5874685af4d0d6389420))
+* **deps:** update dependency devops/ci-cd-components/build-provenance to v2.0.192 ([bc7f467](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/bc7f467ee11e74ee66dced84cadf1f4014edac3c))
+* **deps:** update registry.ole-hartwig.eu/devops/images/code-signing docker tag to v1.3.47 ([f1fc48e](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/f1fc48e1804a311f0f98b5d0ee995649226a1de0))
+* **deps:** update dependency devops/ci-cd-components/build-provenance to v2.0.191 ([d26e6f2](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/d26e6f20d1cca7086e611b7a1554c13e62c46a0e))
+* **deps:** update registry.ole-hartwig.eu/devops/images/code-signing docker tag to v1.3.46 ([9473162](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/94731624234d093bf91e50522495f49ce3826e48))
+* **deps:** update registry.ole-hartwig.eu/devops/images/code-signing docker tag to v1.3.45 ([5824d72](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/5824d72e2d3c7bf98a179e24a93bd20aff80a951))
+* **deps:** update registry.ole-hartwig.eu/devops/images/code-signing docker tag to v1.3.44 ([cffddf3](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/cffddf31380aa3f846627e9d6fee149d721e674e))
+* **deps:** update dependency devops/ci-cd-components/build-provenance to v2.0.190 ([ba5620a](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/ba5620ae86f1d396ecb9be6d85670f136e62a117))
+* **deps:** update registry.ole-hartwig.eu/devops/images/code-signing docker tag to v1.3.43 ([afd2214](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/afd22144a0ef10c798fc1ec3817686752011b577))
+* follow composed-default-pipelines on the rolling major tag ([9c4871f](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/9c4871ff0a2cca23ecdea99fd69342e1e5a30dc8))
+* **deps:** update dependency devops/ci-cd-components/composed-default-pipelines to v2.21.27 ([8be53e7](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/8be53e72ce6f07961df6dff21b34479414d09733))
+* **deps:** update dependency devops/ci-cd-components/composed-default-pipelines to v2.21.26 ([af81a8b](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/af81a8ba513e8bd46ef1e2e9417bb681214add1c))
+* **deps:** update registry.ole-hartwig.eu/devops/images/code-signing docker tag to v1.3.42 ([1d67bd9](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/1d67bd919beca4666a681f2010ceb64490a8f39a))
+* **deps:** update dependency devops/ci-cd-components/composed-default-pipelines to v2.21.25 ([927342f](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/927342fa91c008a3810d314bdd398ee89c94e8ee))
+* **deps:** update ci components ([2f80abf](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/2f80abf18e2240b0f1dd3e85702f2acab69fe1a9))
+* **deps:** update dependency devops/ci-cd-components/build-provenance to v2.0.188 ([8c013ef](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/8c013ef3970ebace5dbd63c86e881d1bcc210acf))
+* **deps:** update dependency devops/ci-cd-components/composed-default-pipelines to v2.21.20 ([e6da8d2](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/e6da8d2c6199038a1ce8a9d4751f7f49e983a1fb))
+* **deps:** update ci components ([e299882](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/e299882032c8ac6a5f98671e21caedada4d10999))
+* **deps:** update dependency devops/ci-cd-components/composed-default-pipelines to v2.21.18 ([f4c1914](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/f4c19142beb844ff3ac39074a887f79c876fb755))
+* **deps:** update registry.ole-hartwig.eu/devops/images/code-signing docker tag to v1.3.41 ([2c1b60b](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/2c1b60b68c6b47543a7649a185caa6f5ee8d02b4))
+* **deps:** update dependency devops/ci-cd-components/composed-default-pipelines to v2.21.17 ([2767ee6](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/2767ee6f6363060b62da3fef0b5a18737f9184d4))
+* **deps:** update registry.ole-hartwig.eu/devops/images/code-signing docker tag to v1.3.40 ([8d7511d](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/8d7511d68a436a3b67bd6e5996aecec6b4f9af61))
+* **deps:** update ci components ([0d2b2c7](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/0d2b2c7178f7d4af0cb23eab48f08a41b7a08aff))
+* **deps:** update dependency devops/ci-cd-components/composed-default-pipelines to v2.21.12 ([7614668](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/7614668210e7caa8cf53ae93e2e459d60e2221ab))
+* **deps:** update dependency devops/ci-cd-components/composed-default-pipelines to v2.21.11 ([2b1f4b3](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/2b1f4b33e40303c123983fb2d05a2b910f626274))
+* **deps:** update registry.ole-hartwig.eu/devops/images/code-signing docker tag to v1.3.39 ([e8d46ba](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/e8d46bae5b8991ef66995cc7bb7af8f2702a0317))
+* **deps:** update ci components ([e14c19e](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/e14c19ef0b4591df3d23980dc4f8cad0a620c82d))
+
+### :repeat: Chores
+
+* **repo-templates:** sync ([e726724](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/e72672492d4e8438e8b75ed1cf89ac4a97a234e0))
+
 ## [1.6.6](https://git.ole-hartwig.eu/development/s3mail/s3mail/compare/v1.6.5...v1.6.6) (2026-09-28)
 
 ### :repeat: Continuous Integrations
