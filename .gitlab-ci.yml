@@ -61,6 +61,8 @@ include:
   - component: ${CI_SERVER_HOST}/devops/ci-cd-components/composed-default-pipelines/go@2
     inputs:
       working-directory: .
+      # The same Go as the release build, not the component's rolling default.
+      go-image: $GO_IMAGE
       # No `test-args`: test:go is overridden below to keep this repository's
       # coverage reporting, and that override replaces the script anyway.
       # Declaring the arguments here as well would leave two places claiming to
@@ -177,10 +179,17 @@ variables:
   # Stayed on 1.27 rather than falling back to 1.25: the image repository builds
   # on go-1.27 deliberately, because this project already moved from 1.25 to
   # 1.27 once (commit 3f87e3d, 2026-08-23). That is a decision already taken,
-  # which this continues rather than reverses. `:1.27` is the rolling tag
-  # carrying the real Go version, not the image repository's own release count
-  # (which sits beside it as an immutable tag).
-  GO_IMAGE: "registry.ole-hartwig.eu/devops/images/golang:1.27"
+  # which this continues rather than reverses.
+  #
+  # The exact Go version, not the rolling 1.27: a Go patch in
+  # devops/images/golang changes no file here, so with the rolling tag nothing
+  # cut a release and the binary kept the old standard library. pinup offers
+  # the next patch tag once the image carries it, as fix(deps), which releases
+  # (pinup/runner!40). The tag on a variable of its own: the annotation
+  # manager reads a quoted version, not an image reference.
+  # pinup: datasource=docker depName=registry.ole-hartwig.eu/devops/images/golang
+  GOLANG_IMAGE_TAG: "1.27.2"
+  GO_IMAGE: "registry.ole-hartwig.eu/devops/images/golang:$GOLANG_IMAGE_TAG"
   # CURL_IMAGE likewise from our own golden image (devops/images/curl) rather
   # than the Minimus mirror - same reasoning as GO_IMAGE. `:8.21` is the rolling
   # tag carrying the real curl version.
