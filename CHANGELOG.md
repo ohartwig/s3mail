@@ -190,27 +190,27 @@
 
 ### :bug: Fixes
 
-* **ci:** release:links ist idempotent - ein zweiter Tag-Lauf scheitert nicht an vorhandenen Links ([96c228d](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/96c228d444eac982c3a17a4e5362cbc4cd5274bd))
+* **ci:** release:links is idempotent - a second tag run no longer fails on existing links ([96c228d](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/96c228d444eac982c3a17a4e5362cbc4cd5274bd))
 
 ### :repeat: Continuous Integrations
 
-* der Spiegel läuft auch bei einem von Hand gestarteten Lauf auf main ([022195d](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/022195da0bcad3f6a8a32825e050b95b5321940e))
+* the mirror also runs on a manually started pipeline on main ([022195d](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/022195da0bcad3f6a8a32825e050b95b5321940e))
 * **deps:** update dependency devops/ci-cd-components/composed-default-pipelines to v2.14.1 ([e665992](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/e665992492bf73ad757fa51aa8623b45a35af3f8))
 * **deps:** update dependency devops/ci-cd-components/composed-default-pipelines to v2.14.0 ([b39f905](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/b39f905b7f2d1a50c3541b359ec7d5d3c660d03b))
 * **deps:** update dependency devops/ci-cd-components/composed-default-pipelines to v2.13.7 ([1ec16c4](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/1ec16c490665c706fbabfa385ad8d0aaa31adf87))
 * **deps:** update dependency devops/ci-cd-components/composed-default-pipelines to v2.13.6 ([855050e](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/855050e0f438a88fb5489bb045a9584a52889a23))
 * **deps:** update dependency devops/ci-cd-components/composed-default-pipelines to v2.13.5 ([4e227be](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/4e227be90de30af33f6ac5808668658aecea0953))
-* extension-clean-export 1.4.1 - der Spiegel exportiert sein Token ([3066582](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/30665823704d6386940e57a7da5fa2de7ccfd73d))
+* extension-clean-export 1.4.1 - the mirror exports its token ([3066582](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/30665823704d6386940e57a7da5fa2de7ccfd73d))
 
 ## [1.6.0](https://git.ole-hartwig.eu/development/s3mail/s3mail/compare/v1.5.0...v1.6.0) (2026-09-14)
 
 ### :sparkles: Features
 
-* go install findet das Modul, und das Repository ist öffentlich ([61c9729](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/61c97292f2468a87ea1356c3418048b2a49a0ad0))
+* go install finds the module, and the repository is public ([61c9729](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/61c97292f2468a87ea1356c3418048b2a49a0ad0))
 
 ### :bug: Fixes
 
-* **lint:** die Prüfungen laufen nicht in den Modul-Cache ([f9cc804](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/f9cc804fcc993bc8ab88c188f8525f78a7994e05))
+* **lint:** the checks no longer descend into the module cache ([f9cc804](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/f9cc804fcc993bc8ab88c188f8525f78a7994e05))
 
 ### :repeat: Continuous Integrations
 
@@ -251,12 +251,12 @@
 
 ### :bug: Fixes
 
-* **ci:** Abrufaussetzer wiederholen statt von Hand nachstarten ([21c151c](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/21c151cb1e967540587c4ccf7561c6b0de2ab117))
+* **ci:** retry transient fetch failures instead of restarting by hand ([21c151c](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/21c151cb1e967540587c4ccf7561c6b0de2ab117))
 
 ### :memo: Documentation
 
-* **ci:** der gefundene Konfigurationsfehler gehoert an den retry ([4d4b4c4](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/4d4b4c4d3ec9f86e772bd80c1a1ae060b8a549c0))
-* **ci:** der stages-Kommentar nennt die Herkunft, nicht die Version ([566b664](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/566b6647ecf682caf5ed806effc304d7aa26562b))
+* **ci:** the configuration error that was found belongs on the retry ([4d4b4c4](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/4d4b4c4d3ec9f86e772bd80c1a1ae060b8a549c0))
+* **ci:** the stages comment names the origin, not the version ([566b664](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/566b6647ecf682caf5ed806effc304d7aa26562b))
 
 ### :repeat: Chores
 
@@ -264,58 +264,58 @@
 * **deps:** update ci components ([4249889](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/4249889ee853a7f3d7908fab6e03076099df9793))
 * **deps:** update registry.ole-hartwig.eu/devops/images/code-signing docker tag to v1.0.39 ([9cfddd6](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/9cfddd6840ae2023029273d7f11333ec1c22ca06))
 * **deps:** update registry.ole-hartwig.eu/devops/images/code-signing docker tag to v1.0.50 ([056ea62](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/056ea62c6503cb3c252c5f2b0a9f0b5f01adbec9))
-* **repo-templates:** den Sync auf die korrigierte Vorlage nachziehen ([e22c08f](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/e22c08f611c3ededb045b9c3a563b3925a958acd))
+* **repo-templates:** bring the sync up to the corrected template ([e22c08f](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/e22c08f611c3ededb045b9c3a563b3925a958acd))
 * **repo-templates:** sync ([ec0e482](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/ec0e482ac385b5dc727165300b26e903dd1d7958))
 
 ## [1.4.0](https://git.ole-hartwig.eu/development/s3mail/s3mail/compare/v1.3.2...v1.4.0) (2026-08-31)
 
 ### :sparkles: Features
 
-* **ci:** ios bauen, wenn der Kern sich aendert ([be8bd01](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/be8bd01fcf2dd31fe619a8dde9106a9b586a08f9))
-* **ci:** Releases schneidet der Automat, nicht die Erinnerung ([a8c98f4](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/a8c98f4971ca409344e4309683c6bd56a726e692))
-* **cmd:** --demo zeigt das Beispiel-Postfach auch auf dem Schreibtisch ([23269f3](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/23269f3b18f7b7b08e73ec48f24a6993901d087a)), closes [#39](https://git.ole-hartwig.eu/development/s3mail/s3mail/issues/39)
-* **demo:** ein Postfach, das man ansehen kann, bevor man eines besitzt ([394f271](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/394f2713e12f6ff9ca4660a3e7b185c726a8c906))
-* **deploy:** eine CloudFormation-Vorlage, mit der ein Fremder anfangen kann ([a41cd7f](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/a41cd7fdb68f3f6a403dd847c8461cda06d3c4d5))
+* **ci:** build ios when the core changes ([be8bd01](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/be8bd01fcf2dd31fe619a8dde9106a9b586a08f9))
+* **ci:** releases are cut by the pipeline, not by someone remembering ([a8c98f4](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/a8c98f4971ca409344e4309683c6bd56a726e692))
+* **cmd:** --demo shows the sample mailbox on the desktop too ([23269f3](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/23269f3b18f7b7b08e73ec48f24a6993901d087a)), closes [#39](https://git.ole-hartwig.eu/development/s3mail/s3mail/issues/39)
+* **demo:** a mailbox to look at before you have one ([394f271](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/394f2713e12f6ff9ca4660a3e7b185c726a8c906))
+* **deploy:** a CloudFormation template a stranger can start from ([a41cd7f](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/a41cd7fdb68f3f6a403dd847c8461cda06d3c4d5))
 
 ### :bug: Fixes
 
-* Beispiel-Postfach folgt der Sprache des Rechners ([0ef99be](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/0ef99be3cb314a205c21584bcc30ff0eb4cbfb79))
-* **ci:** `cd go` gehoert an .build, nicht in default ([eda66aa](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/eda66aabb528b7e063e4c4e07baa67f934c0692d))
-* **ci:** das Leerzeichen, an dem die nosemgrep-Marken haengen ([33363e1](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/33363e1d6575d86e6e6ba04773120217bb664bb5))
-* **ci:** semgrep begruendet schweigen lassen, statt es abzuschalten ([e901c3d](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/e901c3df5b3a6504d56ca5b8487e3e07e5bdc545))
-* **web:** die Zahl neben dem Ordner ist die ungelesene, nicht die gesamte ([55d94d4](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/55d94d48cb5122d24fb5c9623fb113d63445db11))
+* the sample mailbox follows the computer's language ([0ef99be](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/0ef99be3cb314a205c21584bcc30ff0eb4cbfb79))
+* **ci:** `cd go` belongs in .build, not in default ([eda66aa](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/eda66aabb528b7e063e4c4e07baa67f934c0692d))
+* **ci:** the space the nosemgrep markers depend on ([33363e1](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/33363e1d6575d86e6e6ba04773120217bb664bb5))
+* **ci:** silence semgrep with a reason instead of switching it off ([e901c3d](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/e901c3df5b3a6504d56ca5b8487e3e07e5bdc545))
+* **web:** the number beside a folder is the unread count, not the total ([55d94d4](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/55d94d48cb5122d24fb5c9623fb113d63445db11))
 
 ### :memo: Documentation
 
-* Ausfuhrerklaerung ist gesetzt, nicht mehr offen ([87fd0c1](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/87fd0c171ca378631d064fda1c1d9706e80ebb8e))
-* **ci:** die Kommentare der Pipeline auf Englisch ([93f0ad3](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/93f0ad391f57159a980419171ec64fb9434a4653))
-* **ci:** die stages-Liste muss eine Obermenge der komponierten bleiben ([b538ba6](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/b538ba6799b34ebc0e556bd1482a30c2750acfe6))
-* Datenschutz und Support, versioniert neben dem Code ([42880c4](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/42880c46a85c105887cc926fb2d84153c1215439))
-* die Bauanleitung nennt 1.27, nicht mehr 1.25 ([2c7628d](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/2c7628dda29d2cfa28619b660a76497b513c0277))
-* die englische README traegt jetzt, was sie behauptet ([f274a0b](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/f274a0be9eaa2b86e27b52f5b9781a1b56b39e32))
-* eine englische Eingangsseite, die deutsche daneben ([747cce1](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/747cce158cf018020934a92c64478459fb74f235))
-* markdownlint zufriedenstellen, ohne die Doku umzubauen ([bfe454a](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/bfe454a3a012458caaf4bb1236840031b96149ed))
-* was App Store Connect fragt, einmal aufgeschrieben ([6f737a1](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/6f737a1b62f02ad3f4ccd97be5df4150de55e3a8))
+* the export compliance declaration is set, no longer open ([87fd0c1](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/87fd0c171ca378631d064fda1c1d9706e80ebb8e))
+* **ci:** pipeline comments in English ([93f0ad3](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/93f0ad391f57159a980419171ec64fb9434a4653))
+* **ci:** the stages list has to stay a superset of the composed one ([b538ba6](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/b538ba6799b34ebc0e556bd1482a30c2750acfe6))
+* privacy and support pages, versioned beside the code ([42880c4](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/42880c46a85c105887cc926fb2d84153c1215439))
+* the build instructions name 1.27, no longer 1.25 ([2c7628d](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/2c7628dda29d2cfa28619b660a76497b513c0277))
+* the English README now carries what it claims ([f274a0b](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/f274a0be9eaa2b86e27b52f5b9781a1b56b39e32))
+* an English landing page, with the German one beside it ([747cce1](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/747cce158cf018020934a92c64478459fb74f235))
+* satisfy markdownlint without restructuring the docs ([bfe454a](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/bfe454a3a012458caaf4bb1236840031b96149ed))
+* what App Store Connect asks, written down once ([6f737a1](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/6f737a1b62f02ad3f4ccd97be5df4150de55e3a8))
 
 ### :zap: Refactor
 
-* **go:** for i := range n statt der gezaehlten Schleife ([e6a3b37](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/e6a3b37b73fed5ede3a49f28c53313576ebb712d))
-* **go:** go.mod auf 1.27, moderne Formen der Standardbibliothek ([91045bf](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/91045bf8ca48c2a0e3171b4f0373ab1a6e1706f0))
-* **go:** omitzero fuer die drei booleschen JSON-Felder ([465c27e](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/465c27eed929898e597a060d93257b3bdbef40c6))
-* **go:** slices.Sort und slices.SortFunc statt sort.Slice ([dc0950b](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/dc0950b41bcc8b553e6ade044f9b841c72db6804))
-* **go:** SplitSeq, strings.Cut und slices.Contains ([6604309](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/6604309420c0eb86e4e3127c686a7224f91d994f))
+* **go:** for i := range n instead of the counted loop ([e6a3b37](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/e6a3b37b73fed5ede3a49f28c53313576ebb712d))
+* **go:** go.mod on 1.27, modern forms of the standard library ([91045bf](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/91045bf8ca48c2a0e3171b4f0373ab1a6e1706f0))
+* **go:** omitzero for the three boolean JSON fields ([465c27e](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/465c27eed929898e597a060d93257b3bdbef40c6))
+* **go:** slices.Sort and slices.SortFunc instead of sort.Slice ([dc0950b](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/dc0950b41bcc8b553e6ade044f9b841c72db6804))
+* **go:** SplitSeq, strings.Cut and slices.Contains ([6604309](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/6604309420c0eb86e4e3127c686a7224f91d994f))
 
 ### :white_check_mark: Tests
 
-* **go:** t.Context() statt context.Background() ([ddd4035](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/ddd4035fb62a40b792e9a906528c240765ec4436))
+* **go:** t.Context() instead of context.Background() ([ddd4035](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/ddd4035fb62a40b792e9a906528c240765ec4436))
 
 ### :repeat: Continuous Integrations
 
-* ai-review einbinden, dafuer Merge-Request-Pipelines ([46127ba](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/46127ba832c1339c820ac0887c4e1bfd4fdbeea7))
-* s3mail faehrt die komponierte Go-Pipeline ([08c51fd](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/08c51fdad4e9e3320402319ef9a7fd9242808523))
+* add ai-review, and merge request pipelines for it ([46127ba](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/46127ba832c1339c820ac0887c4e1bfd4fdbeea7))
+* s3mail runs the composed Go pipeline ([08c51fd](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/08c51fdad4e9e3320402319ef9a7fd9242808523))
 
 ### :repeat: Chores
 
-* Bilder fuer die Unterseite in Webgroesse ([76a8383](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/76a8383dce68e53010b3e1b9269ef11ddd755c01))
-* das Bauartefakt go/s3mail ignorieren ([b8b4498](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/b8b449854ea772c7a1c76e0f2cc2a6e8eb13d56c))
+* web-sized images for the project page ([76a8383](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/76a8383dce68e53010b3e1b9269ef11ddd755c01))
+* ignore the build artefact go/s3mail ([b8b4498](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/b8b449854ea772c7a1c76e0f2cc2a6e8eb13d56c))
 * **deps:** update dependency devops/ci-cd-components/build-provenance to v2.0.54 ([b873d81](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/b873d8174e3261030571c85922301560e4019d4e))
