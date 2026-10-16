@@ -1,3 +1,26 @@
+## [1.6.9](https://git.ole-hartwig.eu/development/s3mail/s3mail/compare/v1.6.8...v1.6.9) (2026-10-16)
+
+### :bug: Fixes
+
+* **window:** keep the browser profile under the user's cache directory ([fda64b8](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/fda64b8e3c2d4fe2e17a0fde9451e1bcbd6c4653))
+* **mailer:** refuse line breaks in header-bound fields ([9f96eab](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/9f96eabe66e030673d77d9677af55bc64430f681))
+* **web:** refuse an opaque Origin ([27bc98f](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/27bc98ffb16741f73ce0dc343062ec229d44a810))
+* **keyring:** keep the cache key out of security's arguments on macOS ([5d82bf7](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/5d82bf71644ff6ef2c2c75c8439fec0d1650bd48))
+
+### :memo: Documentation
+
+* **changelog:** English entries for the releases up to 1.6.1 ([03fa1c7](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/03fa1c795d27b9dd597fcfa5558db31832a23f43))
+
+### :repeat: Continuous Integrations
+
+* **build:** do not pull the coverage artefact into the build checkout ([bfca51a](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/bfca51a2028827f62a2f4e94028094b73eef9866))
+* **deps:** update dependency devops/ci-cd-components/extension-clean-export to v1.7.0 ([6c9f770](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/6c9f770b787058763adaa904825033ba8148485d))
+* **deps:** update registry.ole-hartwig.eu/devops/images/code-signing docker tag to v1.3.65 ([98cae92](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/98cae92963895c7d53f8b0677005b170c33aadd5))
+* **deps:** update registry.ole-hartwig.eu/devops/images/code-signing docker tag to v1.3.64 ([f2ed260](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/f2ed260dbc04656bfdec0d3e6388dce97ec20c4c))
+* **deps:** update registry.ole-hartwig.eu/devops/images/code-signing docker tag to v1.3.63 ([2b08550](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/2b08550e28c23f7093f1801da7bb3712cad392e3))
+* **deps:** update dependency devops/ci-cd-components/extension-clean-export to v1.6.0 ([f2a3442](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/f2a34426155183510aad13ddaf853e23d537b7a0))
+* **deps:** update registry.ole-hartwig.eu/devops/images/code-signing docker tag to v1.3.62 ([4a6b72d](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/4a6b72d6bb264e0d9928ef2c5e4c67abe4cb59b2))
+
 ## [1.6.8](https://git.ole-hartwig.eu/development/s3mail/s3mail/compare/v1.6.7...v1.6.8) (2026-10-12)
 
 ### :bug: Fixes
