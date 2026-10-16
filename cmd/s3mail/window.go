@@ -4,6 +4,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -61,8 +62,44 @@ func appModeBrowser() []string {
 //
 // It doubles as the mark by which our own window is recognised: no other
 // program passes this path, so a browser process carrying it is one we started.
+//
+// Under the user's cache directory, not under os.TempDir(): on Linux that is
+// /tmp, shared by every user of the machine, and a fixed name there is a
+// directory somebody else can create first and then own - with the session
+// cookie and the rendered pages the browser writes into it (AUD-008-F04).
+// Empty when the machine has no cache directory; the caller then opens a tab
+// instead of a window.
 func profileDir() string {
-	return filepath.Join(os.TempDir(), "s3mail-fenster")
+	base, err := os.UserCacheDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(base, "s3mail", "window")
+}
+
+// prepareProfileDir makes the profile directory ours alone: created 0700, and
+// refused when it already exists as something else - a symlink, a file, a
+// directory of another user, or one that group or others may enter. Refusing
+// is the whole point: a browser that writes a token cookie into a directory
+// it did not make is the hole this closes.
+func prepareProfileDir(dir string) error {
+	if dir == "" {
+		return errors.New("no cache directory on this machine")
+	}
+	if err := os.MkdirAll(filepath.Dir(dir), 0o700); err != nil {
+		return err
+	}
+	if err := os.Mkdir(dir, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
+		return err
+	}
+	info, err := os.Lstat(dir)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("%s is not a directory of ours", dir)
+	}
+	return ownedByUsAlone(dir, info)
 }
 
 // windowArgs are the switches that turn a browser into a program window.
@@ -80,9 +117,13 @@ func windowArgs(url string) []string {
 // one without "--type=" is the process that owns the window. Raising a helper
 // does nothing at all, silently.
 func appModePID() (int, bool) {
+	dir := profileDir()
+	if dir == "" {
+		return 0, false // an empty pattern would match any browser with a profile
+	}
 	// Without the leading dashes: pgrep would read "--user-data-dir=..." as its
 	// own option and fail, and a failing pgrep reads as "nothing running".
-	out, err := exec.Command("pgrep", "-f", "user-data-dir="+profileDir()).Output()
+	out, err := exec.Command("pgrep", "-f", "user-data-dir="+dir).Output()
 	if err != nil {
 		return 0, false
 	}
@@ -125,6 +166,9 @@ func startAppMode(url string) bool {
 	if runtime.GOOS == "darwin" {
 		return startAppModeMac(url)
 	}
+	if prepareProfileDir(profileDir()) != nil {
+		return false // a tab in the default browser, with no profile of ours
+	}
 	for _, candidate := range appModeBrowser() {
 		path := candidate
 		if !filepath.IsAbs(path) {
@@ -163,6 +207,9 @@ func startAppModeMac(url string) bool {
 		// there, and a second browser beside it is exactly what was reported.
 		raiseWindow(pid)
 		return true
+	}
+	if prepareProfileDir(profileDir()) != nil {
+		return false
 	}
 	for _, name := range appModeBrowser() {
 		if _, err := os.Stat("/Applications/" + name + ".app"); err != nil {

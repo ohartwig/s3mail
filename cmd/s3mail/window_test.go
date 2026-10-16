@@ -4,6 +4,9 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -42,7 +45,7 @@ func TestWindowArgs(t *testing.T) {
 	if !strings.HasPrefix(args[0], "--app=") {
 		t.Errorf("--app is missing from the first position: %v", args)
 	}
-	if !strings.Contains(args[2], "s3mail-fenster") {
+	if !strings.Contains(args[2], "s3mail") {
 		t.Errorf("a profile directory of its own is missing: %v", args)
 	}
 }
@@ -79,5 +82,60 @@ func TestTheProfilePathIsOurs(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(windowArgs("http://x/"), " "), profileDir()) {
 		t.Error("the window starts on a different profile than the one we look for")
+	}
+}
+
+// The profile holds the session cookie. It used to live under a fixed name in
+// os.TempDir(), which on Linux is /tmp - a directory another user can plant
+// first. Now it is under the user's own cache directory, made 0700, and
+// anything else standing at that path is refused (AUD-008-F04).
+func TestTheProfileDirIsUnderTheUserAndOursAlone(t *testing.T) {
+	if !strings.Contains(profileDir(), "s3mail") || strings.HasPrefix(profileDir(), os.TempDir()+string(filepath.Separator)) {
+		t.Errorf("profile at %q - that is not the user's cache directory", profileDir())
+	}
+
+	base := t.TempDir()
+	dir := filepath.Join(base, "s3mail", "window")
+	if err := prepareProfileDir(dir); err != nil {
+		t.Fatalf("a fresh directory was refused: %v", err)
+	}
+	info, err := os.Stat(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o700 {
+		t.Errorf("created with %v, expected 0700", info.Mode().Perm())
+	}
+	if err := prepareProfileDir(dir); err != nil {
+		t.Errorf("our own directory was refused the second time: %v", err)
+	}
+
+	if runtime.GOOS != "windows" {
+		if err := os.Chmod(dir, 0o777); err != nil {
+			t.Fatal(err)
+		}
+		if err := prepareProfileDir(dir); err == nil {
+			t.Error("a directory others may enter was accepted")
+		}
+		_ = os.Chmod(dir, 0o700)
+	}
+
+	file := filepath.Join(base, "file")
+	if err := os.WriteFile(file, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := prepareProfileDir(file); err == nil {
+		t.Error("a file at the profile path was accepted")
+	}
+
+	link := filepath.Join(base, "link")
+	if err := os.Symlink(dir, link); err == nil {
+		if err := prepareProfileDir(link); err == nil {
+			t.Error("a symlink at the profile path was accepted")
+		}
+	}
+
+	if err := prepareProfileDir(""); err == nil {
+		t.Error("an empty path was accepted")
 	}
 }
