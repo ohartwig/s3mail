@@ -262,7 +262,13 @@ test:go:
 # --------------------------------------------------------------------------- #
 .build:
   stage: build
-  needs: [test:go]
+  # The job waits for the tests but must not inherit their artefact: a
+  # coverage.out lying untracked in the checkout makes `go build` stamp the
+  # binary as modified, and the release then calls itself v1.6.8+dirty
+  # (AUD-008-F07; Go counts untracked files when it reads `git status`).
+  needs:
+    - job: test:go
+      artifacts: false
   # The module cache sits here, not in `default:`: in `default:` it reached
   # the composed jobs as well, which do not build.
   cache:
