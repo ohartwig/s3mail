@@ -143,6 +143,7 @@
   "error.noBucket": "Sin un bucket esto no funciona.",
   "error.noKms": "Este correo está cifrado con KMS, pero no hay acceso a KMS configurado.",
   "error.noRecipient": "No se ha indicado ningún destinatario.",
+  "error.headerLine": "No se permite un salto de línea en el remitente, el asunto, un destinatario o un nombre de archivo.",
   "error.noSender": "No hay remitente definido.",
   "error.noWizard": "el asistente no está disponible",
   "error.notFound": "No encontrado.",

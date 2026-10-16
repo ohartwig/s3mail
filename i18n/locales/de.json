@@ -143,6 +143,7 @@
   "error.noBucket": "Ohne Bucket geht es nicht.",
   "error.noKms": "Diese Mail ist mit KMS verschlüsselt, aber es ist kein KMS-Zugriff eingerichtet.",
   "error.noRecipient": "Kein Empfänger angegeben.",
+  "error.headerLine": "Ein Zeilenumbruch in Absender, Betreff, Empfänger oder Dateiname ist nicht erlaubt.",
   "error.noSender": "Kein Absender gesetzt.",
   "error.noWizard": "der Assistent ist nicht verfügbar",
   "error.notFound": "Nicht gefunden.",

@@ -143,6 +143,7 @@
   "error.noBucket": "Without a bucket this cannot work.",
   "error.noKms": "This message is encrypted with KMS, but no KMS access is set up.",
   "error.noRecipient": "No recipient given.",
+  "error.headerLine": "A line break in the sender, the subject, a recipient or a file name is not allowed.",
   "error.noSender": "No sender set.",
   "error.noWizard": "the setup wizard is not available",
   "error.notFound": "Not found.",

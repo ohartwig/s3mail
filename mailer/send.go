@@ -73,6 +73,11 @@ var (
 	ErrNoSender    = errors.New("no sender set")
 	ErrNoRecipient = errors.New("no recipient given")
 	ErrTooLarge    = errors.New("message larger than SES accepts")
+	// ErrHeaderLine is a line break, or another control character, inside a
+	// field that becomes a header. A line break ends the field and starts a
+	// header of its own - a Bcc, a Reply-To - written by whoever supplied the
+	// string. The desktop form is the person's own; the MCP draft tool is not.
+	ErrHeaderLine = errors.New("header field contains a line break or control character")
 )
 
 // Build assembles the message ready for sending.
@@ -94,6 +99,13 @@ func build(e Draft, defaultFrom string, o Original, now time.Time, keepBcc bool)
 	}
 	if sender == "" {
 		return Message{}, ErrNoSender
+	}
+	names := make([]string, 0, len(e.Attachments))
+	for _, a := range e.Attachments {
+		names = append(names, a.Filename)
+	}
+	if err := headerSafe(append(names, sender, e.Subject, e.To, e.Cc, e.Bcc)...); err != nil {
+		return Message{}, err
 	}
 	to, err := addresses(e.To)
 	if err != nil {
@@ -278,6 +290,22 @@ func writeHeader(w *bytes.Buffer, header textproto.MIMEHeader, keepBcc bool) {
 			fmt.Fprintf(w, "%s: %s\r\n", name, v)
 		}
 	}
+}
+
+// headerSafe refuses what must not reach a header line: CR, LF and the other
+// control characters. A tab is let through - it is white space, not a line
+// break, and a pasted subject may carry one. The address lists are parsed by
+// net/mail further down, but parsed is not the same as refused: the check sits
+// here so that every field passes it, before anything is written.
+func headerSafe(fields ...string) error {
+	for _, s := range fields {
+		for _, r := range s {
+			if (r < 0x20 && r != '\t') || r == 0x7f {
+				return ErrHeaderLine
+			}
+		}
+	}
+	return nil
 }
 
 // addresses splits a recipient list and returns the bare addresses.

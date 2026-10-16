@@ -246,3 +246,45 @@ func TestADraftNeedsNoRecipient(t *testing.T) {
 		t.Errorf("sending without a recipient went through: %v", err)
 	}
 }
+
+// TestHeaderInjectionIsRefused - a line break in a field is a header written by
+// whoever supplied the string. Before this test a subject of
+// "hi\r\nBcc: x" produced a message with a Bcc header, and a sender with a
+// line break was accepted by Build (AUD-008-F02).
+func TestHeaderInjectionIsRefused(t *testing.T) {
+	cases := []struct {
+		name  string
+		draft Draft
+	}{
+		{"bcc and reply-to through the subject", Draft{To: "a@x.de",
+			Subject: "hi\r\nBcc: x@x.de\r\nReply-To: x@x.de", Body: "."}},
+		{"x-header through the sender", Draft{To: "a@x.de",
+			From: "me@x.de\r\nX-Injected: 1", Subject: "hi", Body: "."}},
+		{"bare line feed in the subject", Draft{To: "a@x.de", Subject: "hi\nBcc: x@x.de", Body: "."}},
+		{"line break in the recipient", Draft{To: "a@x.de\r\nBcc: x@x.de", Subject: "hi", Body: "."}},
+		{"line break in a copy", Draft{To: "a@x.de", Cc: "b@x.de\nBcc: x@x.de", Subject: "hi", Body: "."}},
+		{"line break in an attachment name", Draft{To: "a@x.de", Subject: "hi", Body: ".",
+			Attachments: []Attachment{{Filename: "a.txt\r\nX-Injected: 1", ContentType: "text/plain", Content: []byte("x")}}}},
+		{"other control character", Draft{To: "a@x.de", Subject: "hi\x00there", Body: "."}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if _, err := Build(c.draft, "support@firma.de", Original{}, now()); !errors.Is(err, ErrHeaderLine) {
+				t.Errorf("accepted: err=%v", err)
+			}
+			if _, err := BuildDraft(c.draft, "support@firma.de", Original{}, now()); !errors.Is(err, ErrHeaderLine) {
+				t.Errorf("accepted as a draft: err=%v", err)
+			}
+		})
+	}
+
+	// A tab is white space, not a line break; a pasted subject may carry one.
+	n, err := Build(Draft{To: "a@x.de", Subject: "hi\tthere", Body: "."}, "support@firma.de", Original{}, now())
+	if err != nil {
+		t.Fatalf("a tab in the subject was refused: %v", err)
+	}
+	m := parse(t, n.Raw)
+	if m.Header.Get("Bcc") != "" || m.Header.Get("Reply-To") != "" {
+		t.Errorf("headers appeared out of nowhere: %v", m.Header)
+	}
+}
