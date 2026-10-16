@@ -265,6 +265,8 @@ func (s *Server) translate(w http.ResponseWriter, r *http.Request, err error) {
 		s.writeError(w, http.StatusBadRequest, s.text(r, "error.noSender"))
 	case errors.Is(err, mailer.ErrNoRecipient):
 		s.writeError(w, http.StatusBadRequest, s.text(r, "error.noRecipient"))
+	case errors.Is(err, mailer.ErrHeaderLine):
+		s.writeError(w, http.StatusBadRequest, s.text(r, "error.headerLine"))
 	case errors.Is(err, mailer.ErrTooLarge):
 		s.writeError(w, http.StatusBadRequest, s.text(r, "error.tooLarge"))
 	case errors.Is(err, config.ErrNoBucket):
