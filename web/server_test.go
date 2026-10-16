@@ -241,6 +241,13 @@ func TestAccessControl(t *testing.T) {
 		map[string]string{"Origin": "http://localhost:1234"}); r.Code != 403 {
 		t.Errorf("foreign port as origin: HTTP %d", r.Code)
 	}
+	// An opaque origin is a foreign one: a sandboxed iframe on another site
+	// sends "null", and the Origin check must not wave it through on its own
+	// (AUD-008-F06).
+	if r := callServer(t, ts, "POST", "/api/empty-trash", "{}",
+		map[string]string{"Origin": "null", "Cookie": "s3mail=" + testToken}); r.Code != 403 {
+		t.Errorf("Origin null: HTTP %d", r.Code)
+	}
 	// DNS rebinding: a foreign name in the Host header
 	if r := callServer(t, ts, "GET", "/api/messages?folder=", "",
 		map[string]string{"Host": "boese.example"}); r.Code != 403 {

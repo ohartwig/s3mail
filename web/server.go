@@ -176,8 +176,17 @@ func (s *Server) hostOK(r *http.Request) bool {
 // browser sets the Origin.
 func (s *Server) originOK(r *http.Request) bool {
 	o := r.Header.Get("Origin")
-	if o == "" || o == "null" {
+	if o == "" {
+		// No Origin: a same-origin GET, a form the browser posts without one,
+		// or a non-browser client. The token decides those.
 		return true
+	}
+	if o == "null" {
+		// An opaque origin - a sandboxed iframe with allow-scripts and
+		// allow-forms on a foreign site sends exactly this. Until AUD-008-F06
+		// it passed, and only the withheld SameSite cookie stopped it. The
+		// check holds on its own now; s3mail's own iframes never post.
+		return false
 	}
 	u, err := url.Parse(o)
 	if err != nil {
