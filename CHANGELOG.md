@@ -1,3 +1,9 @@
+## [1.6.10](https://git.ole-hartwig.eu/development/s3mail/s3mail/compare/v1.6.9...v1.6.10) (2026-10-16)
+
+### :repeat: Chores
+
+* **repo-templates:** sync ([b17f610](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/b17f610ff5e55ccaf85005a9a874b0810148469e))
+
 ## [1.6.9](https://git.ole-hartwig.eu/development/s3mail/s3mail/compare/v1.6.8...v1.6.9) (2026-10-16)
 
 ### :bug: Fixes
