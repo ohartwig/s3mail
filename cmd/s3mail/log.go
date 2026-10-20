@@ -34,6 +34,25 @@ func startLog() io.WriteCloser {
 	return f
 }
 
+// appendLog opens the same file without emptying it.
+//
+// A second start that finds the port taken must not wipe what the first one
+// wrote: that file is the evidence when the first instance hangs.
+func appendLog() io.WriteCloser {
+	dir := config.Dir()
+	if os.MkdirAll(dir, 0o700) != nil {
+		return nopCloser{io.Discard}
+	}
+	f, err := os.OpenFile(filepath.Join(dir, "start.log"),
+		os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	if err != nil {
+		return nopCloser{io.Discard}
+	}
+	fmt.Fprintf(f, "s3mail %s second start %s\n", version,
+		time.Now().Format("2006-01-02 15:04:05"))
+	return f
+}
+
 // report writes to the console and to the log.
 func report(w io.Writer, format string, a ...any) {
 	fmt.Printf(format+"\n", a...)
