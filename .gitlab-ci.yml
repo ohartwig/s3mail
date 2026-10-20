@@ -188,7 +188,7 @@ variables:
   # (pinup/runner!40). The tag on a variable of its own: the annotation
   # manager reads a quoted version, not an image reference.
   # pinup: datasource=docker depName=registry.ole-hartwig.eu/devops/images/golang
-  GOLANG_IMAGE_TAG: "1.27.2"
+  GOLANG_IMAGE_TAG: "1.27.3"
   GO_IMAGE: "registry.ole-hartwig.eu/devops/images/golang:$GOLANG_IMAGE_TAG"
   # CURL_IMAGE likewise from our own golden image (devops/images/curl) rather
   # than the Minimus mirror - same reasoning as GO_IMAGE. `:8.21` is the rolling
