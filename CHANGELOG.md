@@ -1,3 +1,17 @@
+## [1.6.11](https://git.ole-hartwig.eu/development/s3mail/s3mail/compare/v1.6.10...v1.6.11) (2026-10-20)
+
+### :bug: Fixes
+
+* **deps:** update dependency registry.ole-hartwig.eu/devops/images/golang to v1.27.3 ([a155fab](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/a155fabbc698585904c4eb376f3559b7d32f6b68))
+
+### :repeat: Continuous Integrations
+
+* **deps:** update registry.ole-hartwig.eu/devops/images/code-signing docker tag to v1.3.69 ([4e9cb95](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/4e9cb95be7a88e57b0d82b5e582ed941f605fe93))
+* **deps:** update registry.ole-hartwig.eu/devops/images/code-signing docker tag to v1.3.68 ([1797eb8](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/1797eb811cc9fcf6977cc9fcc481df86dce0d3b5))
+* **deps:** update registry.ole-hartwig.eu/devops/images/code-signing docker tag to v1.3.67 ([e2a789c](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/e2a789ce0984a8382774ccfe4c4e9884863b1204))
+* **deps:** update registry.ole-hartwig.eu/devops/images/code-signing docker tag to v1.3.66 ([b42fe57](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/b42fe5791d91f6770f6d6ded4e4ac190ae50b346))
+* **deps:** update dependency devops/ci-cd-components/extension-clean-export to v1.7.1 ([ea4b8c3](https://git.ole-hartwig.eu/development/s3mail/s3mail/commit/ea4b8c3ed419e7f5ecd2148910001abc6edc5a64))
+
 ## [1.6.10](https://git.ole-hartwig.eu/development/s3mail/s3mail/compare/v1.6.9...v1.6.10) (2026-10-16)
 
 ### :repeat: Chores
