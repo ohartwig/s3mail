@@ -194,9 +194,6 @@ func main() {
 
 	// Without a console window (macOS bundle, Windows GUI mode) every message goes
 	// nowhere. So the start is written to a file as well.
-	logFile := startLog()
-	defer logFile.Close()
-
 	address := net.JoinHostPort(k.Host, strconv.Itoa(k.Port))
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
@@ -206,14 +203,24 @@ func main() {
 		// not answer the launch request, and the window sits somewhere behind.
 		// So do not abort with an error: bring the existing window to the front
 		// and withdraw.
+		//
+		// The log is appended to, not started over: it belongs to the instance
+		// that holds the port, and this one has nothing to say about itself.
+		busyLog := appendLog()
+		defer busyLog.Close()
 		if url, ok := runningInstance(); ok {
-			report(logFile, "%s", cat.T("cli.alreadyRunning"))
+			report(busyLog, "%s", cat.T("cli.alreadyRunning"))
 			openWindow(url)
 			return
 		}
+		// Without a console this line is the only trace of why the start did
+		// nothing - the port is held by something that does not answer.
+		report(busyLog, "%s", cat.Tf("cli.cannotListen", address, err))
 		fmt.Fprintln(os.Stderr, cat.Tf("cli.cannotListen", address, err))
 		os.Exit(1)
 	}
+	logFile := startLog()
+	defer logFile.Close()
 	srv.Port = listener.Addr().(*net.TCPAddr).Port
 	url := fmt.Sprintf("http://%s:%d/?t=%s", k.Host, srv.Port, srv.Token)
 
