@@ -401,6 +401,12 @@ sign:macos:
     AWS_DEFAULT_REGION: eu-north-1
     AWS_ROLE_ARN: arn:aws:iam::714476370938:role/gitlab-ci-code-signing-role
     AWS_WEB_IDENTITY_TOKEN_FILE: /tmp/gitlab_oidc_token
+    # rcodesign uploads to Apple's notary bucket in us-west-2 with its own
+    # AWS SDK, which ignores HTTPS_PROXY; the plain S3 name has no IPv6 and
+    # the runners no IPv4 since 2026-10-24 (grundschutz-viewer v0.3.1: connect
+    # timeout). The dual-stack name answers over IPv6; the AWS CLI calls below
+    # read it too.
+    AWS_USE_DUALSTACK_ENDPOINT: "true"
   script:
     - echo "$GITLAB_OIDC_TOKEN" > /tmp/gitlab_oidc_token
     # Clear static keys away before the CLI sees them.
