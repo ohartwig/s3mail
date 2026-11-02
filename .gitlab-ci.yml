@@ -379,7 +379,7 @@ sign:macos:
   # while it runs and downloads nothing from the network - before, that was an
   # `apk add` and a download from github.
   # renovate: datasource=docker depName=registry.ole-hartwig.eu/devops/images/code-signing
-  image: registry.ole-hartwig.eu/devops/images/code-signing:1.4.73@sha256:9b7aa62b34914657d0f1b48818b7505dbd046db752b19262f4b3ebed73514998
+  image: registry.ole-hartwig.eu/devops/images/code-signing:1.4.74@sha256:5b71045c33a92a4083ac4cbc612e44360b49bfdffee044a220e193bc56516fe5
   tags: [az1a]
   needs:
     - build:macos-arm64
