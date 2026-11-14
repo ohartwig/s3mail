@@ -588,7 +588,7 @@ func (m *Mailbox) ApplyRules(ctx context.Context, pool []core.Message, force boo
 // Refresh only fetches what changed its ETag, so an entry written before the
 // field existed would keep its empty value forever. The version was written
 // from the start and not read - which made it a comment rather than a check.
-const indexVersion = 4
+const indexVersion = 5
 
 func (m *Mailbox) readCache() {
 	raw, err := os.ReadFile(m.CacheFile)
