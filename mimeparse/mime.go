@@ -18,6 +18,7 @@ import (
 	"unicode/utf8"
 
 	"golang.org/x/text/encoding/charmap"
+	"golang.org/x/text/encoding/htmlindex"
 
 	"github.com/emersion/go-message"
 	_ "github.com/emersion/go-message/charset" // registriert iso-8859-*, windows-125*, …
@@ -143,12 +144,23 @@ func AddrStr(value string) string {
 	parts := make([]string, 0, len(list))
 	for _, a := range list {
 		if a.Name != "" {
-			parts = append(parts, a.Name+" <"+a.Address+">")
+			parts = append(parts, quotedWords(a.Name)+" <"+a.Address+">")
 		} else {
 			parts = append(parts, a.Address)
 		}
 	}
 	return strings.Join(parts, ", ")
+}
+
+// quotedWords decodes RFC 2047 encoded words that sit inside a quoted display
+// name: "=?utf-8?B?5b6u5L+h5Zui6Zif?=" <x@tencent.com>. RFC 2047 says not to,
+// so the address parser leaves them; Tencent, QQ and plenty of others send
+// exactly that, and Gmail, Thunderbird and Apple Mail decode it anyway.
+func quotedWords(name string) string {
+	if !strings.Contains(name, "=?") || !strings.Contains(name, "?=") {
+		return name
+	}
+	return Dec(name)
 }
 
 // ParseDate matches parse_date(): the date from the header, else the fallback.
@@ -157,6 +169,49 @@ func ParseDate(header string, fallback time.Time) time.Time {
 		return t
 	}
 	return fallback
+}
+
+var charsetRe = regexp.MustCompile(`(?i)\bcharset\s*=\s*"?([a-z0-9._:-]+)`)
+
+// rawHeaders returns a function that decodes raw 8-bit header values with the
+// charset the message declares for its text. Chinese and Japanese mail chains
+// often put GBK, Big5 or Shift_JIS bytes straight into Subject and From,
+// without RFC 2047 encoding; repairLatin's windows-1252 guess turns those into
+// "Î¢ÐÅ". The declared charset is the best evidence there is: the top-level
+// Content-Type, else the first charset parameter in the message. Valid UTF-8
+// and pure ASCII pass through untouched, and so does anything the declared
+// charset cannot decode cleanly - repairLatin still gets it.
+func rawHeaders(h message.Header, raw []byte) func(string) string {
+	cs := ""
+	if _, p, err := h.ContentType(); err == nil {
+		cs = p["charset"]
+	}
+	if cs == "" {
+		if m := charsetRe.FindSubmatch(raw); m != nil {
+			cs = string(m[1])
+		}
+	}
+	cs = strings.ToLower(cs)
+	if cs == "" || cs == "utf-8" || cs == "utf8" || cs == "us-ascii" ||
+		strings.HasPrefix(cs, "utf-16") || strings.HasPrefix(cs, "utf-32") {
+		return func(v string) string { return v }
+	}
+	// WHATWG labels: they map gb2312 to GBK, as every browser does, because
+	// "gb2312" mail is GBK in practice.
+	enc, err := htmlindex.Get(cs)
+	if err != nil || enc == nil {
+		return func(v string) string { return v }
+	}
+	return func(v string) string {
+		if utf8.ValidString(v) {
+			return v
+		}
+		out, err := enc.NewDecoder().String(v)
+		if err != nil || !utf8.ValidString(out) || strings.ContainsRune(out, utf8.RuneError) {
+			return v
+		}
+		return out
+	}
 }
 
 var (
@@ -236,13 +291,15 @@ func Summarize(raw []byte, fallback time.Time) Summary {
 	}
 	_ = err // a header error does not topple the message, the rest is often usable
 	h := msg.Header
-	s.From = AddrStr(h.Get("From"))
-	s.FromAddr = BareAddr(h.Get("From"))
-	s.ToAddrs = BareAddrs(h.Get("To"), h.Get("Cc"))
+	fix := rawHeaders(h, raw)
+	from, to, cc := fix(h.Get("From")), fix(h.Get("To")), fix(h.Get("Cc"))
+	s.From = AddrStr(from)
+	s.FromAddr = BareAddr(from)
+	s.ToAddrs = BareAddrs(to, cc)
 	s.MessageID = strings.TrimSpace(h.Get("Message-Id"))
-	s.To = AddrStr(h.Get("To"))
-	s.Cc = AddrStr(h.Get("Cc"))
-	s.Subject = Dec(h.Get("Subject"))
+	s.To = AddrStr(to)
+	s.Cc = AddrStr(cc)
+	s.Subject = Dec(fix(h.Get("Subject")))
 	s.Date = ParseDate(h.Get("Date"), fallback).UTC().Format(time.RFC3339)
 	s.Spam = strings.ToUpper(h.Get("X-Ses-Spam-Verdict"))
 	s.Virus = strings.ToUpper(h.Get("X-Ses-Virus-Verdict"))
@@ -364,15 +421,16 @@ func Read(raw []byte, fallback time.Time) Full {
 	}
 	_ = err
 	h := msg.Header
-	v.Subject = Dec(h.Get("Subject"))
+	fix := rawHeaders(h, raw)
+	v.Subject = Dec(fix(h.Get("Subject")))
 	if v.Subject == "" {
 		v.Subject = SubjectNone
 	}
-	v.From = AddrStr(h.Get("From"))
-	v.ReplyTo = AddrStr(h.Get("Reply-To"))
-	v.To = AddrStr(h.Get("To"))
-	v.Cc = AddrStr(h.Get("Cc"))
-	v.Bcc = AddrStr(h.Get("Bcc"))
+	v.From = AddrStr(fix(h.Get("From")))
+	v.ReplyTo = AddrStr(fix(h.Get("Reply-To")))
+	v.To = AddrStr(fix(h.Get("To")))
+	v.Cc = AddrStr(fix(h.Get("Cc")))
+	v.Bcc = AddrStr(fix(h.Get("Bcc")))
 	v.Date = ParseDate(h.Get("Date"), fallback).UTC().Format(time.RFC3339)
 	v.MessageID = strings.TrimSpace(h.Get("Message-Id"))
 	v.References = strings.TrimSpace(h.Get("References"))
