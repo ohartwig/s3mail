@@ -137,6 +137,16 @@ func (s *Server) pick(w http.ResponseWriter, r *http.Request) (*Account, bool) {
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
+	// A liveness probe for a supervisor or reverse proxy: it has no token and
+	// must not need one in a config file. It says "the process answers" and
+	// nothing else - no mailbox, no version, no state - so there is nothing in
+	// it to protect.
+	if r.URL.Path == "/healthz" && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		_, _ = w.Write([]byte("ok\n"))
+		return
+	}
 	if !s.checkAccess(w, r) {
 		return
 	}
