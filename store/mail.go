@@ -43,6 +43,17 @@ type Mailbox struct {
 	AllowDelete bool
 	Workers     int
 	CacheFile   string
+	// ReconcileEvery is how old the last full listing may get before Sync
+	// makes one again. See Sync for what the full listing is still needed for.
+	ReconcileEvery time.Duration
+
+	// syncMu keeps Refresh and Sync from running side by side - the queue
+	// watcher and the page can both ask at once, and two full listings in
+	// parallel are the bill twice over.
+	syncMu sync.Mutex
+	// reconciled is when the last full listing finished. Kept in the cache, so
+	// a restart within ReconcileEvery does not list the whole mailbox again.
+	reconciled time.Time
 
 	mu    sync.RWMutex
 	index map[string]core.Message
@@ -71,13 +82,15 @@ func NewMailbox(ctx context.Context, s3 S3, kms KMS, bucket, root, cacheDir stri
 	m := &Mailbox{
 		s3: s3, kms: kms, bucket: bucket, Store: st,
 		AllowDelete: allowDelete, Workers: 8,
-		index:    map[string]core.Message{},
-		cacheKey: cacheKey,
+		ReconcileEvery: DefaultReconcile,
+		index:          map[string]core.Message{},
+		cacheKey:       cacheKey,
 	}
+	var cursor *cachedCursor
 	if cacheDir != "" {
 		_ = os.MkdirAll(cacheDir, 0o700)
 		m.CacheFile = filepath.Join(cacheDir, slug+".json")
-		m.readCache()
+		cursor = m.readCache()
 		m.content = newBodyCache(filepath.Join(cacheDir, slug+".bodies"), cacheKey)
 	}
 	local := ""
@@ -85,6 +98,9 @@ func NewMailbox(ctx context.Context, s3 S3, kms KMS, bucket, root, cacheDir stri
 		local = filepath.Join(cacheDir, slug+".state.json")
 	}
 	m.State = NewState(ctx, s3, bucket, st.Root, local)
+	if cursor != nil {
+		m.State.RestoreCursor(cursor.MaxSeen, cursor.Seen)
+	}
 	return m
 }
 
@@ -176,13 +192,43 @@ type RefreshResult struct {
 	Checked int `json:"checked"`
 	New     int `json:"new"`
 	Removed int `json:"removed"`
+	// Changes counts the op objects other machines wrote since the last look -
+	// flags and tags included, which change no key and still change the page.
+	Changes int `json:"changes"`
+	// Full says whether this was the full listing.
+	Full bool `json:"full"`
 }
 
-// Refresh lists the bucket, fetches the beginning of every new or changed
-// message and builds the index from it. Comparison runs over ETags, so only what
-// really changed is fetched.
+// Changed says whether the page has anything new to show.
+func (r RefreshResult) Changed() bool {
+	return r.New > 0 || r.Removed > 0 || r.Changes > 0 || r.Full
+}
+
+// DefaultReconcile is how often Sync falls back to the full listing. The
+// listing is what the S3 bill is made of - about 400 bytes per object, so 90 MB
+// for a mailbox of 227,000 - and between two of them the journal and the queue
+// carry everything an up-to-date s3mail does. What only the full listing sees
+// is what bypasses both: an older client, a phone, a change in the console.
+const DefaultReconcile = 2 * time.Hour
+
+// Refresh is the full reconcile: it lists the whole mailbox, fetches the
+// beginning of every new or changed message and builds the index from it.
+// Comparison runs over ETags, so only what really changed is fetched - but the
+// listing itself is one request per thousand objects, every time. Sync is what
+// runs often; this runs on start, on the reader's explicit request and every
+// ReconcileEvery.
 func (m *Mailbox) Refresh(ctx context.Context) (RefreshResult, error) {
+	m.syncMu.Lock()
+	defer m.syncMu.Unlock()
+	return m.refresh(ctx)
+}
+
+func (m *Mailbox) refresh(ctx context.Context) (RefreshResult, error) {
 	m.State.Load(ctx)
+	// Taken before the listing, so that whatever the journal says from here on
+	// is newer than the listing or repeats it - applying it again is harmless.
+	_, foreign, _ := m.State.Journal()
+	m.State.SeenAll()
 
 	objs, err := m.s3.List(ctx, m.bucket, m.Root)
 	if err != nil {
@@ -229,13 +275,234 @@ func (m *Mailbox) Refresh(ctx context.Context) (RefreshResult, error) {
 	for _, msg := range fresh {
 		m.index[msg.Key] = msg
 	}
+	m.reconciled = time.Now()
 	m.mu.Unlock()
 	m.writeCache()
 
 	// No UID numbering here on purpose - see EnsureUIDs in uids.go. Numbers cost
 	// about fifteen bytes per message in the state document that every machine
 	// downloads, and a mailbox whose owner never touches IMAP should not pay it.
-	return RefreshResult{Checked: len(listed), New: len(todo), Removed: removed}, nil
+	return RefreshResult{Checked: len(listed), New: len(todo), Removed: removed,
+		Changes: foreign, Full: true}, nil
+}
+
+// SyncOpts says what Sync is to look at besides the journal.
+type SyncOpts struct {
+	// Keys are objects somebody named - the queue's notification carries the
+	// key SES wrote. Each is looked at with a HEAD, not found by a listing.
+	Keys []string
+	// Inbox lists the top level of the mailbox, where SES writes, with "/" as
+	// the delimiter: the folders below are not paged through. For a mailbox
+	// without a queue that is the only way to hear of new mail.
+	Inbox bool
+	// Announce writes the keys that turned out new into the journal, so the
+	// other machines on the mailbox learn of them. SQS hands each notification
+	// to one receiver only; without this, a second machine on the same queue
+	// would never hear of the mail the first one took.
+	Announce bool
+}
+
+// ReconcileDue says whether the next Sync will be the full listing.
+func (m *Mailbox) ReconcileDue() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.reconciled.IsZero() || (m.ReconcileEvery > 0 && time.Since(m.reconciled) >= m.ReconcileEvery)
+}
+
+// Sync is the refresh that runs often, and it does not list the mailbox. What
+// it reads instead:
+//
+//   - the op journal under .s3mail-state/, which it reads anyway for the
+//     state: every move, delete, sent copy and draft by an s3mail writes the
+//     keys it touched there (core.KeyChange), so another machine's changes
+//     arrive without anybody listing for them;
+//   - the keys in o.Keys, each with one HEAD - that is how mail announced by
+//     the queue comes in;
+//   - with o.Inbox, the top level of the mailbox and nothing below it.
+//
+// It falls back to the full listing when that is due (ReconcileDue - never
+// done, or older than ReconcileEvery) and when the journal has a gap: ops were
+// compacted away before this process read them.
+func (m *Mailbox) Sync(ctx context.Context, o SyncOpts) (RefreshResult, error) {
+	m.syncMu.Lock()
+	defer m.syncMu.Unlock()
+	if m.ReconcileDue() {
+		return m.refreshAndAnnounce(ctx, o)
+	}
+	m.State.Load(ctx)
+	changes, foreign, gap := m.State.Journal()
+	if gap {
+		return m.refreshAndAnnounce(ctx, o)
+	}
+	res := RefreshResult{Changes: foreign}
+
+	// Moves carry their index entry along: the content is the one already
+	// summarised, and a copy keeps it. What arrived without an entry to carry
+	// is looked at like a named key.
+	var look []string
+	m.mu.Lock()
+	for _, c := range changes {
+		switch {
+		case c.From != "" && c.To != "":
+			entry, known := m.index[c.From]
+			delete(m.index, c.From)
+			if known && m.Own(c.To) == nil {
+				entry.Key, entry.Mid, entry.Folder = c.To, m.Mid(c.To), m.FolderOf(c.To)
+				m.index[c.To] = entry
+			} else {
+				look = append(look, c.To)
+			}
+		case c.To != "":
+			look = append(look, c.To)
+		case c.From != "":
+			if _, known := m.index[c.From]; known {
+				delete(m.index, c.From)
+				res.Removed++
+			}
+		}
+	}
+	m.mu.Unlock()
+
+	var arrived []string
+	for _, key := range slices.Concat(look, o.Keys) {
+		isNew, gone, err := m.lookAt(ctx, key)
+		if err != nil {
+			continue // the next Sync or the reconcile catches it
+		}
+		res.Checked++
+		if gone {
+			res.Removed++
+		}
+		if isNew {
+			res.New++
+			if slices.Contains(o.Keys, key) {
+				arrived = append(arrived, key)
+			}
+		}
+	}
+
+	if o.Inbox {
+		n, fresh, removed, err := m.syncInbox(ctx)
+		if err != nil {
+			return res, err
+		}
+		res.Checked += n
+		res.New += fresh
+		res.Removed += removed
+	}
+
+	if o.Announce {
+		m.announce(ctx, arrived)
+	}
+	m.writeCache()
+	return res, nil
+}
+
+// refreshAndAnnounce is the full listing in Sync's place. The keys the queue
+// named are announced all the same - the listing found them here, but the other
+// machines are still waiting to hear.
+func (m *Mailbox) refreshAndAnnounce(ctx context.Context, o SyncOpts) (RefreshResult, error) {
+	res, err := m.refresh(ctx)
+	if err == nil && o.Announce {
+		var here []string
+		m.mu.RLock()
+		for _, k := range o.Keys {
+			if _, ok := m.index[k]; ok {
+				here = append(here, k)
+			}
+		}
+		m.mu.RUnlock()
+		m.announce(ctx, here)
+	}
+	return res, err
+}
+
+// announce writes arrived keys into the journal. A failed write is no reason to
+// fail the sync: the mail is in this index, and the others find it at their
+// next reconcile.
+func (m *Mailbox) announce(ctx context.Context, keys []string) {
+	if len(keys) == 0 {
+		return
+	}
+	kc := make([]core.KeyChange, 0, len(keys))
+	for _, k := range keys {
+		kc = append(kc, core.KeyChange{To: k})
+	}
+	_ = m.State.Mutate(ctx, core.Op{T: "keys", Keys: kc})
+}
+
+// lookAt brings one key into the index with a HEAD, and the header with a
+// range GET when the ETag is new. A key that is not there leaves the index.
+func (m *Mailbox) lookAt(ctx context.Context, key string) (isNew, gone bool, err error) {
+	if m.Own(key) != nil {
+		return false, false, core.ErrBadInput // not ours, whatever a notification says
+	}
+	head, err := m.s3.Head(ctx, m.bucket, key)
+	if errors.Is(err, ErrNotFound) {
+		m.mu.Lock()
+		_, known := m.index[key]
+		delete(m.index, key)
+		m.mu.Unlock()
+		return false, known, nil
+	}
+	if err != nil {
+		return false, false, err
+	}
+	if head.ContentLength == 0 {
+		return false, false, nil // a folder marker, not mail
+	}
+	m.mu.RLock()
+	old, known := m.index[key]
+	m.mu.RUnlock()
+	if known && old.ETag == head.ETag {
+		return false, false, nil
+	}
+	msg := m.summarize(ctx, ObjectInfo{Key: key, ETag: head.ETag, Size: head.ContentLength,
+		LastModified: head.LastModified})
+	m.mu.Lock()
+	m.index[key] = msg
+	m.mu.Unlock()
+	return true, false, nil
+}
+
+// syncInbox is Refresh for the top level only: list it with the delimiter,
+// fetch what is new or changed, drop inbox entries that are no longer there.
+func (m *Mailbox) syncInbox(ctx context.Context) (checked, fresh, removed int, err error) {
+	objs, err := m.s3.ListDir(ctx, m.bucket, m.Root)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	listed := map[string]ObjectInfo{}
+	for _, o := range objs {
+		if strings.HasSuffix(o.Key, "/") || o.Size == 0 || m.Internal(o.Key) {
+			continue
+		}
+		listed[o.Key] = o
+	}
+	var todo []ObjectInfo
+	m.mu.Lock()
+	for key := range m.index {
+		if m.FolderOf(key) != core.Inbox {
+			continue
+		}
+		if _, present := listed[key]; !present {
+			delete(m.index, key)
+			removed++
+		}
+	}
+	for key, o := range listed {
+		if old, present := m.index[key]; !present || old.ETag != o.ETag {
+			todo = append(todo, o)
+		}
+	}
+	m.mu.Unlock()
+	for _, o := range todo {
+		msg := m.summarize(ctx, o)
+		m.mu.Lock()
+		m.index[msg.Key] = msg
+		m.mu.Unlock()
+	}
+	return len(listed), len(todo), removed, nil
 }
 
 // summarize builds the index entry. A broken message does not topple the run -
@@ -374,6 +641,13 @@ func (m *Mailbox) Move(ctx context.Context, keys []string, folder string) ([]Mov
 					return err
 				}
 			}
+			// Into the journal, so the other machines move their entry instead
+			// of listing the mailbox to find out. Inside the batch: one op
+			// object for the whole move, however many messages.
+			if err := m.State.Mutate(ctx, core.Op{T: "keys",
+				Keys: []core.KeyChange{{From: key, To: newKey}}}); err != nil {
+				return err
+			}
 			out = append(out, MoveResult{Key: key, NewKey: newKey, Folder: target})
 		}
 		return nil
@@ -446,7 +720,8 @@ func (m *Mailbox) Delete(ctx context.Context, keys []string, force bool) (int, e
 			m.mu.Lock()
 			delete(m.index, key)
 			m.mu.Unlock()
-			if err := m.State.Mutate(ctx, core.Op{T: "drop", Mids: []string{m.Mid(key)}}); err != nil {
+			if err := m.State.Mutate(ctx, core.Op{T: "drop", Mids: []string{m.Mid(key)}},
+				core.Op{T: "keys", Keys: []core.KeyChange{{From: key}}}); err != nil {
 				return err
 			}
 			n++
@@ -490,7 +765,8 @@ func (m *Mailbox) Put(ctx context.Context, folder, messageID string, raw []byte)
 		return "", err
 	}
 	read := true
-	if err := m.State.Mutate(ctx, core.Op{T: "flags", Mids: []string{m.Mid(key)}, Read: &read}); err != nil {
+	if err := m.State.Mutate(ctx, core.Op{T: "flags", Mids: []string{m.Mid(key)}, Read: &read},
+		core.Op{T: "keys", Keys: []core.KeyChange{{To: key}}}); err != nil {
 		return key, err
 	}
 	// Into the index right away: without this the message would be missing until
@@ -523,7 +799,8 @@ func (m *Mailbox) DropDraft(ctx context.Context, key string) error {
 	delete(m.index, key)
 	m.mu.Unlock()
 	m.writeCache()
-	return m.State.Mutate(ctx, core.Op{T: "drop", Mids: []string{m.Mid(key)}})
+	return m.State.Mutate(ctx, core.Op{T: "drop", Mids: []string{m.Mid(key)}},
+		core.Op{T: "keys", Keys: []core.KeyChange{{From: key}}})
 }
 
 // baseFromID turns "<a1b2@example.org>" into the base name "a1b2.eml". The
@@ -590,35 +867,53 @@ func (m *Mailbox) ApplyRules(ctx context.Context, pool []core.Message, force boo
 // from the start and not read - which made it a comment rather than a check.
 const indexVersion = 4
 
-func (m *Mailbox) readCache() {
+// cacheFile is the shape on disk. Reconciled and the cursor are what lets a
+// restart carry on with Sync instead of listing the whole mailbox again; a file
+// without them (written before they existed) simply means one full listing.
+type cacheFile struct {
+	Version    int                     `json:"version"`
+	Messages   map[string]core.Message `json:"messages"`
+	Reconciled time.Time               `json:"reconciled,omitzero"`
+	Cursor     *cachedCursor           `json:"cursor,omitempty"`
+}
+
+type cachedCursor struct {
+	MaxSeen string   `json:"max_seen"`
+	Seen    []string `json:"seen"`
+}
+
+func (m *Mailbox) readCache() *cachedCursor {
 	raw, err := os.ReadFile(m.CacheFile)
 	if err != nil {
-		return
+		return nil
 	}
 	blob, err := open(m.cacheKey, raw)
 	if err != nil {
 		// A key that no longer fits means a new key, or a file from another
 		// machine. The cache is a cache: it gets rebuilt.
-		return
+		return nil
 	}
-	var d struct {
-		Version  int                     `json:"version"`
-		Messages map[string]core.Message `json:"messages"`
-	}
+	var d cacheFile
 	if json.Unmarshal(blob, &d) == nil && d.Messages != nil && d.Version == indexVersion {
 		m.index = d.Messages
+		if d.Cursor != nil {
+			// Without the cursor the journal cannot say what was missed, and
+			// the reconcile time would promise what it cannot keep.
+			m.reconciled = d.Reconciled
+		}
+		return d.Cursor
 	}
+	return nil
 }
 
 func (m *Mailbox) writeCache() {
 	if m.CacheFile == "" {
 		return
 	}
+	maxSeen, seen := m.State.Cursor()
 	m.mu.RLock()
-	blob, err := json.Marshal(struct {
-		Version  int                     `json:"version"`
-		Messages map[string]core.Message `json:"messages"`
-	}{indexVersion, m.index})
+	blob, err := json.Marshal(cacheFile{Version: indexVersion, Messages: m.index,
+		Reconciled: m.reconciled, Cursor: &cachedCursor{MaxSeen: maxSeen, Seen: seen}})
 	m.mu.RUnlock()
 	if err != nil {
 		return

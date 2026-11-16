@@ -37,6 +37,9 @@ type Head struct {
 	SSEKMSKeyID          string
 	BucketKeyEnabled     bool
 	StorageClass         string
+	// LastModified is the arrival time, the same one a listing carries. A
+	// message learnt of without a listing needs it for its date fallback.
+	LastModified time.Time
 }
 
 // CopyOpts are the settings a copy inherits from the original.
@@ -51,6 +54,10 @@ type CopyOpts struct {
 // otherwise the form is "bytes=0-65535".
 type S3 interface {
 	List(ctx context.Context, bucket, prefix string) ([]ObjectInfo, error)
+	// ListDir lists only the objects directly under prefix - nothing below a
+	// further slash. That is the inbox without the folders, which is where SES
+	// writes, and it is a few pages where List is two hundred.
+	ListDir(ctx context.Context, bucket, prefix string) ([]ObjectInfo, error)
 	Get(ctx context.Context, bucket, key, byteRange string) (Object, error)
 	Head(ctx context.Context, bucket, key string) (Head, error)
 	Put(ctx context.Context, bucket, key string, body []byte, contentType string) error

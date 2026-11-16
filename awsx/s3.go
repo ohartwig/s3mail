@@ -41,9 +41,19 @@ func NewS3Client(cfg aws.Config, endpoint string) store.S3 {
 // List pages through the prefix completely - a mailbox easily holds more than
 // the 1000 objects one page carries.
 func (a *S3) List(ctx context.Context, bucket, prefix string) ([]store.ObjectInfo, error) {
+	return a.list(ctx, &s3.ListObjectsV2Input{Bucket: aws.String(bucket), Prefix: aws.String(prefix)})
+}
+
+// ListDir is List with "/" as the delimiter: the folders below come back as
+// common prefixes, which are dropped, and their contents are not paged through.
+func (a *S3) ListDir(ctx context.Context, bucket, prefix string) ([]store.ObjectInfo, error) {
+	return a.list(ctx, &s3.ListObjectsV2Input{Bucket: aws.String(bucket), Prefix: aws.String(prefix),
+		Delimiter: aws.String("/")})
+}
+
+func (a *S3) list(ctx context.Context, in *s3.ListObjectsV2Input) ([]store.ObjectInfo, error) {
 	var out []store.ObjectInfo
-	p := s3.NewListObjectsV2Paginator(a.c, &s3.ListObjectsV2Input{
-		Bucket: aws.String(bucket), Prefix: aws.String(prefix)})
+	p := s3.NewListObjectsV2Paginator(a.c, in)
 	for p.HasMorePages() {
 		page, err := p.NextPage(ctx)
 		if err != nil {
@@ -93,6 +103,7 @@ func (a *S3) Head(ctx context.Context, bucket, key string) (store.Head, error) {
 		SSEKMSKeyID:          aws.ToString(resp.SSEKMSKeyId),
 		BucketKeyEnabled:     aws.ToBool(resp.BucketKeyEnabled),
 		StorageClass:         string(resp.StorageClass),
+		LastModified:         aws.ToTime(resp.LastModified),
 	}, nil
 }
 

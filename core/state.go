@@ -39,6 +39,15 @@ type Data struct {
 	Filters []Filter `json:"filters,omitempty"`
 	Upto    string   `json:"upto,omitempty"`
 
+	// Journal keeps the key changes of ops that compaction removed, so a
+	// machine that had not read them yet still can - see store/state.go. The
+	// tail is complete for every op name above JournalSince when JournalOK is
+	// set; a snapshot written by a version without it reads as not OK, and the
+	// reader falls back to listing.
+	Journal      []JournalEntry `json:"journal,omitempty"`
+	JournalSince string         `json:"journal_since,omitempty"`
+	JournalOK    bool           `json:"journal_ok,omitempty"`
+
 	// UIDs is the per-folder IMAP numbering. Empty until something asks for a
 	// UID, so a state document from before this existed stays readable.
 	UIDs map[string]*FolderUIDs `json:"uids,omitempty"`
@@ -108,6 +117,27 @@ type Op struct {
 	Filters []Filter `json:"filters,omitempty"`
 	Folder  string   `json:"folder,omitempty"`
 	Nums    []uint32 `json:"nums,omitempty"`
+	// Keys is the journal of what happened to objects - see KeyChange. Only
+	// the "keys" op carries it.
+	Keys []KeyChange `json:"keys,omitempty"`
+}
+
+// JournalEntry is what one compacted op object said about keys, under its name.
+type JournalEntry struct {
+	Op   string      `json:"op"`
+	Keys []KeyChange `json:"keys"`
+}
+
+// KeyChange is one object that appeared, moved or went away. From empty means
+// it is new at To (a sent copy, a draft, or incoming mail another machine
+// heard about first); To empty means it is gone; both set is a move.
+//
+// It exists so a second machine does not have to list the whole mailbox to
+// learn what the first one did. Listing is what the bill is made of: a
+// mailbox of 200,000 messages is 200 pages and 90 MB per look.
+type KeyChange struct {
+	From string `json:"from,omitempty"`
+	To   string `json:"to,omitempty"`
 }
 
 // Apply applies one change to a state document - pure, without I/O.
@@ -207,6 +237,10 @@ func Apply(d *Data, op Op) {
 		d.Rules = op.Rules
 	case "filters":
 		d.Filters = op.Filters
+	case "keys":
+		// Nothing to do in the state document: the journal is about objects,
+		// and the index is store's business. The case is here so nobody adds a
+		// default branch that would treat it as unknown.
 	}
 }
 

@@ -91,6 +91,7 @@
   "cli.prefix": "Prefijo raíz, p. ej. mail/",
   "cli.profile": "Perfil de AWS de ~/.aws/credentials",
   "cli.refresh": "Segundos entre sincronizaciones automáticas; 0 lo desactiva",
+  "cli.reconcile": "Minutos entre dos listados completos del buzón; entre ellos bastan el diario y la cola. 0: solo al iniciar y a petición",
   "cli.region": "Región de AWS, p. ej. eu-central-1",
   "cli.running": "s3mail se está ejecutando en %s   (Ctrl+C lo detiene)",
   "cli.setup": "Abrir el asistente aunque ya esté configurado",

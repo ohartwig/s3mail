@@ -36,7 +36,24 @@ type Fake struct {
 	// every object carries the same one, and anything that sorts by arrival -
 	// the UID assignment does - cannot be tested at all.
 	Modified map[string]time.Time
+	// Listings records every listing with the number of keys it returned, so
+	// a test can count what S3 would bill: one request per page of PageSize.
+	Listings []Listing
 }
+
+// PageSize is how many keys one ListObjectsV2 page carries.
+const PageSize = 1000
+
+// Listing is one List or ListDir call as S3 would have answered it.
+type Listing struct {
+	Prefix string
+	Dir    bool
+	Keys   int
+}
+
+// Pages is the number of ListObjectsV2 requests this listing would have cost.
+// An empty answer is still one request.
+func (l Listing) Pages() int { return max(1, (l.Keys+PageSize-1)/PageSize) }
 
 func New() *Fake {
 	return &Fake{
@@ -71,7 +88,60 @@ func (f *Fake) List(_ context.Context, _, prefix string) ([]store.ObjectInfo, er
 		}
 	}
 	slices.SortFunc(out, func(a, b store.ObjectInfo) int { return cmp.Compare(a.Key, b.Key) })
+	f.Listings = append(f.Listings, Listing{Prefix: prefix, Keys: len(out)})
 	return out, nil
+}
+
+// ListDir lists what lies directly under prefix, as S3 does with "/" as the
+// delimiter. The common prefixes are not returned - nothing here uses them.
+func (f *Fake) ListDir(_ context.Context, _, prefix string) ([]store.ObjectInfo, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.record("listdir " + prefix)
+	if f.ListErr != nil {
+		return nil, f.ListErr
+	}
+	var out []store.ObjectInfo
+	folders := map[string]bool{}
+	for k, v := range f.Objs {
+		rest, ok := strings.CutPrefix(k, prefix)
+		if !ok {
+			continue
+		}
+		if dir, _, below := strings.Cut(rest, "/"); below {
+			folders[dir] = true // one common prefix per folder, as S3 counts them
+			continue
+		}
+		out = append(out, store.ObjectInfo{Key: k, ETag: f.etag(k), Size: int64(len(v)),
+			LastModified: f.modified(k)})
+	}
+	slices.SortFunc(out, func(a, b store.ObjectInfo) int { return cmp.Compare(a.Key, b.Key) })
+	f.Listings = append(f.Listings, Listing{Prefix: prefix, Dir: true, Keys: len(out) + len(folders)})
+	return out, nil
+}
+
+// ListPages sums the pages of every listing since the last ClearCalls - the
+// number the bill is made of.
+func (f *Fake) ListPages() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	n := 0
+	for _, l := range f.Listings {
+		n += l.Pages()
+	}
+	return n
+}
+
+// ListedKeys sums the keys every listing returned - the egress, roughly 400
+// bytes each.
+func (f *Fake) ListedKeys() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	n := 0
+	for _, l := range f.Listings {
+		n += l.Keys
+	}
+	return n
 }
 
 // SetModified gives one object an arrival time. Call it after Store.
@@ -127,7 +197,7 @@ func (f *Fake) Head(_ context.Context, _, key string) (store.Head, error) {
 	return store.Head{Meta: copyMeta(f.Meta[key]), ContentLength: int64(len(body)),
 		ETag: f.etag(key), ServerSideEncryption: o.ServerSideEncryption,
 		SSEKMSKeyID: o.SSEKMSKeyID, BucketKeyEnabled: o.BucketKeyEnabled,
-		StorageClass: o.StorageClass}, nil
+		StorageClass: o.StorageClass, LastModified: f.modified(key)}, nil
 }
 
 func (f *Fake) Put(_ context.Context, _, key string, body []byte, _ string) error {
@@ -247,6 +317,7 @@ func (f *Fake) ClearCalls() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.CallLog = nil
+	f.Listings = nil
 }
 
 // Calls returns what has been recorded so far.

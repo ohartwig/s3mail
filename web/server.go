@@ -42,6 +42,9 @@ type Account struct {
 	// Profile is the AWS profile this mailbox uses. Only needed to name it in
 	// the sentence about an expired access - "aws sso login --profile NAME".
 	Profile string
+	// Push says a queue watcher looks after this mailbox. The page then runs
+	// no timer of its own - see refresh in inbox.html.
+	Push bool
 }
 
 type Server struct {
@@ -340,6 +343,7 @@ func (s *Server) overview(r *http.Request, acc *Account) map[string]any {
 		"account":      acc.ID,
 		"can_send":     acc.Sender != nil,
 		"can_block":    acc.Blocked != nil,
+		"push":         acc.Push,
 		"default_from": acc.From,
 		"signature":    acc.Signature,
 		// Never nil to the interface: a nil slice becomes JSON `null`, and
@@ -396,6 +400,9 @@ type request struct {
 	// uses it; everywhere else tags travel as Add and Remove.
 	Tags    map[string]string `json:"tags"`
 	Filters []core.Filter     `json:"filters"`
+	// Quick asks /api/refresh for the cheap sync instead of the full listing.
+	// The page's timer sends it; the reader's button does not.
+	Quick bool `json:"quick"`
 }
 
 func (a request) allKeys() []string {
@@ -581,7 +588,16 @@ func (s *Server) routes() {
 	})
 
 	s.post("/api/refresh", func(w http.ResponseWriter, r *http.Request, a request, acc *Account) {
-		res, err := acc.Mailbox.Refresh(r.Context())
+		// The button is the reader saying "look properly", and gets the full
+		// listing. Everything automatic gets the sync, which lists only the
+		// inbox - and not even that when a queue tells us about new mail.
+		var res store.RefreshResult
+		var err error
+		if a.Quick {
+			res, err = acc.Mailbox.Sync(r.Context(), store.SyncOpts{Inbox: !acc.Push})
+		} else {
+			res, err = acc.Mailbox.Refresh(r.Context())
+		}
 		if err != nil {
 			s.translate(w, r, err)
 			return

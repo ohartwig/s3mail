@@ -68,6 +68,14 @@ func (d debugS3) List(ctx context.Context, bucket, prefix string) ([]store.Objec
 	return out, err
 }
 
+func (d debugS3) ListDir(ctx context.Context, bucket, prefix string) ([]store.ObjectInfo, error) {
+	start := time.Now()
+	out, err := d.inner.ListDir(ctx, bucket, prefix)
+	debugf("s3 ListDir bucket=%s prefix=%s -> %d objects, %s%s",
+		bucket, prefix, len(out), took(start), errPart(err))
+	return out, err
+}
+
 func (d debugS3) Get(ctx context.Context, bucket, key, byteRange string) (store.Object, error) {
 	start := time.Now()
 	out, err := d.inner.Get(ctx, bucket, key, byteRange)

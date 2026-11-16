@@ -1356,9 +1356,14 @@ $("#ruleApply").onclick = guard(async () => {
 
 /* ---------------- Start and keyboard ---------------- */
 /* ---------------- Automatic refresh ----------------
-   So new mail turns up by itself instead of waiting for "reload". It costs
-   almost nothing: the refresh lists the bucket and fetches only objects whose
-   ETag has changed.
+   So new mail turns up by itself instead of waiting for "reload". The timer
+   asks for the quick sync ({quick: true}): the op journal plus the top level of
+   the mailbox. It must never ask for the full listing - that is one request per
+   thousand objects and was, with a large mailbox, 90 MB a minute. The button
+   below is the only way to the full listing from the page.
+
+   With a queue (over.push) the page runs no timer at all: the program's queue
+   watcher looks at the bucket and tells the page through /api/events.
 
    Two restraints: do not run while the window is in the background (nobody is
    looking, and the browser throttles timers there anyway), and not while
@@ -1390,12 +1395,13 @@ function scheduleAutoRefresh() {
   if (autoTimer) clearInterval(autoTimer);
   if (secs <= 0) return;
   autoTimer = setInterval(async () => {
+    if (over && over.push) return;                    // the queue watcher looks
     if (document.visibilityState !== "visible") return;
     if (document.querySelector("#compose")) return;   // a draft is open
     if ($("#refresh").disabled) return;               // already running
     try {
       const before = messages.length;
-      const s = await api("/api/refresh", {});
+      const s = await api("/api/refresh", {quick: true});
       await load();
       if (messages.length > before) {
         toast(T["toast.newMail"].replace("%d", messages.length - before));
@@ -1406,9 +1412,9 @@ function scheduleAutoRefresh() {
 
 document.addEventListener("visibilitychange", () => {
   // On coming back, look right away instead of waiting for the next tick.
-  if (document.visibilityState === "visible" && (CFG.refresh_seconds | 0) > 0) {
+  if (document.visibilityState === "visible" && (CFG.refresh_seconds | 0) > 0 && !(over && over.push)) {
     if (!document.querySelector("#compose") && !$("#refresh").disabled) {
-      api("/api/refresh", {}).then(() => load()).catch(() => {});
+      api("/api/refresh", {quick: true}).then(() => load()).catch(() => {});
     }
   }
 });
