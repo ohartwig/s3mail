@@ -91,6 +91,7 @@
   "cli.prefix": "Root prefix, e.g. mail/",
   "cli.profile": "AWS profile from ~/.aws/credentials",
   "cli.refresh": "Seconds between automatic refreshes; 0 turns it off",
+  "cli.reconcile": "Minutes between two full listings of the whole mailbox; in between, the journal and the queue suffice. 0: only at start and on request",
   "cli.region": "AWS region, e.g. eu-central-1",
   "cli.running": "s3mail is running on %s   (Ctrl+C stops it)",
   "cli.setup": "Open the wizard even if s3mail is already configured",

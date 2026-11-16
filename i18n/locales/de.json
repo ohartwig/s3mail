@@ -91,6 +91,7 @@
   "cli.prefix": "Wurzel-Prefix, z. B. mail/",
   "cli.profile": "AWS-Profil aus ~/.aws/credentials",
   "cli.refresh": "Sekunden zwischen automatischen Abgleichen; 0 schaltet ab",
+  "cli.reconcile": "Minuten zwischen zwei vollständigen Abgleichen des ganzen Postfachs; dazwischen genügen Journal und Queue. 0: nur beim Start und auf Knopfdruck",
   "cli.region": "AWS-Region, z. B. eu-central-1",
   "cli.running": "s3mail läuft auf %s   (Strg+C beendet es)",
   "cli.setup": "Assistenten öffnen, auch wenn schon konfiguriert",

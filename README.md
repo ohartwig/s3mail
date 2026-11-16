@@ -292,6 +292,10 @@ The app lives in its own repository,
 - Push needs a bell in AWS: SES notifies an SNS topic that writes into an SQS
   queue s3mail watches. Without it, `--refresh` polls every 60 seconds by
   default. The queue is read out of the IAM policy — nothing to configure.
+- The automatic refresh does not list the mailbox: it reads the op journal
+  and, without a queue, the top level SES writes to. The whole mailbox is
+  listed on start, on "Reload" and every `--reconcile` minutes (default 120) —
+  a listing costs about 400 bytes per object, 90 MB for 200,000 messages.
 - Access hangs on a token, not on users. See [Who may access it](#who-may-access-it).
 - Moving copies the object. Encryption and storage class come along; the version
   history of a versioned bucket does not.

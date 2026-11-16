@@ -212,6 +212,7 @@ ein Schalter kann nicht sagen, welches von mehreren er meint:
 | `--cache-plaintext` | Cache unverschlüsselt schreiben, wenn kein Schlüsselbund da ist |
 | `--debug` | Aufrufe an S3 und SES protokollieren – Schlüssel, Größen, Dauer, **keine Mailinhalte** |
 | `--refresh` | Sekunden zwischen automatischen Abgleichen, `0` schaltet ab (Standard 60) |
+| `--reconcile` | Minuten zwischen zwei vollständigen Listings des ganzen Postfachs (Standard 120); `0` nur beim Start und auf Knopfdruck |
 | `--version` | Version ausgeben und beenden |
 | `--mcp` | Als MCP-Server über stdin/stdout laufen (siehe [unten](#für-ein-modell-erreichbar---mcp)) |
 | `--mcp-readonly` | Dasselbe, aber nur lesend: kein Verschieben, Verschlagworten, Entwerfen |
@@ -285,6 +286,17 @@ S3-Konsole, und der Papierkorb lässt sich per Lifecycle-Regel automatisch leere
 - Beim Indexieren wird pro Mail nur die erste 64 KB per Range-GET geholt – reicht für
   Header und Vorschautext. Index in `~/.cache/s3mail/`, Abgleich über ETags, 8 parallele
   Requests. „Neu laden“ holt nur Neues.
+- **Der automatische Abgleich listet das Postfach nicht.** Ein Listing kostet eine
+  Anfrage je 1000 Objekte und rund 400 Byte je Objekt – bei 200 000 Mails 90 MB.
+  Im Takt liest s3mail deshalb nur das Journal unter `.s3mail-state/` (jede
+  Verschiebung, Löschung, gesendete Kopie und jeder Entwurf eines s3mail steht
+  dort mit Schlüssel) und, ohne Queue, die oberste Ebene des Postfachs, in die
+  SES schreibt. Mit Queue holt s3mail den Schlüssel aus der Benachrichtigung und
+  listet gar nichts. Das ganze Postfach wird nur beim Start, auf „Neu laden“ und
+  alle `--reconcile` Minuten gelistet – das fängt, was am Journal vorbeigeht:
+  ältere Versionen, die App, Änderungen in der Konsole. Index, Zeitpunkt des
+  letzten Listings und Journal-Stand liegen im Cache, ein Neustart innerhalb
+  des Intervalls listet nicht erneut.
 - HTML-Mails rendern in einem `sandbox=""`-iframe mit CSP; externe Bilder sind
   standardmäßig blockiert (Tracking-Pixel) und per Klick nachladbar.
 - Anhänge einzeln herunterladbar, Rohmail als `.eml`.
@@ -839,8 +851,13 @@ sie melden dann einen Rechtefehler im Klartext.
   [Für die Arbeit am Kunden](#funktionen).
 - Push braucht eine Klingel in AWS: SES benachrichtigt ein SNS-Topic, das in eine
   SQS-Queue schreibt, an der s3mail hängt. Ist das eingerichtet, taucht neue Mail
-  sofort auf; ohne läuft der Takt von `--refresh` (Standard 60 Sekunden) weiter.
+  sofort auf, und die Seite fragt gar nicht mehr im Takt; ohne läuft der Takt
+  von `--refresh` (Standard 60 Sekunden) weiter und listet die oberste Ebene.
   Die Queue liest s3mail aus der eigenen IAM-Policy – einzutragen ist nichts.
+  Ein Postfach, das vor der Queue eingerichtet wurde, hat in `config.json` ein
+  leeres `"queue"`: Einrichtung einmal neu durchlaufen. Mehrere Rechner an
+  derselben Queue gehen: SQS gibt jede Benachrichtigung nur einem, der schreibt
+  den Schlüssel ins Journal, und die anderen lesen ihn dort.
 - Der Zugang hängt an einem Token, nicht an Benutzern (siehe
   [Wer darf ran](#wer-darf-ran)). Wer die Adresse aus dem Terminal hat, sieht das
   ganze Postfach. `--host` auf eine öffentliche Adresse zu legen heißt weiterhin,

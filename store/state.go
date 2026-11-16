@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -26,6 +27,12 @@ const (
 
 	// CompactAfter is the number of open ops from which they get merged.
 	CompactAfter = 50
+
+	// JournalKeep is how many key changes the snapshot carries for machines
+	// that have not read them yet. A machine further behind than that lists
+	// the mailbox once. 500 changes are about 75 KB in a document that is only
+	// fetched when it changed.
+	JournalKeep = 500
 
 	fetchWorkers = 8
 )
@@ -61,6 +68,28 @@ type State struct {
 	dirty    bool
 	seq      int
 
+	// The snapshot only changes when somebody compacts, and with a large
+	// mailbox it is megabytes. A HEAD says whether the copy in hand is still the
+	// one in the bucket; only then is it fetched again.
+	snapETag string
+	snapBody []byte
+	// opCache holds the op objects already fetched. Each is written once under
+	// a name of its own and never changed, so a body once read stays right
+	// until compaction removes the object.
+	opCache map[string][]core.Op
+	// open are the op keys above the watermark, as of the last Load.
+	open []string
+
+	// The journal cursor - see Journal. seen are op keys whose key changes have
+	// been handed out (or that this process wrote itself), maxSeen is the
+	// highest op name among them.
+	seen    map[string]bool
+	maxSeen string
+	unread  []journalEntry
+	// gap is set when the watermark rose past everything seen - see Journal.
+	// It stays set until a full listing (SeenAll) has made up for it.
+	gap bool
+
 	// instance tells this process apart from every other one writing to the same
 	// bucket. Without it two machines could produce the same op name in the same
 	// microsecond - and one of the two would be gone.
@@ -80,6 +109,8 @@ func NewState(ctx context.Context, s3 S3, bucket, root, localFile string) *State
 		data:      core.NewData(),
 		remoteOK:  true,
 		instance:  InstanceID(),
+		opCache:   map[string][]core.Op{},
+		seen:      map[string]bool{},
 		Now:       func() time.Time { return time.Now().UTC() },
 		Workers:   fetchWorkers,
 	}
@@ -128,15 +159,44 @@ func (s *State) PendingOps() int {
 }
 
 func (s *State) fetchSnapshot(ctx context.Context) *core.Data {
+	body := s.snapshotBody(ctx)
+	if body == nil {
+		return nil
+	}
+	var d core.Data
+	if json.Unmarshal(body, &d) != nil {
+		return nil
+	}
+	return d.Normalize()
+}
+
+// snapshotBody returns the snapshot's bytes, from the copy in hand when the
+// HEAD says it is still current. A HEAD that fails for another reason than a
+// missing object falls back to the GET - the copy is a saving, not a source.
+func (s *State) snapshotBody(ctx context.Context) []byte {
+	head, err := s.s3.Head(ctx, s.bucket, s.key)
+	if errors.Is(err, ErrNotFound) {
+		s.mu.Lock()
+		s.snapETag, s.snapBody = "", nil
+		s.mu.Unlock()
+		return nil
+	}
+	if err == nil && head.ETag != "" {
+		s.mu.RLock()
+		body, etag := s.snapBody, s.snapETag
+		s.mu.RUnlock()
+		if body != nil && etag == head.ETag {
+			return body
+		}
+	}
 	obj, err := s.s3.Get(ctx, s.bucket, s.key, "")
 	if err != nil {
 		return nil
 	}
-	var d core.Data
-	if json.Unmarshal(obj.Body, &d) != nil {
-		return nil
-	}
-	return d.Normalize()
+	s.mu.Lock()
+	s.snapETag, s.snapBody = obj.ETag, obj.Body
+	s.mu.Unlock()
+	return obj.Body
 }
 
 func (s *State) readLocal() *core.Data {
@@ -166,6 +226,7 @@ func (s *State) listOps(ctx context.Context) []string {
 }
 
 // fetchOps loads the op objects concurrently; the order stays that of the keys.
+// What was fetched before comes from opCache - see there.
 func (s *State) fetchOps(ctx context.Context, keys []string) [][]core.Op {
 	out := make([][]core.Op, len(keys))
 	if len(keys) == 0 {
@@ -174,6 +235,13 @@ func (s *State) fetchOps(ctx context.Context, keys []string) [][]core.Op {
 	sem := make(chan struct{}, s.Workers)
 	var wg sync.WaitGroup
 	for i, key := range keys {
+		s.mu.RLock()
+		ops, cached := s.opCache[key]
+		s.mu.RUnlock()
+		if cached {
+			out[i] = ops
+			continue
+		}
 		wg.Go(func() {
 			sem <- struct{}{}
 			defer func() { <-sem }()
@@ -188,6 +256,9 @@ func (s *State) fetchOps(ctx context.Context, keys []string) [][]core.Op {
 				return
 			}
 			out[i] = h.Ops
+			s.mu.Lock()
+			s.opCache[key] = h.Ops
+			s.mu.Unlock()
 		})
 	}
 	wg.Wait()
@@ -208,6 +279,8 @@ func (s *State) Load(ctx context.Context) {
 		}
 	} else if local != nil {
 		base = local
+		// The local copy's journal says nothing about the bucket.
+		base.Journal, base.JournalSince, base.JournalOK = nil, "", false
 	} else {
 		base = core.NewData()
 	}
@@ -232,6 +305,19 @@ func (s *State) Load(ctx context.Context) {
 	for _, op := range s.pending { // eigene offene Aenderungen erneut drauf
 		core.Apply(s.data, op)
 	}
+	s.open = open
+	// What is no longer open is compacted or gone; its body is not needed.
+	keep := make(map[string][]core.Op, len(open))
+	for _, k := range open {
+		if ops, ok := s.opCache[k]; ok {
+			keep[k] = ops
+		}
+	}
+	s.opCache = keep
+	// Before absorb: the ops above the watermark raise maxSeen, and then a
+	// watermark that jumped past unread ops would no longer show.
+	s.catchUp()
+	s.absorb()
 	s.mu.Unlock()
 
 	if len(open) >= CompactAfter {
@@ -290,6 +376,10 @@ func (s *State) Save(ctx context.Context) error {
 		return nil
 	}
 	name := s.opName()
+	// Our own op is no news to us: marked as seen before it exists, so a Load
+	// running beside this one cannot hand it out as somebody else's.
+	s.opCache[s.opsPrefix+name] = ops
+	s.markSeen(s.opsPrefix + name)
 	s.mu.Unlock()
 
 	body, _ := json.Marshal(struct {
@@ -329,6 +419,7 @@ func (s *State) Compact(ctx context.Context, merged []string) {
 	s.mu.Lock()
 	clone := *s.data
 	clone.Upto = merged[len(merged)-1][cut:]
+	clone.Journal, clone.JournalSince, clone.JournalOK = s.journalTail(merged)
 	payload, _ := json.Marshal(&clone)
 	s.mu.Unlock()
 
@@ -337,6 +428,7 @@ func (s *State) Compact(ctx context.Context, merged []string) {
 	}
 	s.mu.Lock()
 	s.upto, s.openOps = clone.Upto, 0
+	s.data.Journal, s.data.JournalSince, s.data.JournalOK = clone.Journal, clone.JournalSince, true
 	s.mu.Unlock()
 
 	sem := make(chan struct{}, s.Workers)
@@ -349,6 +441,47 @@ func (s *State) Compact(ctx context.Context, merged []string) {
 		})
 	}
 	wg.Wait()
+}
+
+// journalTail is the snapshot's journal after merging these ops: the old tail,
+// the key changes of the merged ops, cut to JournalKeep. Called with s.mu held.
+//
+// Without it every compaction would cost every other machine a full listing:
+// the op that triggers a compaction is written a moment before it, so nobody
+// else has read it yet when it disappears.
+func (s *State) journalTail(merged []string) ([]core.JournalEntry, string, bool) {
+	cut := len(s.opsPrefix)
+	var tail []core.JournalEntry
+	since := s.upto // complete above the old watermark: those are the merged ops
+	if s.upto == "" || s.data.JournalOK {
+		tail, since = slices.Clone(s.data.Journal), s.data.JournalSince
+	}
+	for _, k := range merged {
+		ops, fetched := s.opCache[k]
+		if !fetched {
+			// Nobody can vouch for what this op said. Complete only above it.
+			tail, since = nil, k[cut:]
+			continue
+		}
+		var changes []core.KeyChange
+		for _, op := range ops {
+			if op.T == "keys" {
+				changes = append(changes, op.Keys...)
+			}
+		}
+		if len(changes) > 0 {
+			tail = append(tail, core.JournalEntry{Op: k[cut:], Keys: changes})
+		}
+	}
+	n := 0
+	for _, e := range tail {
+		n += len(e.Keys)
+	}
+	for n > JournalKeep && len(tail) > 0 {
+		since, n = tail[0].Op, n-len(tail[0].Keys)
+		tail = tail[1:]
+	}
+	return tail, since, true
 }
 
 // Batch collects several changes and writes a single op object at the end.
@@ -376,4 +509,134 @@ func (s *State) Upto() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.upto
+}
+
+// -- journal ------------------------------------------------------------------ //
+
+// journalEntry is what one op object said about keys.
+type journalEntry struct {
+	op      string
+	changes []core.KeyChange
+}
+
+// absorb moves every open op not yet seen into unread. Called with s.mu held.
+//
+// It runs inside Load, not when somebody asks: a compaction can follow a Load
+// directly (Save does that), and an op that was compacted before anybody read
+// its key changes would be lost to the journal.
+func (s *State) absorb() {
+	for _, k := range s.open {
+		if s.seen[k] {
+			continue
+		}
+		ops, fetched := s.opCache[k]
+		if !fetched {
+			continue // the GET failed; the next Load tries again
+		}
+		var changes []core.KeyChange
+		for _, op := range ops {
+			if op.T == "keys" {
+				changes = append(changes, op.Keys...)
+			}
+		}
+		s.unread = append(s.unread, journalEntry{op: k, changes: changes})
+		s.markSeen(k)
+	}
+	// What lies at or below the watermark cannot come round again: Load skips
+	// it. Forgetting it keeps the set as small as the open ops.
+	cut := len(s.opsPrefix)
+	for k := range s.seen {
+		if len(k) > cut && k[cut:] <= s.upto {
+			delete(s.seen, k)
+		}
+	}
+}
+
+// catchUp handles a watermark that rose past everything seen: somebody
+// compacted ops this process had not read. The snapshot's journal tail says
+// what they did about keys, if it reaches back far enough; otherwise it is a
+// gap, and only a full listing knows. Called with s.mu held, before absorb.
+func (s *State) catchUp() {
+	if s.upto <= s.maxSeen {
+		return
+	}
+	d := s.data
+	if !d.JournalOK || d.JournalSince > s.maxSeen {
+		s.gap = true
+		return
+	}
+	for _, e := range d.Journal {
+		if e.Op > s.maxSeen && e.Op <= s.upto && !s.seen[s.opsPrefix+e.Op] {
+			s.unread = append(s.unread, journalEntry{op: s.opsPrefix + e.Op, changes: e.Keys})
+		}
+	}
+	s.maxSeen = s.upto
+}
+
+// markSeen records an op key. Called with s.mu held.
+func (s *State) markSeen(key string) {
+	s.seen[key] = true
+	if name := key[min(len(key), len(s.opsPrefix)):]; name > s.maxSeen {
+		s.maxSeen = name
+	}
+}
+
+// Journal hands out, oldest first, the key changes from op objects written by
+// other processes since the last call, and how many such op objects there were
+// - a flag or tag change is one too, and the page wants to hear about it.
+//
+// gap is true when ops may have been missed: a Load found the snapshot's
+// watermark above everything this process had seen, so somebody compacted ops
+// away before they were read here. Only a full listing knows what they said. Clock skew
+// between machines can hide a gap from this test; the slow full reconcile is
+// the net for that.
+func (s *State) Journal() (changes []core.KeyChange, foreign int, gap bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, e := range s.unread {
+		changes = append(changes, e.changes...)
+	}
+	foreign = len(s.unread)
+	s.unread = nil
+	return changes, foreign, s.gap
+}
+
+// SeenAll marks everything open as seen and drops what is unread - after a
+// full listing, which already says everything the journal would.
+func (s *State) SeenAll() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, k := range s.open {
+		s.markSeen(k)
+	}
+	if s.upto > s.maxSeen {
+		s.maxSeen = s.upto
+	}
+	s.unread, s.gap = nil, false
+}
+
+// Cursor is what has to survive a restart for the journal to carry on where
+// it stopped: the highest op name seen and the open ones seen.
+func (s *State) Cursor() (maxSeen string, seen []string) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for k := range s.seen {
+		seen = append(seen, k)
+	}
+	slices.Sort(seen)
+	return s.maxSeen, seen
+}
+
+// RestoreCursor puts a saved cursor back. NewState has loaded already and
+// taken every open op for unread; with the cursor, only those it does not
+// cover stay unread.
+func (s *State) RestoreCursor(maxSeen string, seen []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.seen, s.maxSeen, s.unread = map[string]bool{}, maxSeen, nil
+	for _, k := range seen {
+		s.seen[k] = true
+	}
+	s.catchUp()
+	s.absorb()
 }

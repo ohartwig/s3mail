@@ -70,6 +70,7 @@ func main() {
 		plainCache  = flag.Bool("cache-plaintext", false, cat.T("cli.cachePlaintext"))
 		showVersion = flag.Bool("version", false, cat.T("cli.version"))
 		refreshSecs = flag.Int("refresh", 60, cat.T("cli.refresh"))
+		reconcile   = flag.Int("reconcile", int(store.DefaultReconcile/time.Minute), cat.T("cli.reconcile"))
 		mcpMode     = flag.Bool("mcp", false, cat.T("cli.mcp"))
 		mcpReadOnly = flag.Bool("mcp-readonly", false, cat.T("cli.mcpReadonly"))
 		demoMode    = flag.Bool("demo", false, cat.T("cli.demo"))
@@ -125,7 +126,7 @@ func main() {
 	// tool in somebody else's hands, and stdin and stdout are the whole
 	// interface. Everything below - port, browser, token - is beside the point.
 	if *mcpMode || *mcpReadOnly {
-		if err := serveMCP(context.Background(), k, *mcpReadOnly, cacheDir(), cacheKey); err != nil {
+		if err := serveMCP(context.Background(), k, *mcpReadOnly, *reconcile, cacheDir(), cacheKey); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
@@ -169,7 +170,7 @@ func main() {
 	// start" nobody should have to restart the program.
 	wiz := &wizard.Wizard{}
 	wiz.Activate = func(fresh config.Config) error {
-		return activate(ctx, srv, fresh, *noSend, *refreshSecs, cacheDir(), cacheKey)
+		return activate(ctx, srv, fresh, *noSend, *refreshSecs, *reconcile, cacheDir(), cacheKey)
 	}
 	srv.WithWizard(wiz)
 
@@ -185,7 +186,7 @@ func main() {
 			startErr = err.Error()
 		}
 	} else if len(k.Accounts) > 0 && !*setup {
-		if err := activate(ctx, srv, k, *noSend, *refreshSecs, cacheDir(), cacheKey); err != nil {
+		if err := activate(ctx, srv, k, *noSend, *refreshSecs, *reconcile, cacheDir(), cacheKey); err != nil {
 			// At startup there is no request and therefore no language from
 			// the browser - the one from the configuration has to do.
 			startErr = awsx.PlainText(err, k.First().Profile, cat)
@@ -321,7 +322,7 @@ func activateDemo(ctx context.Context, srv *web.Server, k config.Config,
 // comes back so the start line can name it, but the program keeps running as
 // long as anything came up.
 func activate(ctx context.Context, srv *web.Server, k config.Config, noSend bool,
-	refreshSeconds int, cacheDir string, cacheKey []byte) error {
+	refreshSeconds, reconcileMinutes int, cacheDir string, cacheKey []byte) error {
 	accounts := make([]web.Account, 0, len(k.Accounts))
 	var firstErr error
 	for _, a := range k.Accounts {
@@ -337,8 +338,9 @@ func activate(ctx context.Context, srv *web.Server, k config.Config, noSend bool
 		}
 		mb := store.NewMailbox(ctx, awsx.NewS3Client(cfg, ""), awsx.NewKMS(cfg, ""),
 			a.Bucket, a.Prefix, cacheDir, cacheKey, k.AllowDelete)
+		mb.ReconcileEvery = reconcileEvery(reconcileMinutes)
 		acc := web.Account{ID: a.ID(), Name: a.Name(), Mailbox: mb, Profile: a.Profile,
-			From: a.From, Signature: a.Signature, Snippets: a.Snippets}
+			From: a.From, Signature: a.Signature, Snippets: a.Snippets, Push: a.Queue != ""}
 		if !noSend {
 			acc.Sender = awsx.NewSES(cfg, "")
 			// The suppression list hangs off sending: whoever may not send need not
@@ -347,16 +349,24 @@ func activate(ctx context.Context, srv *web.Server, k config.Config, noSend bool
 		}
 		accounts = append(accounts, acc)
 
-		// Push, where the mailbox has a queue. Without one the timer in the page
-		// does it, exactly as before - a mailbox whose infrastructure predates
-		// this must keep working.
+		// Push, where the mailbox has a queue: the watcher is then the only
+		// thing that looks at the bucket, and the page runs no timer (it reads
+		// Push from the overview). Without a queue the page's timer asks for a
+		// quick sync that lists the inbox - a mailbox whose infrastructure
+		// predates the queue must keep working.
 		if a.Queue != "" {
 			q := awsx.NewQueue(cfg, a.Queue)
-			id := acc.ID
-			go watchQueue(ctx, srv, id, q, func(c context.Context) error {
-				_, err := mb.Refresh(c)
-				return err
-			})
+			go watchQueue(ctx, srv, acc.ID, q, journalEvery(refreshSeconds, mb.ReconcileEvery),
+				func(c context.Context, keys []string, inbox bool) (bool, error) {
+					res, err := mb.Sync(c, store.SyncOpts{Keys: keys, Inbox: inbox, Announce: true})
+					if err != nil {
+						return false, err
+					}
+					// The page timer used to run the rules after every refresh;
+					// with a queue there is no page timer, so the watcher does.
+					moved, err := mb.ApplyRules(c, nil, false)
+					return res.Changed() || moved > 0, err
+				})
 		}
 	}
 	srv.SetAccounts(accounts)
@@ -369,6 +379,25 @@ func activate(ctx context.Context, srv *web.Server, k config.Config, noSend bool
 		firstErr = config.ErrNoBucket
 	}
 	return firstErr
+}
+
+// reconcileEvery turns the -reconcile flag into the mailbox's interval. Zero
+// or less means: only on start and on request.
+func reconcileEvery(minutes int) time.Duration {
+	if minutes <= 0 {
+		return 0
+	}
+	return time.Duration(minutes) * time.Minute
+}
+
+// journalEvery is how often the queue watcher reads the journal between
+// notifications - the -refresh interval, as the page timer used it. Switched
+// off, it still has to come round for the reconcile.
+func journalEvery(refreshSeconds int, reconcile time.Duration) time.Duration {
+	if refreshSeconds > 0 {
+		return time.Duration(refreshSeconds) * time.Second
+	}
+	return reconcile
 }
 
 func setIf(target *string, value string) {
