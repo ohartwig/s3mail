@@ -159,6 +159,24 @@ func ParseDate(header string, fallback time.Time) time.Time {
 	return fallback
 }
 
+// messageDate is the Date header; failing that, the time on the topmost
+// Received header (when the receiving server took the message); failing that,
+// the fallback. Some senders - old QQ notifications among them - leave Date
+// out entirely, and the fallback alone shows them as sent in 1970.
+func messageDate(h message.Header, fallback time.Time) time.Time {
+	if t, err := mail.ParseDate(h.Get("Date")); err == nil {
+		return t
+	}
+	if rcv := h.Values("Received"); len(rcv) > 0 {
+		if i := strings.LastIndexByte(rcv[0], ';'); i >= 0 {
+			if t, err := mail.ParseDate(strings.TrimSpace(rcv[0][i+1:])); err == nil {
+				return t
+			}
+		}
+	}
+	return fallback
+}
+
 var (
 	scriptRe = regexp.MustCompile(`(?is)<(script|style)[^>]*>.*?</(script|style)>`)
 	tagRe    = regexp.MustCompile(`(?s)<[^>]+>`)
@@ -243,7 +261,7 @@ func Summarize(raw []byte, fallback time.Time) Summary {
 	s.To = AddrStr(h.Get("To"))
 	s.Cc = AddrStr(h.Get("Cc"))
 	s.Subject = Dec(h.Get("Subject"))
-	s.Date = ParseDate(h.Get("Date"), fallback).UTC().Format(time.RFC3339)
+	s.Date = messageDate(h, fallback).UTC().Format(time.RFC3339)
 	s.Spam = strings.ToUpper(h.Get("X-Ses-Spam-Verdict"))
 	s.Virus = strings.ToUpper(h.Get("X-Ses-Virus-Verdict"))
 	s.Auth = authResults(h)
@@ -373,7 +391,7 @@ func Read(raw []byte, fallback time.Time) Full {
 	v.To = AddrStr(h.Get("To"))
 	v.Cc = AddrStr(h.Get("Cc"))
 	v.Bcc = AddrStr(h.Get("Bcc"))
-	v.Date = ParseDate(h.Get("Date"), fallback).UTC().Format(time.RFC3339)
+	v.Date = messageDate(h, fallback).UTC().Format(time.RFC3339)
 	v.MessageID = strings.TrimSpace(h.Get("Message-Id"))
 	v.References = strings.TrimSpace(h.Get("References"))
 	v.Spam = strings.EqualFold(h.Get("X-Ses-Spam-Verdict"), "FAIL")
