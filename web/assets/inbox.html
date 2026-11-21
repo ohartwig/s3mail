@@ -15,6 +15,14 @@
             --text:#16202b; --muted:#5d6b7a; }
   }
   * { box-sizing:border-box; }
+  /* Links take the theme accent. Without this they keep the browser default
+     (dark blue, purple once visited), unreadable on the dark background; and
+     color-scheme lets native controls and scrollbars follow the theme too.
+     On light backgrounds the accent is too pale for text (3.2:1 on white), so
+     links there use a darker blue (5.7:1). */
+  :root { color-scheme:dark; --link:var(--accent); }
+  @media (prefers-color-scheme: light) { :root { color-scheme:light; --link:#1f5fd6; } }
+  a, a:visited { color:var(--link); }
 
   /* Symbole erben Farbe und Schriftgroesse von ihrer Umgebung: ein Symbol in
      einem Knopf ist so gross wie dessen Text und nimmt dessen Farbe an, auch
